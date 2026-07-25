@@ -1,6 +1,6 @@
 import {
   getDoc,
-  hasDoc,
+  getVoucher,
   storeAccount,
   storeAddress,
   storeOffer,
@@ -68,7 +68,10 @@ export async function submitDocs(
         if (a.pubkey !== sender) {
           throw new RpcError(-32001, 'account must be signed by sender');
         }
-        if (!(await hasDoc(bank, a.voucher))) {
+        // Type-checked, not just "some doc exists at this hash" — the doc store
+        // is one flat namespace, so hasDoc would let any signed doc stand in
+        // for a Voucher.
+        if (!(await getVoucher(bank, a.voucher))) {
           throw new RpcError(-32005, 'account voucher unknown');
         }
         const h = await storeAccount(bank, a);

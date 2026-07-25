@@ -73,13 +73,17 @@ export async function storeVoucher(
   return h;
 }
 
+// The doc store is one flat content-addressed namespace shared by every type,
+// so a hash must be type-checked before it is treated as a Voucher — otherwise
+// any signed doc (an Address, say) can pose as one, and the issuer/limit gates
+// that key off `voucher.pubkey` read a field that means something else.
 export async function getVoucher(
   bank: Bank,
   hash: Base58SHA256,
 ): Promise<Voucher | null> {
-  const doc = await getDoc<unknown>(bank, hash);
-  if (!doc) return null;
-  return doc as Voucher;
+  const doc = await getDoc<Record<string, unknown>>(bank, hash);
+  if (!doc || doc.type !== 'voucher') return null;
+  return doc as unknown as Voucher;
 }
 
 export async function listVouchers(bank: Bank): Promise<Voucher[]> {
@@ -125,10 +129,15 @@ export async function storeAccount(
   account: Account,
 ): Promise<Base58SHA256> {
   const h = await storeDoc(bank, account);
+  // An Account doc is content-addressed and immutable, so re-submitting one is
+  // a legitimate no-op — but it MUST NOT reset the ledger. Writing balance: 0
+  // unconditionally let anyone wipe their own (possibly negative) position by
+  // re-sending the same signed doc, breaking the per-voucher sum invariant.
+  const existing = await bank.kv.get<AccountRow>(k(bank, 'account', h));
   const row: AccountRow = {
     holder: account.pubkey,
     voucher: account.voucher,
-    balance: 0,
+    balance: existing.value?.balance ?? 0,
     ulid: account.ulid,
   };
   await bank.kv.set(k(bank, 'account', h), row);

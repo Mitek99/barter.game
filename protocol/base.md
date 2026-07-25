@@ -128,7 +128,19 @@ For a bilateral deal across two banks, one bank hosts the **lead** transfer and 
 
 The lead settles first, so a cautious holder can `follow` (receive before giving) to bound counterparty risk. The containment checks are **fail-closed**: an unverifiable or missing predecessor never advances a record — the engine waits (and `reject` is the only abort; there is no rollback, `bank-schema.md` §2). N-party (≥3 bank) deals generalize the same rule over each transfer's predecessor set; that DAG is out of scope for v1 (see `../docs/design/mandate-validation.md` §5 at the repo root).
 
-> **Invariant:** `Signature.seen` carries the cascade proof. A bank MUST NOT issue `hold`/`settle` for a record until it has verified that the upstream signature it depends on **cites this deal's own signatures in its `seen`** (own `ready` ⊆ lead `hold.seen` before follow-hold; own `hold` ⊆ lead `settle.seen` before follow-settle; and the symmetric lead-side checks). Advancing on a signature not so bound — e.g. the newest `settle` from a signer regardless of deal — is a protocol violation. The exactly-one-target rule for actioned signatures is protocol.
+##### Signer authority
+
+`seen` proves a cascade is **fresh** and bound to this deal. It says nothing about **who** asserted it — and record hashes and `seen` chains are public (`get_record_signatures` is an open read). So freshness alone is not enough: a bank MUST also check that each signature it advances on came from the party entitled to make that claim.
+
+For a record, that party is the **bank that minted it** — `Record.pubkey` — which is exactly the bank the holder's own signed Order names for that side. Concretely:
+
+- a `ready`/`hold`/`settle`/`reject` on a **foreign** record counts only if signed by that record's minting bank;
+- a `reject` on a bank's **own** record counts only if signed by that bank itself (it is the sole authority over the voucher it issues; a peer's reject arrives on the peer's own record and cascades from there);
+- a signature whose target record cannot be resolved MUST be ignored — fail closed.
+
+Without this, any keypair can self-sign `ready`, `hold`, and `settle` anchored to the lead bank's record hashes, with correct `seen` containment copied from public reads, and walk a follow bank through the entire cascade — releasing the follower's goods with no counterparty bank ever participating.
+
+> **Invariant:** `Signature.seen` carries the cascade proof. A bank MUST NOT issue `hold`/`settle` for a record until it has verified **both** that the upstream signature **cites this deal's own signatures in its `seen`** (own `ready` ⊆ lead `hold.seen` before follow-hold; own `hold` ⊆ lead `settle.seen` before follow-settle; and the symmetric lead-side checks) **and** that the signature is signed by the record's minting bank. Freshness without authority, or authority without freshness, is a protocol violation — as is advancing on a signature bound by neither, e.g. the newest `settle` from a signer regardless of deal. The exactly-one-target rule for actioned signatures is protocol.
 
 ### 3.2 Address
 

@@ -2,6 +2,7 @@ import {
   getAccount,
   getAccountBalance,
   getAddress,
+  getDoc,
   getMandate,
   getOffer,
   getOrder,
@@ -83,7 +84,10 @@ export async function advanceDeal(bank: Bank, dealId: string): Promise<void> {
       ready: !!ownReady,
       held: !!ownHold,
       settled: !!ownSettle,
-      rejected: sigs.some((s) => s.action === 'reject'),
+      // Only THIS bank may reject its own records — it is the sole authority
+      // over the voucher it issues. A peer's reject arrives on the peer's own
+      // (foreign) record and cascades from there.
+      rejected: sigs.some((s) => s.action === 'reject' && s.pubkey === bank.pubkey),
     });
   }
   if (own.length === 0 || !own.some((o) => o.mandated)) return; // awaiting coordinator
@@ -105,8 +109,22 @@ export async function advanceDeal(bank: Bank, dealId: string): Promise<void> {
     if (!m) continue;
     for (const h of m.records) if (!ownHashes.has(h)) foreignHashes.add(h);
   }
+  // SIGNER AUTHORITY. A foreign record's state may only be attested by the bank
+  // that MINTED it — `Record.pubkey` on the body, which submit_mandate already
+  // verified (signed by that bank, and that bank named by the Order). Without
+  // this filter any keypair could self-sign a `ready`/`hold`/`settle` anchored
+  // to a foreign record hash — both hashes and `seen` chains are public via
+  // get_record_signatures — and drive this bank through the whole cascade with
+  // no counterparty bank involved. `seen` proves the cascade is FRESH and bound
+  // to this deal; this proves it came from the party entitled to assert it.
+  // Fail closed: a record whose body we cannot resolve accepts no signatures.
   const foreignSigs = new Map<Base58SHA256, Signature[]>();
-  for (const h of foreignHashes) foreignSigs.set(h, await getSignaturesForRecord(bank, h));
+  for (const h of foreignHashes) {
+    const body = await getDoc<BankRecord>(bank, h);
+    const minter = body?.pubkey;
+    const sigs = minter ? await getSignaturesForRecord(bank, h) : [];
+    foreignSigs.set(h, sigs.filter((s) => s.pubkey === minter));
+  }
   const foreignAction = (h: Base58SHA256, action: Signature['action']) =>
     (foreignSigs.get(h) ?? []).filter((s) => s.action === action);
   const allHashes = [...ownHashes, ...foreignHashes];
@@ -397,7 +415,6 @@ async function aggregateRateCheck(
   if (!order.debit || !order.credit) return 'ok'; // one-sided: no rate gate
   const mandate = await getMandate(bank, dealId, orderHash);
   if (!mandate) return 'wait';
-  const { getDoc } = await import('./db.ts');
   let debitAmount = 0;
   let creditAmount = 0;
   for (const h of mandate.records) {
