@@ -37,9 +37,28 @@ Every doc is signed over `SHA-256(canonical(doc))` where `canonical()` is the JC
 - Strings escape control chars + `"` + `\`; other UTF-8 passes through.
 - `undefined` keys dropped.
 
-When signing a doc, **the top-level `sig` field is removed** before canonicalization. The hash that the signature commits to is therefore content-addressed by the unsigned doc.
+### 2.1 The preimage: one rule for both signing and hashing
 
-> **Invariant:** Two implementations must produce byte-identical canonical JSON for the same document, or every signature becomes unverifiable across implementations. You MUST implement RFC 8785 (or equivalent JCS) and you MUST verify cross-runtime parity before claiming v1 compatibility.
+Define, for any doc `D`:
+
+```
+preimage(D) = canonical(D minus its TOP-LEVEL "sig" key)
+```
+
+Both operations use **exactly this preimage**:
+
+| | Definition |
+|---|---|
+| **Signature** | `sig = ed25519_sign(SHA-256(preimage(D)))` |
+| **Content hash** | `hash(D) = base58(SHA-256(preimage(D)))` |
+
+Three consequences, all load-bearing:
+
+1. **No circularity.** `sig` is a container attached *after* signing, never an input to what it signs. There is no self-reference to resolve.
+2. **One identity per doc.** A doc's hash is the same before and after it is signed, and is unaffected by *which* valid signature it carries. A doc has exactly one content address, and its signature commits to precisely that address — "the signature signs the hash" is literally true. Any implementation that hashes the doc *including* `sig` gives every doc two different hashes (the one it is stored under and the one its signature attests) and makes identity inherit signature malleability. That is non-conformant.
+3. **Only the top level is stripped.** A nested doc embedded inside another (e.g. a `Post` embedded as `reply_to`, [`post-feed.md`](./post-feed.md) §1) keeps its own `sig` *inside* the preimage, so the outer author commits to the exact signed bytes — signature included — of everything it embeds.
+
+> **Invariant:** `hash(D)` and the message its signature commits to MUST be computed over the identical byte string `preimage(D)`, stripping only the top-level `sig`. Two implementations must also produce byte-identical canonical JSON for the same document, or every signature becomes unverifiable across implementations. You MUST implement RFC 8785 (or equivalent JCS) and you MUST verify cross-runtime parity before claiming v1 compatibility.
 
 ---
 

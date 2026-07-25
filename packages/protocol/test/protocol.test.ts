@@ -169,6 +169,41 @@ describe('doc signing and hashing', () => {
     const b = hashDoc({ a: 2 });
     expect(a).not.toBe(b);
   });
+
+  // The content hash is taken over the SAME preimage the signature commits to:
+  // canonical(doc minus top-level sig). Without this a doc has two identities —
+  // the one its signature signs and the one it is stored under (base.md §2).
+  test('hashDoc ignores the top-level sig: identity is stable across signing', () => {
+    const kp = genKeyPair();
+    const doc = { type: 'voucher', pubkey: kp.pubkeyBase58, ulid: ULID, name: 'x' };
+    const unsigned = hashDoc(doc);
+    const signed = { ...doc, sig: signDoc(doc, kp.privateKey) };
+    expect(hashDoc(signed)).toBe(unsigned);
+  });
+
+  test('hashDoc is unchanged by a different sig value', () => {
+    const doc = { type: 'voucher', pubkey: PUBKEY, ulid: ULID, name: 'x' };
+    expect(hashDoc({ ...doc, sig: 'AAAA' })).toBe(hashDoc({ ...doc, sig: 'BBBB' }));
+  });
+
+  test('hashDoc binds an EMBEDDED doc sig — only the top-level sig is stripped', () => {
+    const kp = genKeyPair();
+    const child = { type: 'post', pubkey: kp.pubkeyBase58, ulid: ULID, body_md: 'hi' };
+    const signedChild = { ...child, sig: signDoc(child, kp.privateKey) };
+    const parent = { type: 'post', pubkey: kp.pubkeyBase58, ulid: ULID, body_md: 're', reply_to: signedChild };
+    const tampered = { ...parent, reply_to: { ...signedChild, sig: 'TAMPERED' } };
+    expect(hashDoc(parent)).not.toBe(hashDoc(tampered));
+  });
+
+  test('the signed preimage and the content hash are the same bytes', () => {
+    const kp = genKeyPair();
+    const doc = { type: 'order', pubkey: kp.pubkeyBase58, ulid: ULID, rate: 1 };
+    const signed = { ...doc, sig: signDoc(doc, kp.privateKey) };
+    // verifyDoc strips the top-level sig; hashDoc must strip exactly the same,
+    // so a signature verifies against the very hash the doc is addressed by.
+    expect(verifyDoc(signed, signed.sig, kp.pubkeyBase58)).toBe(true);
+    expect(hashDoc(signed)).toBe(hashDoc(doc));
+  });
 });
 
 // --- ULID + base58 helpers --------------------------------------------------

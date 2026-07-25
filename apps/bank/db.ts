@@ -18,8 +18,20 @@ const REPLAY_WINDOW_MS = 1000 * 60 * 60 * 24; // 24h
 
 // --- key builders ---------------------------------------------------------
 
+// Storage schema version. Every index below is keyed by content hash, so a
+// change to the content-addressing rule relocates ALL of them at once. Bumping
+// this moves the whole namespace instead of leaving pre-change rows to be
+// half-read under post-change hashes — which fails silently (settled deals
+// rendering as `created`, holds stranded, usage counters reset) rather than
+// loudly. Old rows stay in KV, inert and invisible; no destructive wipe needed.
+//
+// v2: hashDoc now hashes canonical(doc minus top-level `sig`) — the same
+//     preimage the signature commits to (`protocol/base.md` §2.1). Every doc
+//     hash changed, so every key changed.
+const SCHEMA = 'v2';
+
 function k(bank: Bank, ...parts: Deno.KvKeyPart[]): Deno.KvKey {
-  return [bank.pubkey, ...parts];
+  return [bank.pubkey, SCHEMA, ...parts];
 }
 
 // --- generic docs ---------------------------------------------------------
@@ -724,18 +736,6 @@ export async function getForeignRecordDeal(
 ): Promise<ULID | null> {
   const r = await bank.kv.get<ULID>(k(bank, 'foreign_record_deal', recordHash));
   return r.value;
-}
-
-// --- active deal enumeration ----------------------------------------------
-
-export async function listActiveDeals(bank: Bank): Promise<ULID[]> {
-  const iter = bank.kv.list<boolean>({ prefix: k(bank, 'deal_record') });
-  const ids = new Set<string>();
-  for await (const entry of iter) {
-    const dealId = entry.key[2] as string;
-    ids.add(dealId);
-  }
-  return [...ids];
 }
 
 // --- deal propose idempotency ---------------------------------------------

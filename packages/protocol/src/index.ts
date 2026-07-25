@@ -283,8 +283,15 @@ export function verifyDoc(
   return verifyBytes(hash, signatureBase58, pubkeyBase58);
 }
 
+// A doc's content hash is taken over the SAME preimage its signature commits
+// to: canonical(doc minus the top-level `sig`). So `sig` is a container bolted
+// on after the fact, never an input to its own computation — and a doc's
+// identity is stable whether or not it has been signed yet (`base.md` §2).
+// Only the TOP-LEVEL `sig` is stripped: a nested/embedded signed doc keeps its
+// own `sig` inside the preimage, so an embedding author commits to the exact
+// signed bytes of what it embeds.
 export function hashDoc(doc: unknown): Base58SHA256 {
-  return base58.encode(sha256hash(canonicalBytes(doc)));
+  return base58.encode(sha256hash(canonicalBytes(canonicalizeWithoutSig(doc))));
 }
 
 export function sha256Base58(s: string): Base58SHA256 {

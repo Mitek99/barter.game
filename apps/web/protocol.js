@@ -124,8 +124,12 @@ export function verifyDoc(doc, signatureBase58, pubkeyBase58) {
     const hash = sha256hash(bytes);
     return verifyBytes(hash, signatureBase58, pubkeyBase58);
 }
+// Content hash = the SAME preimage the signature commits to: canonical(doc
+// minus the top-level `sig`). Only the top-level `sig` is stripped, so an
+// embedded signed doc keeps its own signature inside the preimage.
+// Must stay byte-identical to packages/protocol/src/index.ts.
 export function hashDoc(doc) {
-    return base58.encode(sha256hash(canonicalBytes(doc)));
+    return base58.encode(sha256hash(canonicalBytes(canonicalizeWithoutSig(doc))));
 }
 export function sha256Base58(s) {
     return base58.encode(sha256hash(new TextEncoder().encode(s)));
