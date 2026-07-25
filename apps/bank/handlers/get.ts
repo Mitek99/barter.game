@@ -9,6 +9,7 @@ import {
   listAccounts as dbListAccounts,
   listOffers as dbListOffers,
   listVouchers as dbListVouchers,
+  listVouchersByIssuer as dbListVouchersByIssuer,
 } from '../db.ts';
 import { hashDoc } from '@barter.game/protocol';
 import type { Bank } from '../types.ts';
@@ -105,8 +106,17 @@ export async function getOffer(
 
 export async function listVouchers(
   bank: Bank,
-  _params: Record<string, unknown>,
+  params: Record<string, unknown>,
+  sender: string,
 ): Promise<unknown> {
+  // filter:'mine' -> the caller's own vouchers; an explicit issuer -> that
+  // issuer's; otherwise the full public registry. Previously this ignored its
+  // params and always returned the whole registry, so clients that asked for
+  // 'mine' saw every bank voucher labeled as their own.
+  const issuer = typeof params.issuer === 'string'
+    ? params.issuer
+    : (params.filter === 'mine' ? sender : null);
+  if (issuer) return dbListVouchersByIssuer(bank, issuer);
   return dbListVouchers(bank);
 }
 

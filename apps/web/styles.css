@@ -6,7 +6,7 @@
   --fg: #1A1712;
   /* --muted/--faint darkened for WCAG AA contrast on the page background */
   --muted: #6B665D;
-  --faint: #857F74;
+  --faint: #6E685E;
   --accent: #3D34D6;
   --accent-soft: #ECEBFB;
   --accent2: #1C7C54;
@@ -186,6 +186,9 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) {
 .chip.state-held { background: var(--amber-soft); color: var(--amber); }
 .chip.state-settled { background: var(--green-soft); color: var(--accent2); }
 .chip.state-rejected { background: var(--danger-soft); color: var(--danger); }
+/* in-progress states between created and settled */
+.chip.state-open { background: var(--accent-soft); color: var(--accent); }
+.chip.state-approved, .chip.state-mandated, .chip.state-pending { background: var(--amber-soft); color: var(--amber); }
 .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .flex { display: flex; gap: 1rem; align-items: center; }
 /* let long mono content (URLs, pubkeys) shrink/wrap instead of forcing overflow */
@@ -351,6 +354,17 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) {
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 
+/* visually hidden but available to screen readers and programmatic focus */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* skip link — hidden until keyboard-focused */
 .skip-link {
   position: absolute;
@@ -376,7 +390,7 @@ h1:focus, h2:focus, h3:focus { outline: none; }
     --bg: #15130E;
     --fg: #ECE9E1;
     --muted: #A8A399;
-    --faint: #7C776D;
+    --faint: #928C7F;
     --accent: #9089F0;
     --accent-soft: #262349;
     --accent2: #6FCF97;

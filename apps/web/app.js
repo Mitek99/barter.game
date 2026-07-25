@@ -94,6 +94,15 @@ async function fetchConfig() {
   return cfg;
 }
 
+// Build an Error from a bank error WITHOUT the numeric JSON-RPC code prefix —
+// users should see the human message ("handle taken"), not "-32008: handle
+// taken". The code is kept as a property for any logic that needs it.
+function bankError(code, message) {
+  const e = new Error(message || `Request failed (${code})`);
+  e.code = code;
+  return e;
+}
+
 async function rpcCall(method, params, toPubkey) {
   const id = newUlid();
   const envelope = {
@@ -109,7 +118,7 @@ async function rpcCall(method, params, toPubkey) {
     body: JSON.stringify(envelope)
   });
   const data = await res.json();
-  if (data.error) throw new Error(`${data.error.code}: ${data.error.message}`);
+  if (data.error) throw bankError(data.error.code, data.error.message);
   return data.result;
 }
 
@@ -130,7 +139,7 @@ async function signedRequest(method, path, body) {
     body: body ? JSON.stringify(body) : undefined
   });
   const data = await res.json();
-  if (data.code && data.code < 0) throw new Error(`${data.code}: ${data.message}`);
+  if (data.code && data.code < 0) throw bankError(data.code, data.message);
   return data;
 }
 
@@ -156,7 +165,7 @@ async function rpcCallAt(base, toPubkey, method, params) {
     body: JSON.stringify(envelope)
   });
   const data = await res.json();
-  if (data.error) throw new Error(`${data.error.code}: ${data.error.message}`);
+  if (data.error) throw bankError(data.error.code, data.error.message);
   return data.result;
 }
 
@@ -177,7 +186,7 @@ async function signedRequestAt(base, method, path, body) {
     body: body ? JSON.stringify(body) : undefined
   });
   const data = await res.json();
-  if (data.code && data.code < 0) throw new Error(`${data.code}: ${data.message}`);
+  if (data.code && data.code < 0) throw bankError(data.code, data.message);
   return data;
 }
 
@@ -230,7 +239,10 @@ async function remoteHoldings(bankRef) {
 }
 
 async function allHoldings() {
-  const local = await uiGet('/portfolio').catch(() => ({ holdings: [] }));
+  // The LOCAL portfolio is load-bearing: let its failure propagate so the
+  // dashboard shows an error rather than a false "no balances yet". Only the
+  // remote per-bank reads below degrade to nothing.
+  const local = await uiGet('/portfolio');
   const out = (local.holdings || []).map(h => ({ ...h, remote: false }));
   const banks = await uiGet('/banks').catch(() => []);
   const remotes = (banks || []).filter(b => b.pubkey && b.pubkey !== state.bankPubkey);
@@ -262,25 +274,51 @@ const ROUTE_TITLES = {
   network: 'Network', scan: 'Scan', settings: 'Settings', deal: 'Deal', posts: 'Posts',
 };
 
+// route() is a coalescing scheduler: many actions do `location.hash = X; route()`,
+// and changing the hash ALSO fires the hashchange listener — so a naive route()
+// rendered twice per navigation (and, on the deal screen, armed two pollers).
+// Collapsing to one render per microtask fixes that; renderRoute does the work.
+let routeQueued = false;
+let lastRenderedHash = null;
+let dealTimer = null; // the single live deal-refresh timer (see renderDeal)
 function route() {
+  if (routeQueued) return;
+  routeQueued = true;
+  // A macrotask (not queueMicrotask): the `location.hash = X` in a handler queues
+  // its hashchange as a macrotask, so the coalescing window must span one too —
+  // otherwise `hash = X; route()` still renders twice.
+  setTimeout(() => { routeQueued = false; renderRoute(); }, 0);
+}
+
+function renderRoute() {
   const hash = location.hash.slice(1) || '/';
   const [p, ...rest] = hash.split('/').filter(Boolean);
   const app = document.getElementById('app');
   stopActiveScanner();
-  // Paint an immediate shell (nav + spinner) so a logged-in screen never blanks
-  // while it fetches; the async render replaces it when the data arrives.
-  // Screens that render synchronously just overwrite this with no visible flash.
-  if (state.user && p !== 'land') {
-    app.innerHTML = header(ROUTE_TITLES[p || ''] || '') +
-      `<div class="container"><div class="skeleton" aria-live="polite"><span class="spinner"></span> Loading…</div></div>`;
-  } else {
-    app.innerHTML = '';
+  // Any pending deal poll belongs to the screen we're leaving/refreshing — drop
+  // it so pollers never stack; renderDeal re-arms exactly one.
+  if (dealTimer) { clearTimeout(dealTimer); dealTimer = null; }
+
+  // An in-place refresh (same hash — e.g. the deal screen's 3s self-poll, or a
+  // "Retry" button) must NOT flash the skeleton or steal focus; only a genuine
+  // navigation does.
+  const isRefresh = hash === lastRenderedHash;
+  lastRenderedHash = hash;
+
+  if (!isRefresh) {
+    if (state.user && p !== 'land') {
+      app.innerHTML = header(ROUTE_TITLES[p || ''] || '') +
+        `<div class="container"><div class="skeleton" aria-live="polite"><span class="spinner"></span> Loading…</div></div>`;
+    } else {
+      app.innerHTML = '';
+    }
   }
 
-  // After the (possibly async) screen renders, move focus to its heading so
-  // keyboard/screen-reader users land on the new content — not stuck at <body>
-  // — and the screen title is announced.
-  Promise.resolve(dispatch(app, p, rest)).then(moveFocusToMain).catch(() => {});
+  // After a genuine navigation, move focus to the screen heading so
+  // keyboard/screen-reader users land on the new content. Skip on refresh.
+  Promise.resolve(dispatch(app, p, rest))
+    .then(() => { if (!isRefresh) moveFocusToMain(); })
+    .catch(() => {});
 }
 
 function dispatch(app, p, rest) {
@@ -319,6 +357,10 @@ function dispatch(app, p, rest) {
 function moveFocusToMain() {
   const app = document.getElementById('app');
   if (!app || app.querySelector('.skeleton')) return; // still loading; render will re-focus
+  // Don't steal focus from a field a screen just focused on purpose (e.g. the
+  // login password input) — that field is where the user needs to be.
+  const active = document.activeElement;
+  if (active && app.contains(active) && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return;
   const h = app.querySelector('h1, h2, h3');
   if (!h) return;
   h.setAttribute('tabindex', '-1');
@@ -339,16 +381,27 @@ function renderPostsSoon(app) {
   </div>`;
 }
 
-// Close the mobile sheet/drawer on Escape (registered once, not per render).
+// Keyboard handling for the mobile sheet/drawer (registered once): Escape
+// closes and restores focus; Tab is trapped inside the open sheet.
 document.addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape') return;
   const s = document.getElementById('new-sheet');
-  if (s && s.classList.contains('open')) { s.classList.remove('open'); return; }
-  const nav = document.getElementById('mainnav');
-  if (nav && nav.classList.contains('open')) {
-    nav.classList.remove('open');
-    const btn = document.querySelector('.nav-toggle');
-    if (btn) btn.setAttribute('aria-expanded', 'false');
+  const sheetOpen = s && s.classList.contains('open');
+  if (e.key === 'Escape') {
+    if (sheetOpen) { closeSheets(); const b = document.querySelector('.bn-new'); if (b) b.focus(); return; }
+    const nav = document.getElementById('mainnav');
+    if (nav && nav.classList.contains('open')) {
+      nav.classList.remove('open');
+      const btn = document.querySelector('.nav-toggle');
+      if (btn) { btn.setAttribute('aria-expanded', 'false'); btn.focus(); }
+    }
+    return;
+  }
+  if (e.key === 'Tab' && sheetOpen) {
+    const items = s.querySelectorAll('.sheet-item');
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
 });
 
@@ -361,13 +414,17 @@ window.route = route;
 
 function header(title) {
   const on = (t) => title === t ? ' class="active"' : '';
+  // A visually-hidden screen heading: gives every screen (the list screens have
+  // no other heading) an <h1> for the router's focus-to-heading + skip-link to
+  // land on, and announces the screen name to screen readers.
   return `<a href="#" class="skip-link" onclick="skipToContent();return false">Skip to content</a>
+  <h1 class="sr-only">${escapeHtml(title || 'barter.game')}</h1>
   <div class="header">
     <div class="brand">
       <div class="logo-mark"><span></span></div>
       <div><strong>${escapeHtml(state.bankName)}</strong> <span class="mono small">${escapeHtml(state.user?.pubkey.slice(0, 12) || '')}…</span></div>
     </div>
-    <nav class="nav" id="mainnav">
+    <nav class="nav" id="mainnav" aria-label="Primary">
       <a href="#/"${on('Dashboard')}>Home</a>
       <a href="#/vouchers"${on('Vouchers')}>Vouchers</a>
       <a href="#/orders"${on('Orders')}>Orders</a>
@@ -385,7 +442,12 @@ function header(title) {
       <button class="btn secondary" onclick="lock()">Lock</button>
     </div>
   </div>
-  ${bottomNav(title)}`;
+  ${bottomNav(title)}
+  <main id="main-region">`;
+  // NOTE: the <main> is intentionally left open — each screen appends its
+  // content right after header(), so the content becomes main's children and
+  // the parser auto-closes main at the end of #app. This wraps the screen body
+  // (not the nav) in a single main landmark without touching every render.
 }
 
 // Persistent mobile bottom bar (quick access) + the "New" action sheet. Hidden
@@ -405,7 +467,7 @@ function bottomNav(title) {
       <div class="sheet-title">Create</div>
       <a href="#/invoices/new" class="sheet-item" role="menuitem" onclick="closeSheets()">Invoice <span class="small">request a payment</span></a>
       <a href="#/cheques/new" class="sheet-item" role="menuitem" onclick="closeSheets()">Cheque <span class="small">send someone funds</span></a>
-      <a href="#/posts/new" class="sheet-item" role="menuitem" onclick="closeSheets()">Post <span class="small">to a voucher feed</span></a>
+      <a href="#/orders/new" class="sheet-item" role="menuitem" onclick="closeSheets()">Swap <span class="small">trade one voucher for another</span></a>
       <a href="#/vouchers/new" class="sheet-item" role="menuitem" onclick="closeSheets()">Voucher <span class="small">mint your own</span></a>
       <button class="sheet-item cancel" onclick="closeSheets()">Cancel</button>
     </div>
@@ -428,15 +490,32 @@ window.toggleNav = function() {
 window.toggleNewSheet = function(e) {
   if (e) e.stopPropagation();
   const s = document.getElementById('new-sheet');
-  if (s) s.classList.toggle('open');
+  if (!s) return;
+  const opening = !s.classList.contains('open');
+  // Only one overlay at a time: opening the sheet closes the Menu drawer.
+  const nav = document.getElementById('mainnav');
+  if (nav) nav.classList.remove('open');
+  const navBtn = document.querySelector('.nav-toggle');
+  if (navBtn) navBtn.setAttribute('aria-expanded', 'false');
+  s.classList.toggle('open', opening);
+  const newBtn = document.querySelector('.bn-new');
+  if (newBtn) newBtn.setAttribute('aria-expanded', opening ? 'true' : 'false');
+  if (opening) {
+    const first = s.querySelector('.sheet-item');
+    if (first) first.focus();
+  } else if (newBtn) {
+    newBtn.focus(); // restore focus to the trigger on close
+  }
 };
 window.closeSheets = function() {
   const s = document.getElementById('new-sheet');
   if (s) s.classList.remove('open');
   const nav = document.getElementById('mainnav');
   if (nav) nav.classList.remove('open');
-  const btn = document.querySelector('.nav-toggle');
-  if (btn) btn.setAttribute('aria-expanded', 'false');
+  const navBtn = document.querySelector('.nav-toggle');
+  if (navBtn) navBtn.setAttribute('aria-expanded', 'false');
+  const newBtn = document.querySelector('.bn-new');
+  if (newBtn) newBtn.setAttribute('aria-expanded', 'false');
 };
 
 function card(title, body) { return `<div class="card"><h3>${escapeHtml(title)}</h3>${body}</div>`; }
@@ -533,12 +612,15 @@ function renderRegister(app) {
 }
 
 window.doRegister = async function() {
-  const handle = document.getElementById('r-handle').value.trim();
+  // Lowercase to match the bank's rule (it requires lowercase), so a stray
+  // capital doesn't bounce a raw "-32600 handle must be…" back at the user.
+  const handle = document.getElementById('r-handle').value.trim().toLowerCase();
   const pass = document.getElementById('r-pass').value;
   const pass2 = document.getElementById('r-pass2').value;
   const ack = document.getElementById('r-ack').checked;
   const err = document.getElementById('r-err');
   if (!handle) { err.textContent = 'Choose a handle'; return; }
+  if (!/^[a-z0-9_-]{2,32}$/.test(handle)) { err.textContent = 'Handle must be 2–32 characters, using only a–z, 0–9, _ or -'; return; }
   if (pass.length < MIN_PASSWORD) { err.textContent = `Password must be at least ${MIN_PASSWORD} characters`; return; }
   if (pass !== pass2) { err.textContent = 'Passwords do not match'; return; }
   if (!ack) { err.textContent = 'Please acknowledge there is no password recovery'; return; }
@@ -552,10 +634,13 @@ window.doRegister = async function() {
       body: JSON.stringify({ handle, pubkey: pubkeyBase58, keystore, proof })
     });
     const data = await res.json();
-    if (data.code) throw new Error(`${data.code}: ${data.message}`);
+    if (data.code) throw bankError(data.code, data.message);
     rememberHandle(handle);
     state.user = { handle, pubkey: pubkeyBase58, privateKey };
-    state.uiState = await uiGet('/state');
+    // The account exists now; a transient /state blip must not bounce the user
+    // back to a register error (a retry would hit "handle taken"). Fall back to
+    // a default state, exactly like doUnlock.
+    state.uiState = await uiGet('/state').catch(() => ({ pubkey: pubkeyBase58, trusted: [], contacts: [], banks: [], catalog: [], drafts: [], prefs: {}, rev: 0 }));
     toast(`Welcome, ${handle}`);
     if (resumePendingAction()) return;
     location.hash = '#/';
@@ -567,16 +652,54 @@ window.doRegister = async function() {
 
 function renderConnect(app) {
   app.innerHTML = `<div class="container" style="max-width:420px;padding-top:8vh">
-    ${card('Connect existing key', `
-      <label>Base58 private key / seed</label>
+    ${card('Restore from recovery kit', `
+      <p class="small">Have the <b>recovery kit</b> file you downloaded from Settings? Load it and enter its password to restore your account — no bank lookup needed.</p>
+      <label for="c-kit">Recovery kit (.json)</label><input id="c-kit" type="file" accept="application/json,.json">
+      <label for="c-kit-pass">Password</label><input id="c-kit-pass" type="password" placeholder="••••••••" autocomplete="current-password">
+      <button class="btn" style="width:100%;margin-top:1rem" onclick="restoreFromKit(this)">Restore</button>
+      <p class="small error" id="c-kit-err"></p>
+    `)}
+    ${card('Or paste a raw key', `
+      <label for="c-key">Base58 private key / seed</label>
       <textarea id="c-key" rows="3" placeholder="paste 32-byte base58 seed"></textarea>
-      <p class="small">Or load encrypted backup by handle below after importing.</p>
-      <button class="btn" style="width:100%;margin-top:1rem" onclick="doConnect()">Connect</button>
+      <button class="btn secondary" style="width:100%;margin-top:1rem" onclick="doConnect()">Connect</button>
       <p class="small error" id="c-err"></p>
     `)}
     <p style="text-align:center"><a href="#/">Back</a></p>
   </div>`;
 }
+
+// Restore an account from a downloaded recovery kit: decrypt its keystore with
+// the password locally (no bank round-trip), so it works even if the account's
+// bank is unreachable.
+window.restoreFromKit = async function(btn) {
+  const fileEl = document.getElementById('c-kit');
+  const pass = document.getElementById('c-kit-pass').value;
+  const err = document.getElementById('c-kit-err');
+  const file = fileEl.files && fileEl.files[0];
+  if (!file) { err.textContent = 'Choose your recovery kit file'; return; }
+  if (!pass) { err.textContent = 'Enter the password you set for this account'; return; }
+  const release = lockBtn(btn);
+  try {
+    let kit;
+    try { kit = JSON.parse(await file.text()); } catch { throw new Error('That file is not a valid recovery kit'); }
+    if (!kit || !kit.keystore || !kit.pubkey) throw new Error('That file is not a barter.game recovery kit');
+    let seed;
+    try { seed = await decryptSeed(kit.keystore, pass); } catch { throw new Error('Wrong password for this recovery kit'); }
+    const { pubkeyBase58 } = publicKeyOf(seed);
+    if (pubkeyBase58 !== kit.pubkey) throw new Error('Wrong password for this recovery kit');
+    const handle = kit.handle || pubkeyBase58.slice(0, 8);
+    rememberHandle(handle);
+    state.user = { handle, pubkey: pubkeyBase58, privateKey: seed };
+    state.uiState = await uiGet('/state').catch(() => ({ pubkey: pubkeyBase58, trusted: [], contacts: [], banks: [], catalog: [], drafts: [], prefs: {}, rev: 0 }));
+    toast(`Welcome back, ${handle}`);
+    location.hash = '#/';
+    route();
+  } catch (e) {
+    release();
+    err.textContent = e.message;
+  }
+};
 
 window.doConnect = async function() {
   const keyStr = document.getElementById('c-key').value.trim();
@@ -587,7 +710,6 @@ window.doConnect = async function() {
     const { pubkeyBase58 } = publicKeyOf(privateKey);
     state.user = { pubkey: pubkeyBase58, privateKey, handle: pubkeyBase58.slice(0, 8) };
     state.uiState = await uiGet('/state').catch(() => null);
-    const handle = await uiGet('/state').then(s => null).catch(() => null);
     location.hash = '#/';
     route();
   } catch (e) {
@@ -717,13 +839,13 @@ function renderCreateVoucher(app) {
       <label for="v-limit">Supply limit <span class="small">(optional — max you will ever issue)</span></label><input id="v-limit" type="number" min="0" step="any" placeholder="unlimited">
       <label for="v-expires">Expires <span class="small">(optional — the voucher is void after this date)</span></label><input id="v-expires" type="date">
       <label><input type="checkbox" id="v-int"> Integer amounts only</label>
-      <button class="btn" style="width:100%;margin-top:1rem" onclick="doCreateVoucher()">Create & sign</button>
+      <button class="btn" style="width:100%;margin-top:1rem" onclick="doCreateVoucher(this)">Create & sign</button>
       <p class="small error" id="v-err"></p>
     `)}
   </div>`;
 }
 
-window.doCreateVoucher = async function() {
+window.doCreateVoucher = async function(btn) {
   const name = document.getElementById('v-name').value.trim();
   const desc = document.getElementById('v-desc').value.trim();
   const limit = document.getElementById('v-limit').value;
@@ -732,6 +854,7 @@ window.doCreateVoucher = async function() {
   const err = document.getElementById('v-err');
   if (!name) { err.textContent = 'Name required'; return; }
   if (limit && (!Number.isFinite(Number(limit)) || Number(limit) <= 0)) { err.textContent = 'Supply limit must be a positive number, or left blank'; return; }
+  const release = lockBtn(btn);
   try {
     const voucher = { type: 'voucher', pubkey: state.user.pubkey, ulid: newUlid(), bank: state.bankPubkey, name };
     if (desc) voucher.description_md = desc;
@@ -750,6 +873,7 @@ window.doCreateVoucher = async function() {
     route();
     toast('Voucher created');
   } catch (e) {
+    release();
     err.textContent = e.message;
   }
 };
@@ -757,6 +881,7 @@ window.doCreateVoucher = async function() {
 async function renderInvoices(app) {
   let orders = { orders: [] }, failed = false;
   try { orders = await uiGet('/orders?kind=invoice'); } catch { failed = true; }
+  const names = await voucherNameMap();
   // Guard against non-invoice rows: a bank that ignores ?kind= (or older data)
   // could return cheques/two-sided orders, which have no credit side.
   const invoices = (orders.orders || []).filter(o => o.credit);
@@ -765,7 +890,7 @@ async function renderInvoices(app) {
   body += `<div class="flex" style="margin-bottom:1rem"><a class="btn" href="#/invoices/new">New invoice</a></div>`;
   body += failed ? loadError('your invoices') : (invoices.map(o => `
     <div class="card">
-      <div>Receive ${escapeHtml(String(o.credit.max))} of ${escapeHtml(o.credit.voucher.slice(0,12))}…</div>
+      <div>Receive ${escapeHtml(String(o.credit.max))} ${vName(names, o.credit.voucher)}</div>
       <div class="mono small">${escapeHtml(o.order.slice(0,16))}…</div>
       <div class="small">state: ${escapeHtml(String(o.state))}</div>
       <button class="btn secondary" onclick="showShare('v', '${jsStr(o.order)}', 'Invoice — scan to pay')">Share QR</button>
@@ -807,10 +932,11 @@ async function knownVouchers() {
     const hash = hashDoc(v);
     if (seen.has(hash)) return;
     seen.add(hash);
-    out.push({ hash, name: v.name, issuer });
+    out.push({ hash, name: v.name, issuer, integer: !!v.integer });
   };
+  let coreFailed = false;
   const [mine, trusted, bases] = await Promise.all([
-    rpcCall('list_vouchers', { filter: 'mine' }).catch(() => []),
+    rpcCall('list_vouchers', { filter: 'mine' }).catch(() => { coreFailed = true; return []; }),
     uiGet('/trusted').catch(() => []),
     issuerResolveBases(),
   ]);
@@ -822,12 +948,40 @@ async function knownVouchers() {
     const who = r.handle || (r.pubkey || '').slice(0, 8) + '…';
     r.vouchers.forEach(v => add(v, who));
   });
+  // Flag a real load failure so callers can distinguish "you have none" from
+  // "the bank is down" (see the Create forms).
+  out.failed = coreFailed;
   return out;
 }
 function voucherChooser(id, vouchers, selected) {
   return `<select id="${id}">${vouchers.map(v =>
-    `<option value="${escapeHtml(v.hash)}"${v.hash === selected ? ' selected' : ''}>${escapeHtml(v.name)} — ${escapeHtml(v.issuer)}</option>`
+    `<option value="${escapeHtml(v.hash)}" data-int="${v.integer ? '1' : ''}"${v.hash === selected ? ' selected' : ''}>${escapeHtml(v.name)} — ${escapeHtml(v.issuer)}</option>`
   ).join('')}</select>`;
+}
+// True when the currently-selected voucher in a chooser is issued in whole units.
+function chooserIsInteger(selectId) {
+  const sel = document.getElementById(selectId);
+  return !!(sel && sel.selectedOptions[0] && sel.selectedOptions[0].dataset.int === '1');
+}
+// hash → voucher name, for showing names (not raw hashes) in the Invoices/
+// Cheques/Orders lists. Best-effort: unknown vouchers fall back to a short hash.
+async function voucherNameMap() {
+  const m = {};
+  (await knownVouchers().catch(() => [])).forEach(v => { m[v.hash] = v.name; });
+  return m;
+}
+function vName(map, hash) {
+  return hash ? escapeHtml(map[hash] || hash.slice(0, 10) + '…') : '';
+}
+// Disable a submit button while its async handler runs, so a double-click (or a
+// slow round-trip) can't fire the same create twice. Returns a release fn to
+// call on error; on success the handler navigates away and the button is gone.
+function lockBtn(btn) {
+  if (!btn) return () => {};
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Working…';
+  return () => { btn.disabled = false; btn.textContent = label; };
 }
 function noVouchersNotice() {
   return `<p class="small">No vouchers to choose from yet. <a href="#/vouchers/new">Create one</a> or <a href="#/network">trust an issuer</a> first.</p>`;
@@ -855,18 +1009,20 @@ async function renderCreateInvoice(app) {
       <label for="i-voucher">Voucher to receive</label>${voucherChooser('i-voucher', vouchers)}
       <label for="i-acct">Account name <span class="small">(where the payment lands)</span></label><input id="i-acct" value="receiving">
       <label for="i-amount">Amount to receive</label><input id="i-amount" type="number" min="0" step="any" value="10">
-      <button class="btn" style="width:100%;margin-top:1rem" onclick="doCreateInvoice()">Create invoice</button>
+      <button class="btn" style="width:100%;margin-top:1rem" onclick="doCreateInvoice(this)">Create invoice</button>
       <p class="small error" id="i-err"></p>
-    ` : noVouchersNotice())}
+    ` : (vouchers.failed ? loadError('your vouchers') : noVouchersNotice()))}
   </div>`;
 }
 
-window.doCreateInvoice = async function() {
+window.doCreateInvoice = async function(btn) {
   const voucherHash = document.getElementById('i-voucher').value.trim();
   const acctName = document.getElementById('i-acct').value.trim();
   const amount = Number(document.getElementById('i-amount').value);
   const err = document.getElementById('i-err');
   if (badAmount(amount)) { err.textContent = 'Enter an amount greater than zero'; return; }
+  if (chooserIsInteger('i-voucher') && !Number.isInteger(amount)) { err.textContent = 'This voucher is issued in whole units only — enter a whole number'; return; }
+  const release = lockBtn(btn);
   try {
     const account = { type: 'account', pubkey: state.user.pubkey, ulid: newUlid(), name: acctName, voucher: voucherHash };
     account.sig = signDoc(account, state.user.privateKey);
@@ -876,11 +1032,14 @@ window.doCreateInvoice = async function() {
       lead: false };
     order.sig = signDoc(order, state.user.privateKey);
     const orderHash = hashDoc(order);
-    const res = await rpcCall('submit_docs', { docs: [order, account], publish_offers: [orderHash] });
+    await rpcCall('submit_docs', { docs: [order, account], publish_offers: [orderHash] });
     location.hash = '#/invoices';
     route();
-    toast('Invoice created. Offer: ' + (res.offers[0] || '').slice(0,12));
+    toast('Invoice created — share its QR so someone can pay it');
+    // Pop the shareable QR straight away, mirroring the cheque flow.
+    showShare('v', orderHash, 'Invoice — scan to pay');
   } catch (e) {
+    release();
     err.textContent = e.message;
   }
 };
@@ -888,13 +1047,14 @@ window.doCreateInvoice = async function() {
 async function renderCheques(app) {
   let orders = { orders: [] }, failed = false;
   try { orders = await uiGet('/orders?kind=cheque'); } catch { failed = true; }
+  const names = await voucherNameMap();
   const cheques = (orders.orders || []).filter(o => o.debit && !o.credit);
   let body = header('Cheques') + `<div class="container">`;
   body += `<div class="flex" style="margin-bottom:1rem"><a class="btn" href="#/cheques/new">New cheque</a></div>`;
   body += `<p class="small">A cheque lets someone claim a fixed amount of your voucher. Share its QR with the recipient.</p>`;
   body += failed ? loadError('your cheques') : (cheques.map(o => `
     <div class="card">
-      <div>Pay out ${escapeHtml(String(o.debit.max))} of ${escapeHtml(o.debit.voucher.slice(0,12))}…</div>
+      <div>Pay out ${escapeHtml(String(o.debit.max))} ${vName(names, o.debit.voucher)}</div>
       <div class="mono small">${escapeHtml(o.order.slice(0,16))}…</div>
       <div class="small">state: ${escapeHtml(String(o.state))}</div>
       <button class="btn secondary" onclick="showShare('q', '${jsStr(o.order)}', 'Cheque — scan to claim')">Share QR</button>
@@ -912,18 +1072,20 @@ async function renderCreateCheque(app) {
       <label for="q-voucher">Voucher to pay out</label>${voucherChooser('q-voucher', vouchers)}
       <label for="q-acct">Account name <span class="small">(paid from)</span></label><input id="q-acct" value="spending">
       <label for="q-amount">Amount to pay</label><input id="q-amount" type="number" min="0" step="any" value="10">
-      <button class="btn" style="width:100%;margin-top:1rem" onclick="doCreateCheque()">Create cheque</button>
+      <button class="btn" style="width:100%;margin-top:1rem" onclick="doCreateCheque(this)">Create cheque</button>
       <p class="small error" id="q-err"></p>
-    ` : noVouchersNotice())}
+    ` : (vouchers.failed ? loadError('your vouchers') : noVouchersNotice()))}
   </div>`;
 }
 
-window.doCreateCheque = async function() {
+window.doCreateCheque = async function(btn) {
   const voucherHash = document.getElementById('q-voucher').value.trim();
   const acctName = document.getElementById('q-acct').value.trim();
   const amount = Number(document.getElementById('q-amount').value);
   const err = document.getElementById('q-err');
   if (badAmount(amount)) { err.textContent = 'Enter an amount greater than zero'; return; }
+  if (chooserIsInteger('q-voucher') && !Number.isInteger(amount)) { err.textContent = 'This voucher is issued in whole units only — enter a whole number'; return; }
+  const release = lockBtn(btn);
   try {
     const account = { type: 'account', pubkey: state.user.pubkey, ulid: newUlid(), name: acctName, voucher: voucherHash };
     account.sig = signDoc(account, state.user.privateKey);
@@ -940,6 +1102,7 @@ window.doCreateCheque = async function() {
     // Pop the shareable QR straight away — the point of a cheque is to send it.
     showShare('q', orderHash, 'Cheque — scan to claim');
   } catch (e) {
+    release();
     err.textContent = e.message;
   }
 };
@@ -947,15 +1110,17 @@ window.doCreateCheque = async function() {
 async function renderOrders(app) {
   let orders = { orders: [] }, failed = false;
   try { orders = await uiGet('/orders'); } catch { failed = true; }
+  const names = await voucherNameMap();
   app.innerHTML = header('Orders') + `<div class="container">
     <div class="flex" style="margin-bottom:1rem"><a class="btn" href="#/orders/new">New order</a></div>
     ${failed ? loadError('your orders') : (orders.orders.map(o => `
       <div class="card">
         <div>${o.kind === 'two-sided' ? 'Swap' : escapeHtml(String(o.kind))}${o.lead ? ' · settles first' : ''}</div>
         <div class="mono small">${escapeHtml(o.order.slice(0,16))}…</div>
-        <div class="small">${o.debit ? `give up to ${escapeHtml(String(o.debit.max))}` : ''} ${o.credit ? `· receive up to ${escapeHtml(String(o.credit.max))}` : ''}</div>
+        <div class="small">${o.debit ? `give up to ${escapeHtml(String(o.debit.max))} ${vName(names, o.debit.voucher)}` : ''} ${o.credit ? `· receive up to ${escapeHtml(String(o.credit.max))} ${vName(names, o.credit.voucher)}` : ''}</div>
         ${o.kind === 'invoice' ? `<button class="btn secondary" onclick="showShare('v', '${jsStr(o.order)}', 'Invoice — scan to pay')">Share QR</button>` : ''}
         ${o.kind === 'cheque' ? `<button class="btn secondary" onclick="showShare('q', '${jsStr(o.order)}', 'Cheque — scan to claim')">Share QR</button>` : ''}
+        ${o.kind === 'two-sided' ? `<button class="btn secondary" onclick="showShare('o', '${jsStr(o.order)}', 'Swap — scan to trade')">Share QR</button>` : ''}
       </div>
     `).join('') || '<p class="small">No orders yet.</p>')}
   </div>`;
@@ -972,13 +1137,13 @@ async function renderCreateOrder(app) {
       <label for="o-cmax">Amount you receive (up to)</label><input id="o-cmax" type="number" min="0" step="any" value="90">
       <label><input type="checkbox" id="o-lead"> Settle my side first <span class="small">(the counterparty may not reciprocate)</span></label>
       <label><input type="checkbox" id="o-pub" checked> List publicly so others can discover this</label>
-      <button class="btn" style="width:100%;margin-top:1rem" onclick="doCreateOrder()">Create order</button>
+      <button class="btn" style="width:100%;margin-top:1rem" onclick="doCreateOrder(this)">Create order</button>
       <p class="small error" id="o-err"></p>
-    ` : noVouchersNotice())}
+    ` : (vouchers.failed ? loadError('your vouchers') : noVouchersNotice()))}
   </div>`;
 }
 
-window.doCreateOrder = async function() {
+window.doCreateOrder = async function(btn) {
   const dv = document.getElementById('o-dv').value.trim();
   const dmax = Number(document.getElementById('o-dmax').value);
   const cv = document.getElementById('o-cv').value.trim();
@@ -988,8 +1153,11 @@ window.doCreateOrder = async function() {
   const err = document.getElementById('o-err');
   if (dv === cv) { err.textContent = 'Pick two different vouchers — you cannot swap a voucher for itself'; return; }
   if (badAmount(dmax) || badAmount(cmax)) { err.textContent = 'Both amounts must be greater than zero'; return; }
+  if (chooserIsInteger('o-dv') && !Number.isInteger(dmax)) { err.textContent = 'The voucher you give is in whole units only — enter a whole number'; return; }
+  if (chooserIsInteger('o-cv') && !Number.isInteger(cmax)) { err.textContent = 'The voucher you receive is in whole units only — enter a whole number'; return; }
   // Rate is derived from the two amounts, not hand-typed — they can never disagree.
   const rate = dmax / cmax;
+  const release = lockBtn(btn);
   try {
     const dAccount = { type: 'account', pubkey: state.user.pubkey, ulid: newUlid(), name: 'giving', voucher: dv };
     dAccount.sig = signDoc(dAccount, state.user.privateKey);
@@ -1008,6 +1176,7 @@ window.doCreateOrder = async function() {
     route();
     toast(pub ? 'Order created and listed publicly' : 'Order created');
   } catch (e) {
+    release();
     err.textContent = e.message;
   }
 };
@@ -1209,7 +1378,7 @@ async function renderDeal(app, dealId) {
       <p class="small">Connecting to the bank… this can take a moment right after a deal is proposed. This page keeps retrying.</p>
       <button class="btn secondary" onclick="route()">Retry now</button>`);
     app.innerHTML = body + `</div>`;
-    setTimeout(() => { if (location.hash === `#/deal/${dealId}`) route(); }, 3000);
+    dealTimer = setTimeout(() => { if (location.hash === `#/deal/${dealId}`) route(); }, 3000);
     return;
   }
   {
@@ -1247,7 +1416,7 @@ async function renderDeal(app, dealId) {
   body += `</div>`;
   app.innerHTML = body;
   if (status && status.state !== 'settled' && status.state !== 'rejected') {
-    setTimeout(() => { if (location.hash === `#/deal/${dealId}`) route(); }, 3000);
+    dealTimer = setTimeout(() => { if (location.hash === `#/deal/${dealId}`) route(); }, 3000);
   }
 }
 
@@ -1301,8 +1470,11 @@ window.downloadBackup = async function() {
 
 // Build the public Barter Link for a kind/value at this bank and show it as a
 // QR + copyable link. REFERENCE mode links per the spec's QR byte budget.
-window.showShare = function(kind, value, title) {
-  const link = `${state.bankUrl}/${kind}/${value}`;
+window.showShare = function(kind, value, title, baseUrl) {
+  // baseUrl lets a foreign entity's QR (e.g. a trusted issuer who banks
+  // elsewhere) point at THEIR bank, where it actually resolves — not ours.
+  const base = (baseUrl || state.bankUrl).replace(/\/+$/, '');
+  const link = `${base}/${kind}/${value}`;
   let dataUrl = '';
   try { dataUrl = qrDataUrl(link); } catch (e) { toast(e.message, 'error'); return; }
   const opener = document.activeElement; // return focus here on close
@@ -1554,8 +1726,12 @@ window.useOtherBank = function(kind, value, sourceUrl) {
   if (!url) return;
   const clean = url.trim().replace(/\/+$/, '');
   if (!/^https?:\/\//.test(clean)) { toast('Enter a full https:// bank URL', 'error'); return; }
+  // Carry the source bank as a ?src= query param so it survives a cross-ORIGIN
+  // redirect (sessionStorage is per-origin). Also set sessionStorage as a
+  // same-origin fallback. boot seeds the scan origin from ?src=.
   try { if (sourceUrl) sessionStorage.setItem('barter_scan_origin', sourceUrl); } catch { /* ignore */ }
-  location.href = `${clean}/ui/app#/land/${kind}/${value}`;
+  const q = sourceUrl ? `?src=${encodeURIComponent(sourceUrl)}` : '';
+  location.href = `${clean}/ui/app${q}#/land/${kind}/${value}`;
 };
 function otherBankCta(kind, value, sourceUrl) {
   return `<p class="small" style="text-align:center;margin-top:0.75rem">
@@ -1604,7 +1780,14 @@ window.actOnOrder = async function(kind) {
     const theirOrder = env.docs.find(d => d.type === 'order');
     const theirHash = hashDoc(theirOrder);
     const side = kind === 'invoice' ? theirOrder.credit : theirOrder.debit;
-    const amount = Number(document.getElementById('act-amount').value) || side.max;
+    // Validate against the order's min–max instead of silently coercing a blank
+    // or out-of-range value to the max.
+    const raw = document.getElementById('act-amount').value.trim();
+    const amount = raw === '' ? side.max : Number(raw);
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error('Enter a valid amount');
+    if (amount < (side.min || 0) || amount > side.max) {
+      throw new Error(`Amount must be between ${side.min || 0} and ${side.max}`);
+    }
 
     // Everything about this action lives at the VOUCHER'S issuing bank (the
     // `bank` the signed Order pins for this side): the voucher doc, the
@@ -1717,10 +1900,14 @@ async function renderActivity(app) {
 // ---------------- network (banks + trusted issuers + contacts) --------------
 
 async function renderNetwork(app) {
+  // Track load failure so a bank outage doesn't masquerade as "nobody trusted /
+  // no peers / no contacts".
+  let failed = false;
+  const onFail = () => { failed = true; return []; };
   const [banks, trusted, contacts] = await Promise.all([
-    uiGet('/banks').catch(() => []),
-    uiGet('/trusted').catch(() => []),
-    uiGet('/contacts').catch(() => []),
+    uiGet('/banks').catch(onFail),
+    uiGet('/trusted').catch(onFail),
+    uiGet('/contacts').catch(onFail),
   ]);
   // Resolve handles/vouchers for trusted issuers across our bank + pinned banks
   // (a foreign issuer only resolves at their own bank). Entries are
@@ -1742,13 +1929,13 @@ async function renderNetwork(app) {
             <span class="small">${(r.vouchers || []).length} voucher(s)</span></span>
           <span>
             <button class="btn secondary" data-pk="${escapeHtml(r.pubkey)}" data-note="${escapeHtml(r.note || '')}" onclick="editTrustNote(this)">Note</button>
-            <button class="btn secondary" onclick="showShare('i', '${jsStr(r.pubkey)}', 'Issuer profile')">QR</button>
+            <button class="btn secondary" onclick="showShare('i', '${jsStr(r.pubkey)}', 'Issuer profile', '${jsStr(r.bank_url || '')}')">QR</button>
             <button class="btn danger" onclick="untrust('${jsStr(r.pubkey)}')">Remove</button>
           </span>
         </div>
         ${r.note ? `<p class="small" style="margin:0.3rem 0 0;font-style:italic">&ldquo;${escapeHtml(r.note)}&rdquo;</p>` : ''}
       </div>
-    `).join('') || '<p class="small">Nobody trusted yet. Scan a friend&#39;s profile QR to start.</p>')}
+    `).join('') || (failed ? loadError('your network') : '<p class="small">Nobody trusted yet. Scan a friend&#39;s profile QR to start.</p>'))}
     ${card('Add trusted issuer', `
       <label for="n-trust-pk">Issuer pubkey</label><input id="n-trust-pk" placeholder="base58 pubkey">
       <label for="n-trust-note">Note <span class="small">(optional)</span></label>
@@ -1762,7 +1949,7 @@ async function renderNetwork(app) {
           <span class="mono small">${escapeHtml(b.pubkey.slice(0, 16))}… · ${escapeHtml(b.url)}</span>
           <button class="btn danger" onclick="removeBank('${jsStr(b.pubkey)}')">Remove</button>
         </div>
-      `).join('') || '<p class="small">No peer banks pinned</p>'}
+      `).join('') || (failed ? loadError('known banks') : '<p class="small">No peer banks pinned</p>')}
       <label for="n-bank-url">Bank URL</label><input id="n-bank-url" placeholder="https://…/bankname">
       <button class="btn" onclick="addBank()">Pin bank</button>
       <p class="small error" id="n-bank-err"></p>
@@ -1772,7 +1959,7 @@ async function renderNetwork(app) {
         <span>${escapeHtml(c.handle || '')} <span class="mono small">${escapeHtml((c.pubkey || '').slice(0, 16))}…</span></span>
         <button class="btn danger" onclick="removeContact('${jsStr(c.pubkey)}')">Remove</button>
       </div>
-    `).join('') || '<p class="small">No contacts</p>')}
+    `).join('') || (failed ? loadError('contacts') : '<p class="small">No contacts</p>'))}
   </div>`;
 }
 
@@ -1841,6 +2028,14 @@ setInterval(() => {
 }, 15000);
 
 // ---------------- boot ----------------
+
+// A cross-bank landing redirect carries the source bank as ?src= (see
+// useOtherBank) — seed the scan origin from it so a foreign doc resolves even
+// across origins, where sessionStorage wouldn't have carried over.
+try {
+  const src = new URLSearchParams(location.search).get('src');
+  if (src && /^https?:\/\//.test(src)) sessionStorage.setItem('barter_scan_origin', src);
+} catch { /* ignore */ }
 
 fetchConfig().then(() => route()).catch(e => {
   document.getElementById('app').innerHTML = `<div class="container"><p class="error">Failed to load bank config: ${e.message}</p></div>`;
