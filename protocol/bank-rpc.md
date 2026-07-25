@@ -3,7 +3,7 @@
 This file defines the bank's public interface:
 
 - JSON-RPC methods for voucher/account/order submission, record creation, authorization clearance, signature fan-out, and reads
-- REST address-directory endpoints
+- REST endpoints (address directory, media blobs)
 - Orchestration recipe
 - Bank discovery
 
@@ -117,16 +117,26 @@ Across two banks, the coordinator makes one call to each bank, with `giver`/`rec
 | `list_offers(voucher_hash, intention)` | any → bank | Return Offers for the given Voucher and intention (`sell` or `buy`). |
 | `get_invoice(hash)` / `get_cheque(hash)` | any → bank | Return the Order or Offer at `hash` if it has the invoice (`debit` omitted) or cheque (`credit` omitted) specialization. |
 | `list_vouchers({ issuer?, cursor?, limit? })` | any → bank | *Paginated.* Return Vouchers from the bank's public registry. The `issuer` filter is protocol: given an issuer pubkey, return every registry-published Voucher signed by it. Which Vouchers enter the registry is bank policy ([`discovery.md`](./discovery.md) §2). |
-| `list_posts({ voucher, author?, cursor?, limit? })` | any → bank | *Paginated.* Return stored Post docs anchored to the Voucher, optionally filtered by author ([`post-feed.md`](./post-feed.md) §3). |
+| `list_posts(pubkey, voucher_hash, before?)` | any → bank | *Paginated, newest-first.* Return stored Post docs by **author** `pubkey` (a bank, issuer, or user), for a single `voucher_hash` **or** the literal `"all"` (no voucher filter). Optional `before` ULID pages backward in time. Bodies carry the author `sig` inline ([`post-feed.md`](./post-feed.md) §3). |
 | `get_post(post_hash)` | any → bank | Return the Post doc body. |
+| `get_post_signatures(post_hash)` | any → bank | Return the **additional** signatures anchored to a post (endorsements, reactions, issuer co-signs) — accrued after the immutable post was signed. The author's own signature lives in the post body. Mirrors `get_record_signatures`. |
 
-### 2.5 Address directory (REST)
+### 2.5 REST endpoints
 
-The Address directory exposes one plain HTTP endpoint for discovery:
+Two read/serve surfaces are plain HTTP (cacheable, no JSON-RPC envelope):
 
 - `GET /address/<pubkey>` — return the newest Address doc for the pubkey, or `404`.
+- `GET /media/<sha256>` — return a content-addressed media blob referenced by a
+  Post ([`post-feed.md`](./post-feed.md) §5). **Unauthenticated:** whoever knows
+  the hash may fetch the bytes. The bank verifies the bytes hash to the requested
+  value; blobs are immutable, so responses are freely cacheable. Unknown hash →
+  `404`.
 
-Address docs are submitted and updated through the standard `submit_docs` JSON-RPC method. This keeps the write path uniform with Vouchers, Accounts, and Orders.
+Address docs are submitted and updated through the standard `submit_docs`
+JSON-RPC method. Media blobs are uploaded to the carrying bank before the Post
+that references them — `POST /media` with the raw bytes (or multipart), returning
+the `sha256`; acceptance (size caps, types, quotas) is bank policy. This keeps
+the write path uniform: docs via `submit_docs`, blobs via `/media`.
 
 ---
 
