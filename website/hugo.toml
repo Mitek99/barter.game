@@ -21,7 +21,14 @@ title = 'barter.game'
 
   [params.navbar]
     displayTitle = true
-    displayLogo = false
+    displayLogo = true
+    # The barter.game mark, same artwork as the favicon and the web app icon.
+    # It carries its own accent background, so the light and dark navbar share
+    # one file (no logo.dark override needed).
+    [params.navbar.logo]
+      path = 'images/logo.svg'
+      width = 24
+      height = 24
 
   [params.footer]
     enable = true

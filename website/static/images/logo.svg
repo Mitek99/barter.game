@@ -1,0 +1,11 @@
+<!-- barter.game navbar mark — overrides Hextra's default images/logo.svg.
+     Identical artwork to the favicon and the web app's icon (apps/web/icon.svg
+     and website/static/favicon.svg); the accent badge carries its own
+     background, so one file serves both the light and dark navbar. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="barter.game">
+  <title>barter.game</title>
+  <rect width="512" height="512" rx="137" ry="137" fill="#3D34D6"/>
+  <rect x="163" y="163" width="186" height="186" rx="32" ry="32"
+        fill="none" stroke="#FFFFFF" stroke-width="44"
+        transform="rotate(45 256 256)"/>
+</svg>
