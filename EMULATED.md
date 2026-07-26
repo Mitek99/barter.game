@@ -283,6 +283,36 @@ Then the threads:
 - **kai → lena** (repost, same bank): *"Can vouch — she rebuilt my rear hub for the price of a lesson."* — an issuer amplifying a neighbour's post to his own followers.
 - **yusuf → priya** (reply, **cross-bank**): *"She sorted my sister's visa and took a loaf for it. Worth crossing banks for."* — yusuf banks at bob, but posted into the feed alice carries, which §2 allows for any bank that knows the voucher.
 
+### Nothing here is free
+
+A first round of newcomer-facing posts offered *free* slots and cuts "on the
+house". That was wrong, and worth recording as a rule rather than a typo.
+
+A Voucher is a commitment to deliver, and a deal is a set of **paired**
+credit/debit transfers (`protocol/README.md`) — value moves in both directions
+by construction. There is no gratis path through the ledger: you redeem a
+voucher, and you obtained that voucher by issuing one of your own. A giveaway
+has no ledger entry and cannot be traded onward, so it does not even help the
+person receiving it.
+
+Which means the onboarding answer for a newcomer is **not** charity — it is
+*mint your own voucher*. The one thing an established member can genuinely
+extend is **credit**: agreeing to hold a currency nobody has tested yet. That
+is the risk, and it is the only thing anyone can really give.
+
+The six re-posted on that footing (the originals stay — a signed post is a
+fact, and the correction is itself part of the record):
+
+> **priya** — *"nothing here is free, and it shouldn't be. An hour of my advice
+> costs one hour of my advice… What I will do for a newcomer is accept a voucher
+> nobody has heard of yet."*
+
+> **lena** — *"I do not discount and I do not do favours — a favour has no
+> ledger entry and cannot be traded onward."*
+
+> **kai** — *"Every lesson I have given this year was paid for… That is not me
+> being generous, it is me being solvent."*
+
 ### Discovery through posts
 
 There is no global timeline. Each reader's feed is their own trust graph merged
