@@ -1107,6 +1107,17 @@ window.doCreateCheque = async function(btn) {
   }
 };
 
+// A `/o/<value>` Barter Link resolves an **Offer** hash, not an Order hash, so
+// sharing `o.order` produces a link that always 404s. `/ui/orders` already
+// returns the derived Offer hashes for each order; share the first of those.
+// An order published with no offer (the "list publicly" box left unticked) has
+// nothing shareable — say so instead of handing out a dead link.
+function twoSidedShare(o) {
+  const offer = Array.isArray(o.offers) && o.offers.length ? o.offers[0] : null;
+  if (!offer) return `<div class="small">Not listed publicly — no shareable link</div>`;
+  return `<button class="btn secondary" onclick="showShare('o', '${jsStr(offer)}', 'Swap — scan to trade')">Share QR</button>`;
+}
+
 async function renderOrders(app) {
   let orders = { orders: [] }, failed = false;
   try { orders = await uiGet('/orders'); } catch { failed = true; }
@@ -1120,7 +1131,7 @@ async function renderOrders(app) {
         <div class="small">${o.debit ? `give up to ${escapeHtml(String(o.debit.max))} ${vName(names, o.debit.voucher)}` : ''} ${o.credit ? `· receive up to ${escapeHtml(String(o.credit.max))} ${vName(names, o.credit.voucher)}` : ''}</div>
         ${o.kind === 'invoice' ? `<button class="btn secondary" onclick="showShare('v', '${jsStr(o.order)}', 'Invoice — scan to pay')">Share QR</button>` : ''}
         ${o.kind === 'cheque' ? `<button class="btn secondary" onclick="showShare('q', '${jsStr(o.order)}', 'Cheque — scan to claim')">Share QR</button>` : ''}
-        ${o.kind === 'two-sided' ? `<button class="btn secondary" onclick="showShare('o', '${jsStr(o.order)}', 'Swap — scan to trade')">Share QR</button>` : ''}
+        ${o.kind === 'two-sided' ? twoSidedShare(o) : ''}
       </div>
     `).join('') || '<p class="small">No orders yet.</p>')}
   </div>`;
