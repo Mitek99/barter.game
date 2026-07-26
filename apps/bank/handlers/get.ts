@@ -1,4 +1,5 @@
 import {
+  getAccount as dbGetAccount,
   getAccountBalance as dbGetAccountBalance,
   getAddress as dbGetAddress,
   getDoc,
@@ -28,13 +29,27 @@ export async function getVoucher(
   return v;
 }
 
+// Accounts are private by default (bank-schema.md §1.2): a bank MUST NOT
+// disclose an account's balance to anyone but its holder — and the issuer of
+// the voucher the account is denominated in, who is entitled to see every
+// position in their own currency. v1 has no `Account.public` opt-in, so those
+// two are the whole allow-list.
 export async function getAccountBalance(
   bank: Bank,
   params: Record<string, unknown>,
+  sender: string,
 ): Promise<unknown> {
   const hash = params.account_hash;
   if (typeof hash !== 'string') {
     throw new RpcError(-32602, 'account_hash required');
+  }
+  const account = await dbGetAccount(bank, hash);
+  if (!account) throw new RpcError(-32005, 'unknown account');
+  if (sender !== account.doc.pubkey) {
+    const voucher = await dbGetVoucher(bank, account.doc.voucher);
+    if (!voucher || sender !== voucher.pubkey) {
+      throw new RpcError(-32001, 'not authorized to read this account');
+    }
   }
   const bal = await dbGetAccountBalance(bank, hash);
   if (!bal) throw new RpcError(-32005, 'unknown account');
