@@ -336,7 +336,7 @@ function dispatch(app, p, rest) {
   if (p === 'unlock') return renderUnlock(app);
   if (p === 'vouchers' && rest[0] === 'new') return renderCreateVoucher(app);
   if (p === 'vouchers') return renderVouchers(app);
-  if (p === 'orders' && rest[0] === 'new') return renderCreateOrder(app);
+  if (p === 'orders' && rest[0] === 'new') return renderCreateOrder(app, rest[1]);
   if (p === 'orders') return renderOrders(app);
   if (p === 'invoices' && rest[0] === 'new') return renderCreateInvoice(app);
   if (p === 'invoices') return renderInvoices(app);
@@ -489,6 +489,44 @@ function followTarget(post, followSet) {
   return `<button class="btn secondary" onclick="followAuthor('${jsStr(pk)}')">Follow author</button>`;
 }
 
+/**
+ * "Trade for this" — the action a post about a voucher is FOR. Without it a
+ * reader had to memorise the voucher, find its issuer's pubkey elsewhere,
+ * trust them by hand, then go and build an order: nothing linked the feed to
+ * the trade.
+ *
+ * Offered on any post whose voucher we could resolve, except your own
+ * currency (you cannot swap a voucher for itself).
+ */
+function wantTarget(post, vMap) {
+  const h = post.voucher;
+  if (!h || !vMap[h]) return '';
+  const info = (window.__feedVouchers || {})[h];
+  if (info && state.user && info.issuer === state.user.pubkey) return '';
+  return `<button class="btn" onclick="wantVoucher('${jsStr(h)}')">Trade for this</button>`;
+}
+
+/**
+ * Make the advertised voucher usable, then open a swap preloaded with it.
+ *
+ * Trusting the issuer is what puts a voucher into `knownVouchers()`, which is
+ * what the order form's choosers are built from — so without this step the
+ * thing you just read about is not even selectable. Pins the issuer's bank too
+ * when it is not ours, or the deal cannot be addressed later.
+ */
+window.wantVoucher = async function(voucherHash) {
+  const info = (window.__feedVouchers || {})[voucherHash];
+  if (!info) { toast('Could not resolve that voucher', 'error'); return; }
+  try {
+    await uiPost('/trusted', { pubkey: info.issuer, note: 'from a post' }).catch(() => {});
+    if (info.bank && info.bank !== state.bankPubkey) {
+      await uiPost('/banks', { pubkey: info.bank, url: info.bank_url }).catch(() => {});
+    }
+  } catch { /* trusting is best-effort; the form still opens */ }
+  location.hash = `#/orders/new/${voucherHash}`;
+  route();
+};
+
 async function renderPosts(app, voucherFilter) {
   app.innerHTML = header('Posts') + `<div class="container"><p class="small">Loading feed…</p></div>`;
 
@@ -523,20 +561,28 @@ async function renderPosts(app, voucherFilter) {
   }));
 
   const vMap = {};
+  // vInfo carries the issuer and bank as well as the name, because acting on a
+  // post ("I want that voucher") means trusting the voucher's ISSUER — who is
+  // not necessarily the post's author. A reply or a bank repost is anchored to
+  // someone else's voucher.
+  const vInfo = {};
   vouchers.forEach(v => { vMap[v.hash] = v.name; });
-  // Fill the gaps by asking each known bank for the voucher body.
   const missing = [...mentionedVouchers].filter(h => !vMap[h]);
-  if (missing.length) {
-    const banks = await feedBanks().catch(() => []);
-    await Promise.all(missing.map(async h => {
-      for (const b of banks) {
-        try {
-          const v = await rpcCallAt(b.url, b.pubkey, 'get_voucher', { voucher_hash: h });
-          if (v && v.name) { vMap[h] = v.name; return; }
-        } catch { /* not carried here */ }
-      }
-    }));
-  }
+  const knownBanks = await feedBanks().catch(() => []);
+  await Promise.all([...mentionedVouchers].map(async h => {
+    for (const b of knownBanks) {
+      try {
+        const v = await rpcCallAt(b.url, b.pubkey, 'get_voucher', { voucher_hash: h });
+        if (v && v.name) {
+          if (!vMap[h]) vMap[h] = v.name;
+          vInfo[h] = { name: v.name, issuer: v.pubkey, bank: b.pubkey, bank_url: b.url };
+          return;
+        }
+      } catch { /* this bank does not carry it */ }
+    }
+  }));
+  window.__feedVouchers = vInfo;
+  void missing;
   const selected = voucherFilter && vMap[voucherFilter] ? voucherFilter : '';
 
   const filterBar = `<div class="card">
@@ -577,6 +623,7 @@ async function renderPosts(app, voucherFilter) {
           <button class="btn secondary" onclick="startReply('${jsStr(hash)}')">Reply</button>
           <button class="btn secondary" onclick="repostPost('${jsStr(hash)}')">Repost</button>
           ${followTarget(post, followSet)}
+          ${wantTarget(post, vMap)}
         </div>
       </div>`).join('')
     : `<div class="card"><p class="small">No posts yet from you or the issuers you trust${selected ? ' about this voucher' : ''}.</p></div>`;
@@ -1452,14 +1499,20 @@ async function renderOrders(app) {
   </div>`;
 }
 
-async function renderCreateOrder(app) {
+async function renderCreateOrder(app, wantVoucherHash) {
   const vouchers = await knownVouchers();
+  // Arriving from "Trade for this": preselect what you are trying to get, and
+  // default "you give" to something else so the two are never the same voucher.
+  const want = wantVoucherHash && vouchers.some(v => v.hash === wantVoucherHash)
+    ? wantVoucherHash : '';
+  const giveDefault = want ? (vouchers.find(v => v.hash !== want) || {}).hash : undefined;
   app.innerHTML = header('New order') + `<div class="container">
     ${card('Offer a swap', vouchers.length ? `
       <p class="small">Offer to trade one voucher for another. The exchange rate is set by the two amounts you enter.</p>
-      <label for="o-dv">You give (voucher)</label>${voucherChooser('o-dv', vouchers)}
+      ${want ? `<p class="small">Preloaded from a post: you are asking for <b>${escapeHtml(vouchers.find(v => v.hash === want).name)}</b>.</p>` : ''}
+      <label for="o-dv">You give (voucher)</label>${voucherChooser('o-dv', vouchers, giveDefault)}
       <label for="o-dmax">Amount you give (up to)</label><input id="o-dmax" type="number" min="0" step="any" value="100">
-      <label for="o-cv">You receive (voucher)</label>${voucherChooser('o-cv', vouchers)}
+      <label for="o-cv">You receive (voucher)</label>${voucherChooser('o-cv', vouchers, want)}
       <label for="o-cmax">Amount you receive (up to)</label><input id="o-cmax" type="number" min="0" step="any" value="90">
       <label><input type="checkbox" id="o-lead"> Settle my side first <span class="small">(the counterparty may not reciprocate)</span></label>
       <label><input type="checkbox" id="o-pub" checked> List publicly so others can discover this</label>
