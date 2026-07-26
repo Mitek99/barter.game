@@ -25,6 +25,7 @@ import {
   verifyPostTree,
   type Offer,
   type Order,
+  type Post,
 } from '@barter.game/protocol';
 import type { Bank } from '../types.ts';
 import { RpcError } from '../error.ts';
@@ -136,6 +137,7 @@ export async function submitDocs(
         }
         const h = await storePost(bank, p);
         if (!stored.includes(h)) stored.push(h);
+        await bankRepost(bank, p);
         break;
       }
       default:
@@ -209,4 +211,36 @@ export async function deriveOffer(
   };
   offer.sig = signDoc(offer, bank.privateKey);
   return storeOffer(bank, offer);
+}
+
+/**
+ * The bank reposts every user post it accepts.
+ *
+ * New users follow their own bank by default, so the bank's feed is what an
+ * account with no connections sees on day one — without it, a newcomer's feed
+ * is empty and there is nothing to discover. Following the bank is the
+ * opt-out: unfollow it and you are back to a pure trust-graph feed.
+ *
+ * Two things this must not do:
+ *   - repost its OWN posts, which would recurse forever;
+ *   - fail the user's write. Carriage is bank policy (post-feed.md §2/§6), so
+ *     a repost that cannot be minted is the bank's problem, not the author's —
+ *     their post is already stored and signed.
+ */
+async function bankRepost(bank: Bank, post: Post): Promise<void> {
+  if (post.pubkey === bank.pubkey) return;
+  try {
+    const repost: Record<string, unknown> = {
+      type: 'post',
+      pubkey: bank.pubkey,
+      ulid: newUlid(),
+      voucher: post.voucher,
+      body_md: '',
+      repost: post,
+    };
+    repost.sig = signDoc(repost, bank.privateKey);
+    await storePost(bank, repost as unknown as Post);
+  } catch (e) {
+    console.error('bank repost failed', e);
+  }
 }

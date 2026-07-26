@@ -110,7 +110,7 @@ Hash-routed; the whole router is one function in `app.js`.
 | `#/posts`, `#/posts/:voucher` | Voucher post feeds. Merges `list_posts` across every trusted author x known bank, newest-first, de-duplicated by content hash; compose, reply and repost; every post's signature tree is verified client-side before it renders |
 | `#/deal/:id` | Deal status with per-leg ready/hold/settle; re-polls every 3 s until settled/rejected |
 | `#/activity` | Transaction history |
-| `#/network` | Trusted issuers (with free-text notes), pinned banks, contacts |
+| `#/network` | Following (feed subscriptions, incl. your bank), trusted issuers (with free-text notes), pinned banks, contacts |
 | `#/scan` | Camera QR scanner (BarcodeDetector, jsQR fallback) or paste a link |
 | `#/settings` | Identity, bank info, install on home screen, recovery kit, lock |
 | `#/land/:kind/:value` | Barter Link landings (`i` profile, `v` invoice, `q` cheque, `o` offer, `x` invite) — work logged out, then resume the action after register/login |

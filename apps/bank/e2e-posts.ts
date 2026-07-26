@@ -78,6 +78,23 @@ async function authedPost(user: User, bank: BankRef, path: string, body: unknown
   return { status: res.status, body: await res.json() };
 }
 
+async function authedReq(user: User, bank: BankRef, method: string, path: string, body?: unknown) {
+  const text = body === undefined ? undefined : JSON.stringify(body);
+  const authdoc = {
+    pubkey: user.pubkey, method, path: `/${bank.name}${path}`,
+    id: newUlid(), ts: Date.now(),
+    body_sha256: text ? await sha256Base58(text) : null,
+  };
+  const sig = signDoc(authdoc, user.privateKey);
+  const token = `${b64url(new TextEncoder().encode(canonicalizeWithoutSig(authdoc)))}.${sig}`;
+  const res = await fetch(`${bank.url}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'X-Barter-Auth': token },
+    body: text,
+  });
+  return { status: res.status, body: await res.json() };
+}
+
 const sign = <T extends Record<string, unknown>>(d: T, u: User): T & { sig: string } =>
   ({ ...d, sig: signDoc(d, u.privateKey) });
 
@@ -257,6 +274,43 @@ await rpc(issuer, alice, 'submit_docs', { docs: [repost] });
   check('get_post_signatures returns the endorsement',
     r.signatures.length === 1 && r.signatures[0].reason === 'can confirm',
     `${r.signatures.length} signature(s)`);
+}
+
+// --- 8. follows: default, bank repost, unfollow ---------------------------
+{
+  // A brand-new account has never touched /follows.
+  // No registration needed: /ui auth verifies a signature, not a handle.
+  const fresh = makeUser();
+  const f0 = await authedReq(fresh, alice, 'GET', '/ui/follows');
+  check('new user follows their own bank by default',
+    Array.isArray(f0.body) && f0.body.includes(alice.pubkey),
+    JSON.stringify(f0.body));
+
+  // The bank reposts what its users publish, so the bank feed carries p1 —
+  // which is what makes a newcomer's feed non-empty on day one.
+  const bankFeed = await rpc(fresh, alice, 'list_posts', {
+    pubkey: alice.pubkey, voucher_hash: 'all',
+  }) as { items: Array<Record<string, unknown>> };
+  const carried = bankFeed.items.some((p) =>
+    (p.repost as { body_md?: string } | undefined)?.body_md === p1.body_md);
+  check('bank reposted a user post into its own feed', carried,
+    `${bankFeed.items.length} post(s) in the bank feed`);
+  check('bank reposts are signed by the bank and embed the original',
+    bankFeed.items.every((p) => p.pubkey === alice.pubkey && !!p.repost),
+    'all bank-authored with an embedded original');
+
+  // Unfollowing must stick — resolveFollows only re-seeds when never set.
+  await authedReq(fresh, alice, 'DELETE', `/ui/follows/${alice.pubkey}`);
+  const f1 = await authedReq(fresh, alice, 'GET', '/ui/follows');
+  check('unfollowing the bank sticks (empty list is not re-seeded)',
+    Array.isArray(f1.body) && !f1.body.includes(alice.pubkey),
+    JSON.stringify(f1.body));
+
+  // ...and re-following works.
+  await authedReq(fresh, alice, 'POST', '/ui/follows', { pubkey: issuer.pubkey });
+  const f2 = await authedReq(fresh, alice, 'GET', '/ui/follows');
+  check('following an author adds them', Array.isArray(f2.body) && f2.body.includes(issuer.pubkey),
+    JSON.stringify(f2.body));
 }
 
 console.log(pass ? 'POST FEEDS OK ✅' : 'POST FEEDS FAILED ❌');

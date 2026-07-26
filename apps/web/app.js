@@ -376,8 +376,11 @@ window.skipToContent = function() { moveFocusToMain(); };
 // author x every known bank, newest-first, de-duplicated by content hash
 // (post-feed.md §7). "Followed" here is the trusted-issuer list plus yourself.
 async function feedAuthors() {
-  const trusted = await uiGet('/trusted').catch(() => []);
-  const keys = (trusted || []).map(t => (typeof t === 'string' ? t : t.pubkey)).filter(Boolean);
+  // Follows, NOT trusted issuers: reading someone and vouching for their
+  // currency are different decisions. The bank applies the default (follow
+  // your own bank) so a brand-new account still has a feed.
+  const follows = await uiGet('/follows').catch(() => []);
+  const keys = (follows || []).filter(Boolean);
   if (state.user && !keys.includes(state.user.pubkey)) keys.unshift(state.user.pubkey);
   return keys;
 }
@@ -469,6 +472,19 @@ function renderMedia(post, bankUrl) {
     `</div>`;
 }
 
+/**
+ * A bank reposting its users is how a newcomer meets them — so the actionable
+ * button on a repost is "follow the ORIGINAL author", not the reposter you
+ * already follow.
+ */
+function followTarget(post, followSet) {
+  const origin = post.repost || post.reply_to;
+  const pk = origin && origin.pubkey ? origin.pubkey : post.pubkey;
+  if (!pk || followSet.has(pk)) return '';
+  if (state.user && pk === state.user.pubkey) return '';
+  return `<button class="btn secondary" onclick="followAuthor('${jsStr(pk)}')">Follow author</button>`;
+}
+
 async function renderPosts(app, voucherFilter) {
   app.innerHTML = header('Posts') + `<div class="container"><p class="small">Loading feed…</p></div>`;
 
@@ -543,6 +559,7 @@ async function renderPosts(app, voucherFilter) {
         <p class="small">A post is anchored to a voucher. Mint one, or trust an issuer, and you can post about it.</p>
         <a class="btn secondary" href="#/vouchers/new">Mint a voucher</a>`);
 
+  const followSet = new Set(feed.authors);
   const bankUrl = state.bankUrl || state.basePath;
   const list = feed.posts.length
     ? feed.posts.map(({ hash, post }) => `<div class="card">
@@ -555,6 +572,7 @@ async function renderPosts(app, voucherFilter) {
         <div class="flex" style="gap:.5rem;margin-top:.5rem">
           <button class="btn secondary" onclick="startReply('${jsStr(hash)}')">Reply</button>
           <button class="btn secondary" onclick="repostPost('${jsStr(hash)}')">Repost</button>
+          ${followTarget(post, followSet)}
         </div>
       </div>`).join('')
     : `<div class="card"><p class="small">No posts yet from you or the issuers you trust${selected ? ' about this voucher' : ''}.</p></div>`;
@@ -611,6 +629,21 @@ window.repostPost = async function(hash) {
   if (sel) sel.value = parent.voucher;
   const body = document.getElementById('post-body');
   if (body) body.focus();
+};
+
+window.addFollow = async function() {
+  const el = document.getElementById('n-follow-pk');
+  const pk = (el.value || '').trim();
+  if (!pk) return toast('Enter a pubkey', 'error');
+  await window.followAuthor(pk);
+};
+window.followAuthor = async function(pubkey) {
+  try { await uiPost('/follows', { pubkey }); toast('Following'); route(); }
+  catch (e) { toast(e.message, 'error'); }
+};
+window.unfollowAuthor = async function(pubkey) {
+  try { await signedRequest('DELETE', `/follows/${pubkey}`, null); toast('Unfollowed'); route(); }
+  catch (e) { toast(e.message, 'error'); }
 };
 
 window.clearParent = function() {
@@ -2194,10 +2227,11 @@ async function renderNetwork(app) {
   // no peers / no contacts".
   let failed = false;
   const onFail = () => { failed = true; return []; };
-  const [banks, trusted, contacts] = await Promise.all([
+  const [banks, trusted, contacts, follows] = await Promise.all([
     uiGet('/banks').catch(onFail),
     uiGet('/trusted').catch(onFail),
     uiGet('/contacts').catch(onFail),
+    uiGet('/follows').catch(onFail),
   ]);
   // Resolve handles/vouchers for trusted issuers across our bank + pinned banks
   // (a foreign issuer only resolves at their own bank). Entries are
@@ -2211,7 +2245,29 @@ async function renderNetwork(app) {
     return { ...r, pubkey: pk, note };
   }));
 
+  // Following is a separate list from trusting: you can read someone without
+  // vouching for their currency, and vice versa.
+  const followed = await Promise.all((follows || []).map(async pk => {
+    if (pk === state.bankPubkey) {
+      return { pubkey: pk, handle: `${state.bankName} (your bank)`, isBank: true };
+    }
+    if (state.user && pk === state.user.pubkey) return { pubkey: pk, handle: 'you', isSelf: true };
+    const r = await resolveIssuerAt(bases, pk).catch(() => null);
+    return { pubkey: pk, handle: (r && r.handle) || '' };
+  }));
+
   app.innerHTML = header('Network') + `<div class="container">
+    ${card('Following', `
+      <p class="small">Whose posts show up in your feed. Separate from trust — reading someone is not the same as accepting their currency. You follow your bank by default, which reposts everything its users publish.</p>
+      ${followed.map(f => `
+        <div class="flex" style="justify-content:space-between;align-items:center;margin:0.5rem 0;padding-bottom:0.5rem;border-bottom:1px solid var(--border)">
+          <span>${escapeHtml(f.handle || '')} <span class="mono small">${escapeHtml(f.pubkey.slice(0, 16))}…</span></span>
+          ${f.isSelf ? '<span class="small">always</span>'
+            : `<button class="btn danger" onclick="unfollowAuthor('${jsStr(f.pubkey)}')">Unfollow</button>`}
+        </div>`).join('') || (failed ? loadError('your follows') : '<p class="small">Following nobody. Your feed will be empty until you follow someone — start with <a href="#/registry">the registry</a>.</p>')}
+      <label for="n-follow-pk">Follow a pubkey</label><input id="n-follow-pk" placeholder="base58 pubkey">
+      <button class="btn" onclick="addFollow()">Follow</button>
+    `)}
     ${card('Trusted issuers', resolved.map(r => `
       <div style="margin:0.5rem 0;padding-bottom:0.5rem;border-bottom:1px solid var(--border)">
         <div class="flex" style="justify-content:space-between;align-items:center">

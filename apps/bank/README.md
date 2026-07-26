@@ -32,8 +32,14 @@ may implement it differently or not at all.
 | Media | `POST /:bank/media`, `GET /:bank/media/:hash` | Content-addressed blobs for posts. Upload is authed (`X-Barter-Auth`) and takes `{content_type, data_base64}`; download is unauthenticated and immutable-cacheable |
 | Barter Links | `GET /:bank/{i,v,q,o,x}/:value` | `i` profile, `v` invoice (credit-only Order), `q` cheque (debit-only Order), `o` offer, `x` invite. HTML landing page by default; machine envelope via `?format=json` or `Accept: application/barter+json` |
 | UI API (public) | `GET /:bank/ui/handle/:handle`, `POST .../register`, `GET .../keystore/:handle`, `GET .../challenge`, `GET .../config`, `GET .../resolve/:pubkey` | Handle registry, encrypted keystore fetch, auth bootstrap |
-| UI API (authed) | `/:bank/ui/{state, trusted, contacts, banks, prefs, portfolio, history, orders, discover, relay, relay_signatures, propose_deal, deal/:id}`, `PUT .../keystore` | Requires `X-Barter-Auth`: a signed authdoc over method + path + query |
+| UI API (authed) | `/:bank/ui/{state, trusted, follows, contacts, banks, prefs, portfolio, history, orders, discover, relay, relay_signatures, propose_deal, deal/:id}`, `PUT .../keystore` | Requires `X-Barter-Auth`: a signed authdoc over method + path + query |
 | SPA | `GET /:bank/ui`, `GET /:bank/ui/app/*` | Serves `./apps/web/index.html` with an injected `<base>`, and static assets from `./apps/web/` |
+
+`follows` is the feed subscription list — deliberately separate from `trusted`,
+because reading someone and accepting their currency are different decisions. A
+user who has never touched it defaults to following their own bank, and the bank
+reposts every user post it accepts, so a new account has a non-empty feed on day
+one. Unfollowing the bank is the opt-out.
 
 `propose_deal` is the built-in **coordinator**: it builds the deal's Orders
 into records across the participating banks and mandates them; `deal/:id`

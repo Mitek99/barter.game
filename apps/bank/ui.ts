@@ -34,6 +34,7 @@ import {
   listVouchersByIssuer,
   putUiState,
   registerHandle,
+  resolveFollows,
   setKeystore,
   type KeystoreBlob,
   type UiState,
@@ -145,6 +146,36 @@ export async function handleUiRequest(
       state.trusted = normTrustedIssuers(state.trusted).filter((t) => t.pubkey !== pk);
       const rev = await putUiState(bank, state);
       return json(200, { trusted: state.trusted, rev });
+    }
+
+    // --- follows (feed subscriptions) ---------------------------------
+    // Separate from /trusted on purpose: following is editorial, trusting is
+    // financial. GET applies the default-follow-your-bank migration.
+    if (uiPath === '/follows') {
+      if (request.method === 'GET') {
+        return json(200, resolveFollows(bank, await getUiState(bank, authPubkey)));
+      }
+      if (request.method === 'POST') {
+        const body = await request.json() as { pubkey: string };
+        if (!isValidBase58(body.pubkey)) throw new UiError(422, -32012, 'invalid pubkey');
+        const state = await getUiState(bank, authPubkey);
+        const follows = resolveFollows(bank, state);
+        if (!follows.includes(body.pubkey)) follows.push(body.pubkey);
+        state.follows = follows;
+        const rev = await putUiState(bank, state);
+        return json(200, { follows, rev });
+      }
+    }
+    const followDelete = uiPath.match(/^\/follows\/([^/]+)$/);
+    if (followDelete && request.method === 'DELETE') {
+      const pk = followDelete[1]!;
+      const state = await getUiState(bank, authPubkey);
+      // Write the array back even when it becomes empty: `follows: []` is what
+      // records "this user unfollowed everyone", and resolveFollows() only
+      // re-seeds when the field was never set at all.
+      state.follows = resolveFollows(bank, state).filter((f) => f !== pk);
+      const rev = await putUiState(bank, state);
+      return json(200, { follows: state.follows, rev });
     }
 
     if (uiPath === '/contacts') {
@@ -383,9 +414,15 @@ async function requireAuth(
   if (Math.abs(Date.now() - authdoc.ts) > 120000) {
     throw new UiError(408, -32006, 'timestamp skew');
   }
-  const bodyHash = request.body
-    ? await sha256Base58(await request.clone().text())
-    : undefined;
+  // `request.body` being non-null does NOT mean a body was sent: some HTTP
+  // clients (Deno's fetch among them) attach an empty stream to a bodyless
+  // DELETE, where a browser attaches none. Hashing that empty string produced
+  // a digest the client never signed — it signs `body_sha256: null` when there
+  // is no body — so every DELETE route (trusted, contacts, banks, follows) was
+  // unreachable from anything but a browser. An empty body binds nothing, so
+  // treat "no bytes" as "no body" regardless of how the stream arrives.
+  const bodyText = request.body ? await request.clone().text() : '';
+  const bodyHash = bodyText.length > 0 ? await sha256Base58(bodyText) : undefined;
   if (bodyHash !== undefined && authdoc.body_sha256 !== bodyHash) {
     throw new UiError(400, -32600, 'body hash mismatch');
   }

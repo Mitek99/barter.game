@@ -805,6 +805,17 @@ export type UiState = {
   // carry an optional user note ("met at the train station, seemed OK"). Read
   // through normTrustedIssuers() in the UI layer, which normalizes both shapes.
   trusted: (Base58PubKey | { pubkey: Base58PubKey; note?: string; at?: number })[];
+  /**
+   * Authors whose posts appear in this user's feed. Deliberately SEPARATE from
+   * `trusted`: trusting an issuer is a financial judgement (I will accept this
+   * promise as money), following is an editorial one (I want to read them).
+   * Conflating them meant you could not read someone without vouching for
+   * their currency — and a new user who had done neither saw an empty app.
+   *
+   * `undefined` means "never set", which resolveFollows() migrates rather than
+   * treating as "follows nobody" — see below.
+   */
+  follows?: Base58PubKey[];
   contacts: { pubkey: Base58PubKey; handle?: string; note?: string }[];
   banks: { pubkey: Base58PubKey; url: string }[];
   catalog: unknown[];
@@ -817,6 +828,7 @@ export function emptyUiState(pubkey: Base58PubKey): UiState {
   return {
     pubkey,
     trusted: [],
+    follows: undefined,
     contacts: [],
     banks: [],
     catalog: [],
@@ -832,6 +844,25 @@ export async function getUiState(
 ): Promise<UiState> {
   const r = await bank.kv.get<UiState>(k(bank, 'ui_state', pubkey));
   return r.value ?? emptyUiState(pubkey);
+}
+
+/**
+ * The effective follow list, applying the default for anyone who has never
+ * touched it.
+ *
+ * - Never set (`undefined`): default to this bank plus every issuer the user
+ *   already trusts. New users therefore see their bank's feed immediately
+ *   instead of an empty app, and users who predate follows keep the feed they
+ *   had (which was their trusted list).
+ * - Set (including `[]`): taken literally. An empty array is a user who
+ *   unfollowed everyone, and MUST NOT be re-seeded with the bank — otherwise
+ *   "unfollow the bank" silently undoes itself on the next read.
+ */
+export function resolveFollows(bank: Bank, state: UiState): Base58PubKey[] {
+  if (Array.isArray(state.follows)) return state.follows;
+  const trusted = (state.trusted ?? []).map((t) =>
+    typeof t === 'string' ? t : t?.pubkey).filter(Boolean) as Base58PubKey[];
+  return [bank.pubkey, ...trusted.filter((t) => t !== bank.pubkey)];
 }
 
 export async function putUiState(

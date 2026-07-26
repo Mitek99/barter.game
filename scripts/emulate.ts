@@ -652,9 +652,11 @@ async function cmdFeed(ref: string, voucherHash = 'all'): Promise<void> {
   const user = await loadUser(ref);
   const home = await bank(user.bank);
 
-  const trusted = await uiAuth(user, home, 'GET', '/trusted', null) as
-    Array<{ pubkey: string; note?: string }>;
-  const authors = [user.pubkey, ...trusted.map((t) => t.pubkey)];
+  // Follows, not trusted issuers — reading someone and vouching for their
+  // currency are separate decisions. The bank defaults a new user to following
+  // their own bank, which reposts everything its users publish.
+  const follows = await uiAuth(user, home, 'GET', '/follows', null) as string[];
+  const authors = [user.pubkey, ...follows.filter((f) => f !== user.pubkey)];
 
   const pinned = await uiAuth(user, home, 'GET', '/banks', null) as
     Array<{ pubkey: string; url: string }>;
@@ -797,6 +799,24 @@ try {
     case 'feed':
       await cmdFeed(rest[0]!, rest[1]);
       break;
+    case 'follow': {
+      const u = await loadUser(rest[0]!);
+      await uiAuth(u, await bank(u.bank), 'POST', '/follows', { pubkey: rest[1]! });
+      console.log(`${rest[0]} now follows ${rest[1]}`);
+      break;
+    }
+    case 'unfollow': {
+      const u = await loadUser(rest[0]!);
+      await uiAuth(u, await bank(u.bank), 'DELETE', `/follows/${rest[1]!}`, null);
+      console.log(`${rest[0]} unfollowed ${rest[1]}`);
+      break;
+    }
+    case 'follows': {
+      const u = await loadUser(rest[0]!);
+      const f = await uiAuth(u, await bank(u.bank), 'GET', '/follows', null);
+      console.log(JSON.stringify(f, null, 2));
+      break;
+    }
     case 'state':
       await cmdState();
       break;
@@ -825,6 +845,9 @@ try {
   post     <handle@bank> <voucherHash> "<text>" [--reply <hash>] [--repost <hash>] [--at <bank>]
   posts    <handle@bank> <authorPubkey> [voucherHash|all] [bankName]
   feed     <handle@bank> [voucherHash|all]
+  follow   <handle@bank> <pubkey>
+  unfollow <handle@bank> <pubkey>
+  follows  <handle@bank>
   state`);
   }
 } catch (e) {
