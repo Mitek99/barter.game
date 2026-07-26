@@ -449,6 +449,10 @@ function postBody(md) {
 
 function postAuthorLabel(pubkey, names) {
   if (state.user && pubkey === state.user.pubkey) return 'you';
+  // A bank has no registered handle, so /ui/resolve never names it — but the
+  // bank reposts every user post, so it is the most frequent author in the
+  // feed and must not render as raw base58.
+  if (pubkey === state.bankPubkey) return `${state.bankName} (your bank)`;
   return names[pubkey] || pubkey.slice(0, 10) + '…';
 }
 
@@ -538,10 +542,10 @@ async function renderPosts(app, voucherFilter) {
   const filterBar = `<div class="card">
     <label for="feed-voucher">Feed</label>
     <select id="feed-voucher" onchange="onFeedFilterChange()">
-      <option value=""${selected ? '' : ' selected'}>Everything from people I trust</option>
+      <option value=""${selected ? '' : ' selected'}>Everything from people I follow</option>
       ${vouchers.map(v => `<option value="${escapeHtml(v.hash)}"${v.hash === selected ? ' selected' : ''}>${escapeHtml(v.name)} — ${escapeHtml(v.issuer)}</option>`).join('')}
     </select>
-    <p class="small">Posts are anchored to a voucher. You see the people you trust; there is no global timeline.</p>
+    <p class="small">Posts are anchored to a voucher. You see the people you <a href="#/network">follow</a> — there is no global timeline. You follow your bank by default, and it reposts what its users publish.</p>
   </div>`;
 
   const composer = vouchers.length
