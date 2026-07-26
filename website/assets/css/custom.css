@@ -1,3 +1,18 @@
+/* Fix the whole page scrolling sideways on phones.
+   `div.content` is a flex item of a `flex-direction: column; align-items:
+   flex-start` container, so it is sized to its widest child rather than to the
+   column. One code block was enough to stretch it — Chroma emits every line as
+   an unbreakable `white-space: pre` span — giving 992px of page in a 360px
+   viewport. The theme already sets `min-width: 0` on <main> and
+   `overflow-x: auto` on <pre>, but that <pre> never had to scroll: its parent
+   had already grown to fit it, so the PAGE scrolled instead of the code block.
+   Clamping the column to its container puts the overflow back inside the code
+   block (and any over-wide table), where it scrolls on its own. Desktop is
+   unaffected — 100% there is the width the column already had. */
+main .content {
+  max-width: 100%;
+}
+
 /* Fix white-on-white code blocks.
    Hugo's Chroma 'github' style hardcodes `background-color:#fff` inline on <pre>.
    In dark mode the body text becomes light, so unstyled spans inside the white
