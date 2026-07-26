@@ -9,6 +9,8 @@
   --faint: #6E685E;
   --accent: #3D34D6;
   --accent-soft: #ECEBFB;
+  /* border that reads as "accent-tinted" on --accent-soft fills */
+  --accent-line: #D8D5F5;
   --accent2: #1C7C54;
   --green-soft: #E6F1EA;
   --danger: #C0492E;
@@ -248,6 +250,38 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) {
 .stack .btn { width: 100%; padding: 0.95rem; font-size: 1rem; border-radius: 14px; }
 .footnote { font-family: var(--mono); font-size: 0.75rem; color: var(--faint); line-height: 1.5; }
 
+/* install ("add to home screen") offer — a tinted card, dismissible */
+.install-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  position: relative;
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+.welcome .install-card { margin-top: 1.6rem; text-align: left; }
+/* Room on the right so no text ever sits under the close button's hit area. */
+.install-body { flex: 1; min-width: 0; padding-right: 2.25rem; }
+.install-card h3 { margin: 0.1rem 0 0.3rem; }
+.install-card p { margin: 0 0 0.75rem; }
+.install-card .logo-mark { margin-top: 0.15rem; }
+.install-close {
+  position: absolute; top: 0.15rem; right: 0.2rem;
+  width: 40px; height: 40px; padding: 0; /* 40px touch target */
+  display: flex; align-items: center; justify-content: center;
+  border: none; border-radius: 10px; background: transparent;
+  color: var(--muted); font-size: 1.15rem; line-height: 1; cursor: pointer;
+}
+.install-close:hover { background: var(--hair); color: var(--fg); }
+.install-steps {
+  margin: 0 0 0.8rem;
+  padding-left: 1.15rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.install-steps li { margin: 0.2rem 0; }
+.install-steps b { color: var(--fg); }
+
 @media (max-width: 640px) {
   input, textarea, select { font-size: 16px; } /* stops iOS zoom on focus */
 }
@@ -393,6 +427,7 @@ h1:focus, h2:focus, h3:focus { outline: none; }
     --faint: #928C7F;
     --accent: #9089F0;
     --accent-soft: #262349;
+    --accent-line: #383464;
     --accent2: #6FCF97;
     --green-soft: #1C3025;
     --danger: #E58A72;

@@ -1,0 +1,12 @@
+<!-- barter.game app mark — the SPA's .logo-mark (styles.css) as a standalone
+     icon: an accent squircle badge holding a white rounded-diamond outline.
+     Proportions mirror the CSS mark (badge radius 26.8%, diamond side 36%);
+     the stroke is heavier and the diamond corners tighter than the CSS mark so
+     the silhouette still reads at 16px. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="barter.game">
+  <title>barter.game</title>
+  <rect width="512" height="512" rx="137" ry="137" fill="#3D34D6"/>
+  <rect x="163" y="163" width="186" height="186" rx="32" ry="32"
+        fill="none" stroke="#FFFFFF" stroke-width="44"
+        transform="rotate(45 256 256)"/>
+</svg>

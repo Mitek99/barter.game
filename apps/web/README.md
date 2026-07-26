@@ -18,8 +18,11 @@ hosts the SPA directly:
 
 | Route | What it does |
 |---|---|
-| `GET /:bank/ui` (with or without trailing slash) | Returns `index.html` with `<base href="/:bank/ui/">` injected into `<head>`, so the relative `app/…` asset refs resolve either way |
+| `GET /:bank/ui` | `308` redirect to `/:bank/ui/`. The trailing slash is load-bearing: scope matching for the service worker and the manifest is a plain string prefix, so the slashless URL sits outside its own app's scope and would never be installable |
+| `GET /:bank/ui/` | Returns `index.html` with `<base href="/:bank/ui/">` injected into `<head>`, so the relative `app/…` asset refs resolve |
 | `GET /:bank/ui/app/*` | Serves the static files from `apps/web/` (paths are relative to the bank process CWD — run the bank from the repo root) |
+| `GET /:bank/ui/manifest.webmanifest` | The install manifest, generated per bank (`webManifest` in `../bank/ui.ts`) — `id`/`start_url`/`scope` all carry this bank's path prefix |
+| `GET /:bank/ui/sw.js` | The service worker, served from the UI root so its scope covers the whole SPA |
 
 The SPA derives the bank name from the first URL path segment and boots by
 fetching the public `GET /:bank/ui/config` for the bank's pubkey and URL.
@@ -28,6 +31,40 @@ Runtime dependencies are pinned in an import map in `index.html` and loaded
 from esm.sh (`@noble/ed25519` 3.1.0, `@noble/hashes` 2.2.0, `@scure/base`
 2.2.0, `ulid` 2.3.0); fonts come from Google Fonts. Nothing is bundled, and the
 app is **not offline-capable**.
+
+## Installing it (home screen)
+
+The SPA is installable as a PWA — one bank, one installed app. Each bank gets
+its own manifest whose `scope` is `/:bank/ui/`, so an installed app is confined
+to the bank it was installed from and a Barter Link to a *different* bank opens
+in the browser, where it belongs.
+
+The offer is made in-app rather than left to the browser menu:
+
+- Chromium fires `beforeinstallprompt`; `app.js` captures it (suppressing
+  Chrome's own mini-infobar) and shows a card on the welcome hero and the
+  dashboard, plus an entry in `#/settings`. The button replays the captured
+  event, which is single-use.
+- WebKit never fires it, so on iOS/iPadOS the same card shows the two Share-sheet
+  steps instead.
+- Where neither applies (Firefox, desktop Safari) the banner stays hidden —
+  Settings still explains where to look.
+- "Not now" snoozes the banner for 30 days (`barter.install_snoozed` in
+  `localStorage`); Settings is always available.
+
+**`sw.js` caches nothing, by design.** Chromium only offers an install for a
+page controlled by a service worker with a fetch handler that yields a response
+while offline, so the worker handles exactly one case — top-level navigations,
+answered from the network or, if that fails, with an inline "you're offline"
+page — and declines to respond to everything else, leaving app code and the
+signed API on their normal network path. Caching signed, per-user, time-
+sensitive responses (or a stale client that verifies them) would trade a clear
+offline message for silently wrong balances. Offline re-unlock from a cached
+keystore blob is a separate, unbuilt feature (`docs/REVIEW.md` §18).
+
+Icons: `icon.svg` is the source of truth (it mirrors the `.logo-mark` in
+`styles.css`); the PNGs and `favicon.ico` are rendered from it, and the
+full-bleed variants exist because Android masks icons and iOS rounds them.
 
 ## Key handling & security model
 
@@ -75,7 +112,7 @@ Hash-routed; the whole router is one function in `app.js`.
 | `#/activity` | Transaction history |
 | `#/network` | Trusted issuers (with free-text notes), pinned banks, contacts |
 | `#/scan` | Camera QR scanner (BarcodeDetector, jsQR fallback) or paste a link |
-| `#/settings` | Identity, bank info, recovery kit, lock |
+| `#/settings` | Identity, bank info, install on home screen, recovery kit, lock |
 | `#/land/:kind/:value` | Barter Link landings (`i` profile, `v` invoice, `q` cheque, `o` offer, `x` invite) — work logged out, then resume the action after register/login |
 
 Order/invoice/cheque forms use a **voucher chooser** (own issued vouchers plus
@@ -104,9 +141,15 @@ of the protocol contract.
 
 | File | What it is |
 |---|---|
-| `index.html` | Shell + import map; `<base>` is injected at serve time |
-| `app.js` | The entire app: router, screens, transports, keystore crypto |
+| `index.html` | Shell + import map + icon/manifest links; `<base>` is injected at serve time |
+| `app.js` | The entire app: router, screens, transports, keystore crypto, install offer |
 | `styles.css` | All styling |
+| `sw.js` | Service worker: installability + offline page, no caching |
+| `icon.svg` | The app mark — source artwork for every raster icon below |
+| `favicon.ico` | 16/32/48 favicon, rendered from `icon.svg` |
+| `icon-192.png`, `icon-512.png` | Manifest icons (`purpose: any`) |
+| `icon-maskable-512.png` | Full-bleed manifest icon (`purpose: maskable`) for Android's icon mask |
+| `apple-touch-icon.png` | 180×180 opaque home-screen icon for iOS |
 | `protocol.js` | **Vendored** JS build of [`packages/protocol/src/index.ts`](../../packages/protocol/src/index.ts) — not imported from the workspace |
 | `qr.js` | QR generation (ECC level M) and camera scanning |
 | `vendor/qrcode.js` | qrcode-generator 1.5.0 (MIT), UMD → ESM |

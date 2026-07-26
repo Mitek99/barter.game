@@ -59,7 +59,10 @@ barter.game/
 │   │   ├── handlers/         #   submit_docs, submit_mandate, create_records, notify_signatures, get_*, subscribe
 │   │   └── e2e-*.ts          #   end-to-end settlement checks (local, crossbank, reject, replay)
 │   └── web/                  # Browser SPA served by the bank (see its README.md)
-│       └── index.html app.js protocol.js qr.js styles.css vendor/
+│       ├── index.html app.js protocol.js qr.js styles.css vendor/
+│       └── sw.js icon.svg favicon.ico icon-*.png apple-touch-icon.png
+│                             #   installable PWA (home-screen install offer);
+│                             #   the manifest is generated per bank by ui.ts
 ├── scenarios/                # Step-by-step interaction traces (cheque, invoice, swaps, builder event)
 ├── scripts/                  # genkey.ts (bun) — NOTE: demo-*.sh are stale (invoke the removed CLI)
 ├── docs/                     # Design notes, reviews, UI specs, legacy material

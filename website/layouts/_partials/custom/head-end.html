@@ -4,6 +4,11 @@
   PostHog analytics. Gated to production builds only: netlify.toml sets
   HUGO_ENV=production for the live site and HUGO_ENV=development for deploy
   previews, so previews and local `hugo server` runs never report traffic.
+
+  No favicon tags here: Hextra's own favicons.html partial already links
+  favicon.ico / favicon.svg / favicon-16x16.png / favicon-32x32.png /
+  apple-touch-icon.png / site.webmanifest, and website/static/ overrides every
+  one of those theme defaults with the barter.game mark (apps/web/icon.svg).
 */}}
 {{ if hugo.IsProduction -}}
 <script>

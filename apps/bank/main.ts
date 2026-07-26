@@ -156,18 +156,32 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+const CONTENT_TYPES: Record<string, string> = {
+  css: 'text/css; charset=utf-8',
+  js: 'application/javascript; charset=utf-8',
+  html: 'text/html; charset=utf-8',
+  json: 'application/json; charset=utf-8',
+  // Icons: the browser refuses to use an SVG favicon or a manifest PNG served
+  // as application/octet-stream.
+  svg: 'image/svg+xml',
+  png: 'image/png',
+  ico: 'image/x-icon',
+};
+
 async function serveStaticAsset(path: string): Promise<Response> {
   const safe = (path || 'index.html').replace(/\.\//g, '').replace(/\.\./g, '');
   try {
     const file = await Deno.readFile(`./apps/web/${safe}`);
-    const contentType = safe.endsWith('.css')
-      ? 'text/css; charset=utf-8'
-      : safe.endsWith('.js')
-      ? 'application/javascript; charset=utf-8'
-      : safe.endsWith('.html')
-      ? 'text/html; charset=utf-8'
-      : 'application/octet-stream';
-    return new Response(file, { headers: { 'Content-Type': contentType } });
+    const ext = safe.split('.').pop() ?? '';
+    const headers: Record<string, string> = {
+      'Content-Type': CONTENT_TYPES[ext] ?? 'application/octet-stream',
+    };
+    // Icons are content-stable and fetched on every install/tab; app code is
+    // not (there is no build step, so no content hashes to bust a cache with).
+    if (ext === 'png' || ext === 'ico' || ext === 'svg') {
+      headers['Cache-Control'] = 'public, max-age=86400';
+    }
+    return new Response(file, { headers });
   } catch {
     return json({ code: -32005, message: 'asset not found' }, 404);
   }

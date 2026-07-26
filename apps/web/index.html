@@ -10,6 +10,21 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="app/styles.css">
   <meta name="description" content="Federated mutual-credit ledger">
+  <!-- Icons and the install manifest resolve against the injected
+       <base href="/:bank/ui/"> (see apps/bank/ui.ts serveSpa), so the manifest
+       is the per-bank one and every icon comes from apps/web/. -->
+  <link rel="icon" href="app/favicon.ico" sizes="32x32">
+  <link rel="icon" href="app/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="app/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <!-- Browser/status-bar chrome follows the app's own light and dark skins
+       (styles.css). The manifest's single theme_color is the light one. -->
+  <meta name="theme-color" content="#F3F1EC" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#15130E" media="(prefers-color-scheme: dark)">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="barter.game">
 </head>
 <body>
   <div id="app"></div>

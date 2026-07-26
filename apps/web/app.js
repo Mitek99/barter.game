@@ -856,6 +856,7 @@ async function renderWelcome(app) {
       <a class="btn secondary" href="#/unlock">Log in</a>
       <a href="#/connect" style="text-align:center;font-size:0.87rem;color:var(--muted);padding:0.3rem">I have a raw key instead</a>
     </div>
+    ${installSlot('banner')}
     <p class="footnote" style="margin-top:1.6rem">handle + password login · key encrypted in this browser · never sent to the bank</p>
   </div>`;
 }
@@ -1068,6 +1069,7 @@ async function renderDashboard(app) {
     <a class="btn secondary" href="#/cheques/new">New cheque</a>
     <a class="btn secondary" href="#/discover">Discover</a>
   </div>`);
+  body += installSlot('banner');
   body += card('Recent activity', historyFailed ? loadError('activity') : (history.events.map(e => `
     <div class="flex" style="justify-content:space-between;margin:0.4rem 0">
       <span class="mono small">${escapeHtml(e.deal_id.slice(0,12))}…</span>
@@ -1713,6 +1715,7 @@ async function renderSettings(app) {
       <p class="mono small">${escapeHtml(state.bankPubkey)}</p>
       <p class="small">${escapeHtml(state.bankUrl)}</p>
     `)}
+    ${installSlot('settings')}
     ${card('Recovery kit', `
       <p class="small">Download your encrypted keystore. Together with your password it restores this account anywhere; without the password it is useless — and there is no password recovery.</p>
       <button class="btn secondary" onclick="downloadBackup()">Download encrypted backup</button>
@@ -2287,6 +2290,161 @@ window.removeContact = async function(pk) {
   catch (e) { toast(e.message, 'error'); }
 };
 
+// ---------------- install (add to home screen) ----------------
+
+// Chromium fires `beforeinstallprompt` when the app qualifies for installation,
+// and that event object is the ONLY way to open the install dialog — so it is
+// captured here and replayed when the user asks for it. WebKit never fires it:
+// on iOS installing goes through the Share sheet, so there we show the steps.
+let installEvent = null;
+let installSlotShows = null; // which variant the live #install-slot is showing
+const INSTALL_SNOOZE_KEY = 'barter.install_snoozed';
+const INSTALL_SNOOZE_MS = 30 * 24 * 60 * 60 * 1000;
+
+function isInstalled() {
+  try {
+    return window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: minimal-ui)').matches ||
+      navigator.standalone === true;
+  } catch { return navigator.standalone === true; }
+}
+
+function isIosDevice() {
+  const ua = navigator.userAgent || '';
+  // iPadOS 13+ reports a Mac user agent; touch points disambiguate it.
+  return /iPad|iPhone|iPod/.test(ua) ||
+    (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
+function installSnoozed() {
+  try {
+    const at = Number(localStorage.getItem(INSTALL_SNOOZE_KEY) || 0);
+    return at > 0 && Date.now() - at < INSTALL_SNOOZE_MS;
+  } catch { return false; }
+}
+
+// What we can actually offer: a real install dialog, hand-holding through the
+// iOS Share sheet, or (Firefox, desktop Safari) nothing actionable — in which
+// case the home-screen banner stays away rather than sending users hunting.
+function installOffer() {
+  if (isInstalled()) return 'installed';
+  if (installEvent) return 'prompt';
+  if (isIosDevice()) return 'ios';
+  return 'none';
+}
+
+const IOS_SHARE_ICON =
+  '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px"><path d="M12 15V4"/><path d="m8.5 7.5 3.5-3.5 3.5 3.5"/><path d="M6 11.5H5.5A1.5 1.5 0 0 0 4 13v6.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V13a1.5 1.5 0 0 0-1.5-1.5H18"/></svg>';
+
+const IOS_STEPS = `<ol class="install-steps">
+  <li>Tap the Share button ${IOS_SHARE_ICON} in the browser toolbar.</li>
+  <li>Scroll down and choose <b>Add to Home Screen</b>.</li>
+</ol>`;
+
+// `variant` is 'banner' (dashboard/welcome — dismissible, hidden when there is
+// nothing to offer) or 'settings' (always states where you stand).
+function installCardHtml(variant) {
+  const offer = installOffer();
+  const mark = '<div class="logo-mark"><span></span></div>';
+  if (variant === 'banner') {
+    if (installSnoozed() || (offer !== 'prompt' && offer !== 'ios')) return '';
+    const action = offer === 'prompt'
+      ? `<div class="flex" style="gap:0.5rem;flex-wrap:wrap">
+           <button class="btn" onclick="installApp()">Install app</button>
+           <button class="btn secondary" onclick="snoozeInstall()">Not now</button>
+         </div>`
+      : `${IOS_STEPS}
+         <button class="btn secondary" onclick="snoozeInstall()">Got it</button>`;
+    return `<div class="card install-card">${mark}
+      <div class="install-body">
+        <h3>Keep it on your home screen</h3>
+        <p class="small">Install barter.game for a full-screen app with your
+          scanner one tap away — same keys, same bank, no app store.</p>
+        ${action}
+      </div>
+      <button class="install-close" onclick="snoozeInstall()"
+        aria-label="Dismiss install suggestion" title="Dismiss">&times;</button>
+    </div>`;
+  }
+  const body = offer === 'installed'
+    ? '<p class="small">Running as an installed app. Your keys live in this app\'s browser storage — the encrypted keystore, never the key itself.</p>'
+    : offer === 'prompt'
+    ? `<p class="small">Add barter.game to your home screen: full-screen, launches from the lock screen, no app store.</p>
+       <button class="btn secondary" onclick="installApp()">Install app</button>`
+    : offer === 'ios'
+    ? `<p class="small">Add barter.game to your home screen:</p>${IOS_STEPS}`
+    : '<p class="small">This browser has no install prompt. Chrome, Edge or Safari on a phone can add barter.game to the home screen — or look for “Install app” in your browser menu.</p>';
+  return `<div class="card">
+    <h3>${offer === 'installed' ? 'Installed' : 'Install on your home screen'}</h3>
+    ${body}
+  </div>`;
+}
+
+// Rendered into a slot so a late `beforeinstallprompt` (it can arrive after the
+// screen is painted) can fill it in without re-rendering the whole screen.
+function installSlot(variant) {
+  installSlotShows = variant;
+  return `<div id="install-slot">${installCardHtml(variant)}</div>`;
+}
+
+function repaintInstallSlot() {
+  const slot = document.getElementById('install-slot');
+  if (slot && installSlotShows) slot.innerHTML = installCardHtml(installSlotShows);
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  // Suppress Chrome's own mini-infobar; we offer the install in context.
+  e.preventDefault();
+  installEvent = e;
+  repaintInstallSlot();
+});
+
+window.addEventListener('appinstalled', () => {
+  installEvent = null;
+  try { localStorage.removeItem(INSTALL_SNOOZE_KEY); } catch { /* ignore */ }
+  repaintInstallSlot();
+  toast('Installed — look for barter.game on your home screen');
+});
+
+window.installApp = async function() {
+  if (!installEvent) {
+    toast('Use your browser menu → Install app', 'error');
+    return;
+  }
+  // prompt() is single-use: once shown, this event is spent whatever the user
+  // chooses. Chromium fires a fresh one on a later visit if they declined.
+  const ev = installEvent;
+  installEvent = null;
+  try {
+    ev.prompt();
+    await ev.userChoice;
+  } catch (e) {
+    toast(e.message || 'Install prompt unavailable', 'error');
+  }
+  repaintInstallSlot();
+};
+
+window.snoozeInstall = function() {
+  try { localStorage.setItem(INSTALL_SNOOZE_KEY, String(Date.now())); } catch { /* ignore */ }
+  // Dismissing removes the button that was just activated, so a keyboard user
+  // would be left on <body>. Send focus back to the screen heading, the same
+  // landing spot the router uses.
+  const hadFocus = document.getElementById('install-slot')?.contains(document.activeElement);
+  repaintInstallSlot();
+  if (hadFocus) moveFocusToMain();
+};
+
+// The service worker exists so the install prompt can appear at all (Chromium
+// requires a controlled page); it caches nothing — see sw.js.
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  const local = ['localhost', '127.0.0.1'].includes(location.hostname);
+  if (location.protocol !== 'https:' && !local) return;
+  navigator.serviceWorker
+    .register(`${state.basePath}/ui/sw.js`, { scope: `${state.basePath}/ui/` })
+    .catch(() => { /* installability is a nice-to-have; the app works without it */ });
+}
+
 // ---------------- auto-lock ----------------
 
 let lastActivity = Date.now();
@@ -2317,6 +2475,8 @@ try {
   const src = new URLSearchParams(location.search).get('src');
   if (src && /^https?:\/\//.test(src)) sessionStorage.setItem('barter_scan_origin', src);
 } catch { /* ignore */ }
+
+registerServiceWorker();
 
 fetchConfig().then(() => route()).catch(e => {
   document.getElementById('app').innerHTML = `<div class="container"><p class="error">Failed to load bank config: ${e.message}</p></div>`;

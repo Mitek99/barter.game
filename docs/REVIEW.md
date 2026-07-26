@@ -190,6 +190,13 @@ The bank is chosen only by URL path (`parsePath`, app.js:79); root `/` returns b
 `serveStaticAsset` (main.ts:148) sends no `Cache-Control`/`ETag`, so every asset re-downloads; the esm.sh imports add a third-party round-trip on the critical unlock path (fixed by #5). Backend `/ui/history` (ui.ts:466–506) does per-record + per-signature KV reads in a nested loop. Dashboard awaits portfolio then history serially (app.js:337–338). Polling never pauses on `document.hidden` (§18.4/§11). All individually small; together they define perceived speed.
 
 ### 18. Offline/PWA shell + offline re-unlock (M)
+
+> **Partially fixed** — the SPA is now installable: a per-bank manifest
+> (`apps/bank/ui.ts`), a cache-less service worker with an offline page
+> (`apps/web/sw.js`), and an in-app install offer on the hero/dashboard/Settings
+> (`apps/web/app.js`). Deliberately **not** done: caching the app shell or any
+> bank response, so offline re-unlock and read-only cached balances remain open.
+
 No manifest, no service worker. Spec §4 explicitly expects the keystore ciphertext to be "cached locally, so no network is needed to re-unlock" — cache the encrypted blob (it's ciphertext, safe) in IndexedDB, add a manifest + SW for the app shell, and show a clear offline banner with read-only cached balances. Makes the app installable for the market/festival use cases the QR journeys target.
 
 ### 19. Optimistic-vs-confirmed state model (M)

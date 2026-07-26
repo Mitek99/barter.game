@@ -80,7 +80,19 @@ export async function handleUiRequest(
   try {
     const url = new URL(request.url);
     const uiPath = url.pathname.slice(basePath.length);
-    if (uiPath === '/' || uiPath === '' || uiPath.startsWith('/app/')) {
+    // Canonicalise /:bank/ui to /:bank/ui/ — a trailing slash is required for
+    // installability, because both the service-worker and manifest scopes are
+    // "/:bank/ui/" and scope matching is a plain string prefix: the slashless
+    // URL is OUTSIDE its own app's scope, so the page loads uncontrolled and
+    // Chromium never offers the install. The fragment (#/settings) is
+    // reattached by the browser; the query string is carried over here.
+    if (uiPath === '') {
+      return new Response(null, {
+        status: 308,
+        headers: { Location: `${basePath}/${url.search}` },
+      });
+    }
+    if (uiPath === '/' || uiPath.startsWith('/app/')) {
       return serveSpa(request, uiPath, basePath);
     }
 
@@ -267,6 +279,39 @@ export async function handlePublicUiRoute(
       name: bank.name,
       protocol_version: 'barter.game/v1',
     });
+  }
+
+  // Web app manifest — makes the SPA installable ("add to home screen").
+  // Generated per bank rather than shipped as a static file because
+  // start_url/scope/id must carry this bank's path prefix: two banks served by
+  // one process install as two distinct apps, each confined to its own UI.
+  if (uiPath === '/manifest.webmanifest' && request.method === 'GET') {
+    return new Response(JSON.stringify(webManifest(bank, basePath), null, 2), {
+      headers: {
+        'Content-Type': 'application/manifest+json; charset=utf-8',
+        'Cache-Control': 'public, max-age=300',
+      },
+    });
+  }
+
+  // Service worker, served from the UI root so its scope covers the whole SPA
+  // (a worker under /app/ could not control start_url). Installability requires
+  // it; it caches nothing — see apps/web/sw.js.
+  if (uiPath === '/sw.js' && request.method === 'GET') {
+    try {
+      const file = await Deno.readFile('./apps/web/sw.js');
+      return new Response(file, {
+        headers: {
+          'Content-Type': 'application/javascript; charset=utf-8',
+          // Never serve a stale worker: it is the one script that can outlive
+          // a deploy and keep controlling clients.
+          'Cache-Control': 'no-cache',
+          'Service-Worker-Allowed': `${basePath}/`,
+        },
+      });
+    } catch {
+      return notFound();
+    }
   }
 
   // Public issuer resolution — everything this bank knows about a pubkey:
@@ -1182,6 +1227,53 @@ function escapeHtml(s: string): string {
 }
 
 // --- SPA static ------------------------------------------------------------
+
+/**
+ * The installable-app description for this bank's SPA.
+ *
+ * `scope` confines the installed window to /:bank/ui/ — a Barter Link to
+ * another bank then opens in the browser, where it belongs, instead of
+ * appearing to be part of this installed app. `id` keeps the install identity
+ * stable across start_url changes, and distinct per bank.
+ */
+function webManifest(bank: Bank, basePath: string): Record<string, unknown> {
+  const root = `${basePath}/`;
+  return {
+    id: root,
+    name: `barter.game — ${bank.name}`,
+    short_name: 'barter.game',
+    description: 'Federated mutual-credit ledger. Be your own bank.',
+    start_url: root,
+    scope: root,
+    display: 'standalone',
+    display_override: ['standalone', 'minimal-ui'],
+    // Matches <meta name="theme-color"> and the page background in
+    // apps/web/styles.css, so the splash screen and status bar are seamless.
+    theme_color: '#F3F1EC',
+    background_color: '#F3F1EC',
+    lang: 'en',
+    dir: 'ltr',
+    categories: ['finance'],
+    icons: [
+      { src: `${root}app/icon.svg`, sizes: 'any', type: 'image/svg+xml' },
+      { src: `${root}app/icon-192.png`, sizes: '192x192', type: 'image/png' },
+      { src: `${root}app/icon-512.png`, sizes: '512x512', type: 'image/png' },
+      // Full-bleed variant: Android crops icons to its own shape, and a
+      // squircle-with-transparent-corners icon would get clipped twice.
+      {
+        src: `${root}app/icon-maskable-512.png`,
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
+    ],
+    shortcuts: [
+      { name: 'Scan a code', url: `${root}#/scan` },
+      { name: 'New invoice', url: `${root}#/invoices/new` },
+      { name: 'New cheque', url: `${root}#/cheques/new` },
+    ],
+  };
+}
 
 async function serveSpa(
   _request: Request,
