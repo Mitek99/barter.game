@@ -17,10 +17,13 @@ import {
   getHandleByPubkey,
   getHandleInfo,
   getKeystore,
+  getMedia,
   getOffer,
   getOffersForOrder,
   getOrder,
   getRecord,
+  MEDIA_MAX_BYTES,
+  storeMedia,
   getSignaturesForRecord,
   getUiState,
   getVoucher,
@@ -1204,6 +1207,98 @@ async function serveSpa(
 }
 
 // --- utilities -------------------------------------------------------------
+
+/**
+ * Media blobs for posts — `POST /:bank/media`, `GET /:bank/media/:hash`
+ * (post-feed.md §5, bank-rpc.md §2.5).
+ *
+ * **Upload takes base64 in JSON, not raw bytes.** The spec suggests raw bytes
+ * or multipart, but this bank's write auth binds the body with
+ * `body_sha256 = sha256(await request.text())` — a TEXT read, which mangles any
+ * non-UTF-8 byte and so cannot authenticate a binary upload. Wrapping the bytes
+ * in base64 inside a JSON body keeps the existing authdoc contract exactly as
+ * it is for every other write. §5 leaves the upload encoding to the bank
+ * ("or multipart"), so this stays inside the spec; the 33% overhead is the cost.
+ *
+ * Download is unauthenticated and immutable-cacheable, per §5.
+ */
+export async function handleMedia(
+  bank: Bank,
+  request: Request,
+  hash: string | undefined,
+  basePath: string,
+): Promise<Response> {
+  // main.ts routes /media directly, so the UiError -> JSON mapping that
+  // handleUiRequest performs does not apply here. Map it locally, otherwise
+  // an honest 404 surfaces to the caller as a 500 from main.ts's catch-all.
+  try {
+    return await mediaRoute(bank, request, hash, basePath);
+  } catch (e) {
+    if (e instanceof UiError) return json(e.status, { code: e.code, message: e.message });
+    if (e instanceof RpcError) return json(400, { code: e.code, message: e.message });
+    console.error('media error', e);
+    return json(500, { code: -32603, message: 'internal error' });
+  }
+}
+
+async function mediaRoute(
+  bank: Bank,
+  request: Request,
+  hash: string | undefined,
+  basePath: string,
+): Promise<Response> {
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204 });
+
+  if (request.method === 'GET') {
+    if (!hash) throw new UiError(400, -32602, 'media hash required');
+    const blob = await getMedia(bank, hash);
+    if (!blob) throw new UiError(404, -32005, 'unknown media');
+    // Re-verify the bytes hash to the requested value before serving (§5).
+    const verifyBuf = new Uint8Array(blob.bytes.length);
+    verifyBuf.set(blob.bytes);
+    const digest = await crypto.subtle.digest('SHA-256', verifyBuf);
+    if (base58Encode(new Uint8Array(digest)) !== hash) {
+      throw new UiError(500, -32603, 'stored media failed its content hash');
+    }
+    const outBuf = new Uint8Array(blob.bytes.length);
+    outBuf.set(blob.bytes);
+    return new Response(outBuf, {
+      status: 200,
+      headers: {
+        'Content-Type': blob.meta.content_type,
+        'Content-Length': String(blob.meta.size),
+        // Content-addressed and immutable, so cache hard.
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      },
+    });
+  }
+
+  if (request.method === 'POST') {
+    await requireAuth(bank, request, basePath);
+    const body = await request.json() as Record<string, unknown>;
+    const b64 = body.data_base64;
+    const contentType = typeof body.content_type === 'string' ? body.content_type : 'application/octet-stream';
+    if (typeof b64 !== 'string' || b64.length === 0) {
+      throw new UiError(400, -32602, 'data_base64 required');
+    }
+    let bytes: Uint8Array;
+    try {
+      const bin = atob(b64);
+      bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    } catch {
+      throw new UiError(400, -32600, 'data_base64 is not valid base64');
+    }
+    // Size cap is bank policy (§5/§6).
+    if (bytes.length > MEDIA_MAX_BYTES) {
+      throw new UiError(413, -32000, `media exceeds ${MEDIA_MAX_BYTES} bytes`);
+    }
+    const stored = await storeMedia(bank, bytes, contentType);
+    return json(201, { hash: stored, size: bytes.length, content_type: contentType });
+  }
+
+  throw new UiError(405, -32601, 'method not allowed');
+}
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {

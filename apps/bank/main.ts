@@ -1,6 +1,6 @@
 import { loadBankKeys, createBank } from './env.ts';
 import { handleRpc } from './rpc.ts';
-import { handleUiRequest, handlePublicUiRoute, handleBarterLink, cors } from './ui.ts';
+import { handleUiRequest, handlePublicUiRoute, handleBarterLink, handleMedia, cors } from './ui.ts';
 import { getAddress, storeAddress } from './db.ts';
 import { registerLocalBank } from './local.ts';
 import { newUlid, signDoc } from '@barter.game/protocol';
@@ -82,6 +82,14 @@ async function route(request: Request, banks: Map<string, Bank>): Promise<Respon
       const { registry } = await import('./registry.ts');
       const result = await registry['get_address'](bank, { pubkey }, bank.pubkey);
       return cors(json(result));
+    }
+
+    // Media blobs (post-feed.md §5, bank-rpc.md §2.5). Upload is authenticated
+    // via the same signed authdoc the rest of the write path uses; download is
+    // deliberately UNAUTHENTICATED — blobs are immutable and content-addressed,
+    // so whoever knows the hash may fetch the bytes, and responses cache freely.
+    if (segment === 'media') {
+      return cors(await handleMedia(bank, request, rest[1], `/${name}/media`));
     }
 
     // Barter Link public routes

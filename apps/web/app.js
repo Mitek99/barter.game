@@ -9,6 +9,7 @@ import {
   sha256Base58,
   signDoc,
   verifyDoc,
+  verifyPostTree,
 } from './protocol.js';
 import { qrDataUrl, startScanner } from './qr.js';
 
@@ -343,7 +344,7 @@ function dispatch(app, p, rest) {
   if (p === 'cheques') return renderCheques(app);
   if (p === 'discover') return renderDiscover(app);
   if (p === 'registry') return renderRegistry(app);
-  if (p === 'posts') return renderPostsSoon(app);
+  if (p === 'posts') return renderPosts(app, rest[0]);
   if (p === 'deal' && rest[0]) return renderDeal(app, rest[0]);
   if (p === 'activity') return renderActivity(app);
   if (p === 'network') return renderNetwork(app);
@@ -368,18 +369,257 @@ function moveFocusToMain() {
 }
 window.skipToContent = function() { moveFocusToMain(); };
 
-// Voucher post feeds aren't built yet (they need their own protocol doc shape);
-// the "New → Post" action lands here with an honest explanation rather than a
-// dead end.
-function renderPostsSoon(app) {
-  app.innerHTML = header('Posts') + `<div class="container" style="max-width:560px">
-    ${card('Posts — coming soon', `
-      <p class="small">Voucher <b>post feeds</b> aren't available yet. The plan: issuers, and people you trust, can publish short posts attached to a voucher — and you'll see them in a feed for the vouchers you hold or follow. A lightweight, spam-resistant way to hear from the issuers behind your currencies.</p>
-      <p class="small">Until then you can mint vouchers, trade, and manage your network.</p>
-      <a class="btn secondary" href="#/vouchers/new">Mint a voucher instead</a>
-    `)}
+// ---------------- voucher post feeds (protocol/post-feed.md) ----------------
+
+// There is deliberately no global timeline: a feed is the reader's own trust
+// graph. The client merges list_posts(author, voucher) across every followed
+// author x every known bank, newest-first, de-duplicated by content hash
+// (post-feed.md §7). "Followed" here is the trusted-issuer list plus yourself.
+async function feedAuthors() {
+  const trusted = await uiGet('/trusted').catch(() => []);
+  const keys = (trusted || []).map(t => (typeof t === 'string' ? t : t.pubkey)).filter(Boolean);
+  if (state.user && !keys.includes(state.user.pubkey)) keys.unshift(state.user.pubkey);
+  return keys;
+}
+
+async function feedBanks() {
+  const bases = [{ url: state.bankUrl || state.basePath, pubkey: state.bankPubkey }];
+  const pinned = await uiGet('/banks').catch(() => []);
+  (pinned || []).forEach(b => {
+    if (b.url && !bases.some(x => x.url === b.url)) bases.push({ url: b.url, pubkey: b.pubkey });
+  });
+  return bases;
+}
+
+/**
+ * Merge one page from every (author, bank) source. Each source is already
+ * newest-first, so a k-way merge by ULID yields a correct global order without
+ * the bank doing any cross-author ranking.
+ *
+ * Every post is signature-checked here — including its embedded ancestors —
+ * before it is allowed into the feed. A bank serves what it stored; trusting
+ * it to have verified is not the reader's job.
+ */
+async function loadFeed(voucherFilter, limit = 30) {
+  const [authors, banks] = await Promise.all([feedAuthors(), feedBanks()]);
+  if (!authors.length) return { posts: [], authors, unreachable: [] };
+
+  const unreachable = [];
+  const results = await Promise.all(
+    banks.flatMap(b => authors.map(async author => {
+      try {
+        const r = await rpcCallAt(b.url, b.pubkey, 'list_posts', {
+          pubkey: author, voucher_hash: voucherFilter || 'all', limit,
+        });
+        return (r && r.items) || [];
+      } catch {
+        const label = b.url;
+        if (!unreachable.includes(label)) unreachable.push(label);
+        return [];
+      }
+    })),
+  );
+
+  const byHash = new Map();
+  results.flat().forEach(p => {
+    let hash;
+    try { hash = hashDoc(p); } catch { return; }
+    if (byHash.has(hash)) return;
+    // Fail closed: an unverifiable post is dropped, not rendered with a warning.
+    try { if (!verifyPostTree(p)) return; } catch { return; }
+    byHash.set(hash, p);
+  });
+
+  const posts = [...byHash.entries()]
+    .map(([hash, post]) => ({ hash, post }))
+    .sort((a, b) => (a.post.ulid < b.post.ulid ? 1 : a.post.ulid > b.post.ulid ? -1 : 0));
+  return { posts, authors, unreachable };
+}
+
+// Markdown is NOT rendered — body_md is escaped and shown as text, with only
+// newlines honoured. Rendering author-controlled markdown to HTML would hand
+// every post author an injection surface; that is a deliberate omission, not
+// an oversight.
+function postBody(md) {
+  return escapeHtml(String(md || '')).replace(/\n/g, '<br>');
+}
+
+function postAuthorLabel(pubkey, names) {
+  if (state.user && pubkey === state.user.pubkey) return 'you';
+  return names[pubkey] || pubkey.slice(0, 10) + '…';
+}
+
+function renderEmbedded(p, names, kind) {
+  if (!p) return '';
+  return `<div class="card" style="margin:.5rem 0 0;padding:.6rem .8rem;opacity:.85">
+    <div class="small"><b>${escapeHtml(postAuthorLabel(p.pubkey, names))}</b> · ${kind}</div>
+    <div class="small">${postBody(p.body_md)}</div>
+    ${renderEmbedded(p.reply_to, names, 'in reply to')}
+    ${renderEmbedded(p.repost, names, 'reposted')}
   </div>`;
 }
+
+function renderMedia(post, bankUrl) {
+  const list = Array.isArray(post.media) ? post.media : [];
+  if (!list.length) return '';
+  return `<div class="flex" style="gap:.5rem;flex-wrap:wrap;margin-top:.5rem">` +
+    list.map(h => `<img src="${escapeHtml(bankUrl.replace(/\/$/, ''))}/media/${escapeHtml(h)}"
+      alt="attachment" loading="lazy" style="max-width:100%;max-height:280px;border-radius:8px">`).join('') +
+    `</div>`;
+}
+
+async function renderPosts(app, voucherFilter) {
+  app.innerHTML = header('Posts') + `<div class="container"><p class="small">Loading feed…</p></div>`;
+
+  let vouchers = [];
+  let feed = { posts: [], authors: [], unreachable: [] };
+  let failed = false;
+  try {
+    [vouchers, feed] = await Promise.all([knownVouchers().catch(() => []), loadFeed(voucherFilter)]);
+  } catch { failed = true; }
+
+  const names = {};
+  const bases = await issuerResolveBases().catch(() => []);
+  await Promise.all(feed.authors.map(async pk => {
+    if (state.user && pk === state.user.pubkey) return;
+    const r = await resolveIssuerAt(bases, pk).catch(() => null);
+    if (r && r.handle) names[pk] = r.handle;
+  }));
+
+  const vMap = {};
+  vouchers.forEach(v => { vMap[v.hash] = v.name; });
+  const selected = voucherFilter && vMap[voucherFilter] ? voucherFilter : '';
+
+  const filterBar = `<div class="card">
+    <label for="feed-voucher">Feed</label>
+    <select id="feed-voucher" onchange="onFeedFilterChange()">
+      <option value=""${selected ? '' : ' selected'}>Everything from people I trust</option>
+      ${vouchers.map(v => `<option value="${escapeHtml(v.hash)}"${v.hash === selected ? ' selected' : ''}>${escapeHtml(v.name)} — ${escapeHtml(v.issuer)}</option>`).join('')}
+    </select>
+    <p class="small">Posts are anchored to a voucher. You see the people you trust; there is no global timeline.</p>
+  </div>`;
+
+  const composer = vouchers.length
+    ? `<div class="card">
+        <h3>Say something</h3>
+        <label for="post-voucher">About which voucher</label>
+        ${voucherChooser('post-voucher', vouchers, selected || vouchers[0].hash)}
+        <label for="post-body">Post</label>
+        <textarea id="post-body" rows="3" placeholder="Redeem at booth 12 all Saturday…"></textarea>
+        <div class="small" id="post-reply-note"></div>
+        <button class="btn" id="post-submit" onclick="submitPost()">Post</button>
+        <div class="error" id="post-err"></div>
+      </div>`
+    : card('Nothing to post about yet', `
+        <p class="small">A post is anchored to a voucher. Mint one, or trust an issuer, and you can post about it.</p>
+        <a class="btn secondary" href="#/vouchers/new">Mint a voucher</a>`);
+
+  const bankUrl = state.bankUrl || state.basePath;
+  const list = feed.posts.length
+    ? feed.posts.map(({ hash, post }) => `<div class="card">
+        <div class="small"><b>${escapeHtml(postAuthorLabel(post.pubkey, names))}</b>
+          · ${escapeHtml(vMap[post.voucher] || post.voucher.slice(0, 10) + '…')}</div>
+        <div>${postBody(post.body_md)}</div>
+        ${renderMedia(post, bankUrl)}
+        ${renderEmbedded(post.reply_to, names, 'in reply to')}
+        ${renderEmbedded(post.repost, names, 'reposted')}
+        <div class="flex" style="gap:.5rem;margin-top:.5rem">
+          <button class="btn secondary" onclick="startReply('${jsStr(hash)}')">Reply</button>
+          <button class="btn secondary" onclick="repostPost('${jsStr(hash)}')">Repost</button>
+        </div>
+      </div>`).join('')
+    : `<div class="card"><p class="small">No posts yet from you or the issuers you trust${selected ? ' about this voucher' : ''}.</p></div>`;
+
+  const warn = feed.unreachable.length
+    ? `<div class="card"><p class="small">Couldn't reach: ${feed.unreachable.map(escapeHtml).join(', ')}</p></div>`
+    : '';
+
+  app.innerHTML = header('Posts') + `<div class="container">
+    ${failed ? loadError('the feed') : `${filterBar}${composer}${warn}${list}`}
+  </div>`;
+}
+
+window.onFeedFilterChange = function() {
+  const v = document.getElementById('feed-voucher').value;
+  location.hash = v ? `#/posts/${v}` : '#/posts';
+  route();
+};
+
+// The post being replied to / reposted, kept out of the DOM so the embedded
+// parent is the exact signed object the bank returned.
+let pendingParent = null;
+
+async function fetchPostByHash(hash) {
+  const banks = await feedBanks();
+  for (const b of banks) {
+    try {
+      const p = await rpcCallAt(b.url, b.pubkey, 'get_post', { post_hash: hash });
+      if (p) return p;
+    } catch { /* try the next bank */ }
+  }
+  return null;
+}
+
+window.startReply = async function(hash) {
+  const parent = await fetchPostByHash(hash);
+  if (!parent) return toast('Could not load that post', 'error');
+  pendingParent = { kind: 'reply_to', post: parent };
+  const note = document.getElementById('post-reply-note');
+  if (note) note.innerHTML = `Replying to <b>${escapeHtml((parent.body_md || '').slice(0, 60))}</b> — <a href="#" onclick="clearParent();return false">cancel</a>`;
+  const sel = document.getElementById('post-voucher');
+  if (sel) sel.value = parent.voucher;
+  const body = document.getElementById('post-body');
+  if (body) body.focus();
+};
+
+window.repostPost = async function(hash) {
+  const parent = await fetchPostByHash(hash);
+  if (!parent) return toast('Could not load that post', 'error');
+  pendingParent = { kind: 'repost', post: parent };
+  const note = document.getElementById('post-reply-note');
+  if (note) note.innerHTML = `Reposting <b>${escapeHtml((parent.body_md || '').slice(0, 60))}</b> — <a href="#" onclick="clearParent();return false">cancel</a>`;
+  const sel = document.getElementById('post-voucher');
+  if (sel) sel.value = parent.voucher;
+  const body = document.getElementById('post-body');
+  if (body) body.focus();
+};
+
+window.clearParent = function() {
+  pendingParent = null;
+  const note = document.getElementById('post-reply-note');
+  if (note) note.textContent = '';
+};
+
+window.submitPost = async function() {
+  const err = document.getElementById('post-err');
+  const btn = document.getElementById('post-submit');
+  err.textContent = '';
+  const voucher = document.getElementById('post-voucher').value;
+  const body = document.getElementById('post-body').value.trim();
+  // A repost may carry no commentary of its own (post-feed.md §4); a plain
+  // post or reply must say something.
+  if (!body && !(pendingParent && pendingParent.kind === 'repost')) {
+    err.textContent = 'Write something first'; return;
+  }
+  if (!voucher) { err.textContent = 'Pick a voucher to anchor this post to'; return; }
+
+  const release = lockBtn(btn);
+  try {
+    const post = {
+      type: 'post', pubkey: state.user.pubkey, ulid: newUlid(),
+      voucher, body_md: body,
+    };
+    if (pendingParent) post[pendingParent.kind] = pendingParent.post;
+    post.sig = signDoc(post, state.user.privateKey);
+    await rpcCall('submit_docs', { docs: [post] });
+    pendingParent = null;
+    toast('Posted');
+    route();
+  } catch (e) {
+    release();
+    err.textContent = e.message;
+  }
+};
 
 // Keyboard handling for the mobile sheet/drawer (registered once): Escape
 // closes and restores focus; Tab is trapped inside the open sheet.
@@ -431,6 +671,7 @@ function header(title) {
       <a href="#/invoices"${on('Invoices')}>Invoices</a>
       <a href="#/cheques"${on('Cheques')}>Cheques</a>
       <a href="#/discover"${on('Discover')}>Discover</a>
+      <a href="#/posts"${on('Posts')}>Posts</a>
       <a href="#/registry"${on('Registry')}>Registry</a>
       <a href="#/activity"${on('Activity')}>Activity</a>
       <a href="#/network"${on('Network')}>Network</a>

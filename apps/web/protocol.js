@@ -124,10 +124,13 @@ export function verifyDoc(doc, signatureBase58, pubkeyBase58) {
     const hash = sha256hash(bytes);
     return verifyBytes(hash, signatureBase58, pubkeyBase58);
 }
-// Content hash = the SAME preimage the signature commits to: canonical(doc
-// minus the top-level `sig`). Only the top-level `sig` is stripped, so an
-// embedded signed doc keeps its own signature inside the preimage.
-// Must stay byte-identical to packages/protocol/src/index.ts.
+// A doc's content hash is taken over the SAME preimage its signature commits
+// to: canonical(doc minus the top-level `sig`). So `sig` is a container bolted
+// on after the fact, never an input to its own computation — and a doc's
+// identity is stable whether or not it has been signed yet (`base.md` §2).
+// Only the TOP-LEVEL `sig` is stripped: a nested/embedded signed doc keeps its
+// own `sig` inside the preimage, so an embedding author commits to the exact
+// signed bytes of what it embeds.
 export function hashDoc(doc) {
     return base58.encode(sha256hash(canonicalBytes(canonicalizeWithoutSig(doc))));
 }
@@ -345,12 +348,13 @@ export function validateRecord(d) {
     assertBase58(b.details, 'details');
     return d;
 }
-export function validateConfirm(d) {
+export function validateMandate(d) {
     const b = validateBaseDoc(d);
-    if (b.type !== 'confirm')
-        throw new ValidationError('type must be confirm');
-    requireFields(b, ['deal_id', 'bank', 'records']);
+    if (b.type !== 'mandate')
+        throw new ValidationError('type must be mandate');
+    requireFields(b, ['deal_id', 'order', 'bank', 'records']);
     assertUlid(b.deal_id, 'deal_id');
+    assertBase58(b.order, 'order');
     assertBase58(b.bank, 'bank');
     if (!Array.isArray(b.records) || b.records.length === 0) {
         throw new ValidationError('records must be a non-empty array');
@@ -388,6 +392,64 @@ export function validateAddress(d) {
         throw new ValidationError('address url must be an http(s) URL');
     }
     return d;
+}
+/**
+ * Maximum `reply_to`/`repost` nesting a validator will walk (post-feed.md §6:
+ * "banks cap embed depth and total post size at intake"). The cap is a
+ * termination guarantee as much as a policy: embeds are recursive and arrive
+ * from the network, so an unbounded walk is a denial-of-service vector.
+ */
+export const MAX_POST_EMBED_DEPTH = 8;
+/**
+ * Validate a Post and, recursively, every Post it embeds.
+ *
+ * Shape only — the AUTHOR SIGNATURE OF EMBEDDED POSTS IS NOT CHECKED HERE,
+ * because signature verification is async in some runtimes and this validator
+ * is sync like its siblings. `verifyPostTree` does that half; a bank MUST call
+ * both (post-feed.md §2 requires every embedded post to be "well-formed and
+ * correctly signed").
+ */
+export function validatePost(d, depth = 0) {
+    if (depth > MAX_POST_EMBED_DEPTH) {
+        throw new ValidationError(`post embed depth exceeds ${MAX_POST_EMBED_DEPTH}`);
+    }
+    const b = validateBaseDoc(d);
+    if (b.type !== 'post')
+        throw new ValidationError('type must be post');
+    requireFields(b, ['voucher', 'body_md']);
+    assertBase58(b.voucher, 'voucher');
+    if (typeof b.body_md !== 'string') {
+        throw new ValidationError('body_md must be a string');
+    }
+    if (b.media !== undefined) {
+        if (!Array.isArray(b.media)) {
+            throw new ValidationError('media must be an array');
+        }
+        b.media.forEach((m, i) => assertBase58(m, `media[${i}]`));
+    }
+    // An embedded ancestor is a full Post, so it validates by the same rules.
+    if (b.reply_to !== undefined)
+        validatePost(b.reply_to, depth + 1);
+    if (b.repost !== undefined)
+        validatePost(b.repost, depth + 1);
+    return d;
+}
+/**
+ * Verify the author signature of a Post and of every Post embedded in it.
+ *
+ * Embedded ancestors keep their own `sig`, so each is verified against its own
+ * `pubkey` exactly as a standalone post would be. Returns false on the first
+ * bad signature; a missing `sig` anywhere in the tree is a failure.
+ */
+export function verifyPostTree(post) {
+    const sig = post.sig;
+    if (!sig || !verifyDoc(post, sig, post.pubkey))
+        return false;
+    if (post.reply_to && !verifyPostTree(post.reply_to))
+        return false;
+    if (post.repost && !verifyPostTree(post.repost))
+        return false;
+    return true;
 }
 // --- helpers --------------------------------------------------------------
 export function offerSideFromOrderSide(side) {

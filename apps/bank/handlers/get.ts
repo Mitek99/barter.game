@@ -5,10 +5,13 @@ import {
   getDoc,
   getOffer as dbGetOffer,
   getOrder,
+  getPost as dbGetPost,
   getRecord,
+  getSignaturesForPost as dbGetSignaturesForPost,
   getVoucher as dbGetVoucher,
   listAccounts as dbListAccounts,
   listOffers as dbListOffers,
+  listPosts as dbListPosts,
   listVouchers as dbListVouchers,
   listVouchersByIssuer as dbListVouchersByIssuer,
 } from '../db.ts';
@@ -147,3 +150,62 @@ export async function getAddress(
 }
 
 export { hashDoc };
+
+// --- posts ----------------------------------------------------------------
+
+// Advisory page size; the bank caps it (bank-rpc.md §2.4 pagination note).
+const POSTS_DEFAULT_LIMIT = 50;
+const POSTS_MAX_LIMIT = 200;
+
+/**
+ * `list_posts(pubkey, voucher_hash, before?)` — post-feed.md §3.
+ *
+ * `pubkey` is the AUTHOR whose feed is read and is required: there is
+ * deliberately no "all authors" query, because that would be a global
+ * timeline and feeds are the reader's own trust graph (§3, §7).
+ */
+export async function listPosts(
+  bank: Bank,
+  params: Record<string, unknown>,
+): Promise<unknown> {
+  const author = params.pubkey;
+  const voucher = params.voucher_hash;
+  const before = params.before;
+  if (typeof author !== 'string') {
+    throw new RpcError(-32602, 'pubkey (author) required');
+  }
+  if (typeof voucher !== 'string') {
+    throw new RpcError(-32602, "voucher_hash required (a hash, or \"all\")");
+  }
+  if (before !== undefined && typeof before !== 'string') {
+    throw new RpcError(-32602, 'before must be a ULID string');
+  }
+  const rawLimit = typeof params.limit === 'number' ? params.limit : POSTS_DEFAULT_LIMIT;
+  const limit = Math.max(1, Math.min(rawLimit, POSTS_MAX_LIMIT));
+  return await dbListPosts(bank, author, voucher as string, before, limit);
+}
+
+export async function getPost(
+  bank: Bank,
+  params: Record<string, unknown>,
+): Promise<unknown> {
+  const hash = params.post_hash;
+  if (typeof hash !== 'string') throw new RpcError(-32602, 'post_hash required');
+  const p = await dbGetPost(bank, hash);
+  if (!p) throw new RpcError(-32005, 'unknown post');
+  return p;
+}
+
+/**
+ * Signatures that accrued on a post AFTER it was signed — endorsements,
+ * reactions, an issuer co-signing a holder's post. The author's own signature
+ * lives in the post body. Mirrors `get_record_signatures`.
+ */
+export async function getPostSignatures(
+  bank: Bank,
+  params: Record<string, unknown>,
+): Promise<unknown> {
+  const hash = params.post_hash;
+  if (typeof hash !== 'string') throw new RpcError(-32602, 'post_hash required');
+  return { signatures: await dbGetSignaturesForPost(bank, hash) };
+}

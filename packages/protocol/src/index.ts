@@ -23,7 +23,8 @@ export type DocType =
   | 'order'
   | 'offer'
   | 'mandate'
-  | 'address';
+  | 'address'
+  | 'post';
 
 export type BaseDoc = {
   type: DocType;
@@ -125,6 +126,26 @@ export type Address = BaseDoc & {
   url: string;
 };
 
+/**
+ * A voucher-anchored post (post-feed.md §1).
+ *
+ * `reply_to` / `repost` embed the FULL referenced Post — including its own
+ * `sig`, and its own `reply_to`/`repost` in turn — rather than a hash. That is
+ * what makes a reply or repost self-contained and independently verifiable: a
+ * reader checks the whole thread from the bytes in hand, with no follow-up
+ * fetch. Only the OUTER post's top-level `sig` is stripped when hashing, so the
+ * outer author commits to the exact bytes, signatures included, of every
+ * ancestor it embeds.
+ */
+export type Post = BaseDoc & {
+  type: 'post';
+  voucher: Base58SHA256;
+  body_md: string;
+  media?: Base58SHA256[];
+  reply_to?: Post;
+  repost?: Post;
+};
+
 export type AnyDoc =
   | Voucher
   | Account
@@ -133,7 +154,8 @@ export type AnyDoc =
   | Offer
   | Mandate
   | Signature
-  | Address;
+  | Address
+  | Post;
 
 // --- canonical JSON (RFC 8785 / JCS) --------------------------------------
 
@@ -570,6 +592,63 @@ export function validateAddress(d: unknown): Address {
     throw new ValidationError('address url must be an http(s) URL');
   }
   return d as Address;
+}
+
+/**
+ * Maximum `reply_to`/`repost` nesting a validator will walk (post-feed.md §6:
+ * "banks cap embed depth and total post size at intake"). The cap is a
+ * termination guarantee as much as a policy: embeds are recursive and arrive
+ * from the network, so an unbounded walk is a denial-of-service vector.
+ */
+export const MAX_POST_EMBED_DEPTH = 8;
+
+/**
+ * Validate a Post and, recursively, every Post it embeds.
+ *
+ * Shape only — the AUTHOR SIGNATURE OF EMBEDDED POSTS IS NOT CHECKED HERE,
+ * because signature verification is async in some runtimes and this validator
+ * is sync like its siblings. `verifyPostTree` does that half; a bank MUST call
+ * both (post-feed.md §2 requires every embedded post to be "well-formed and
+ * correctly signed").
+ */
+export function validatePost(d: unknown, depth = 0): Post {
+  if (depth > MAX_POST_EMBED_DEPTH) {
+    throw new ValidationError(
+      `post embed depth exceeds ${MAX_POST_EMBED_DEPTH}`,
+    );
+  }
+  const b = validateBaseDoc(d) as Record<string, unknown>;
+  if (b.type !== 'post') throw new ValidationError('type must be post');
+  requireFields(b, ['voucher', 'body_md']);
+  assertBase58(b.voucher, 'voucher');
+  if (typeof b.body_md !== 'string') {
+    throw new ValidationError('body_md must be a string');
+  }
+  if (b.media !== undefined) {
+    if (!Array.isArray(b.media)) {
+      throw new ValidationError('media must be an array');
+    }
+    b.media.forEach((m, i) => assertBase58(m, `media[${i}]`));
+  }
+  // An embedded ancestor is a full Post, so it validates by the same rules.
+  if (b.reply_to !== undefined) validatePost(b.reply_to, depth + 1);
+  if (b.repost !== undefined) validatePost(b.repost, depth + 1);
+  return d as Post;
+}
+
+/**
+ * Verify the author signature of a Post and of every Post embedded in it.
+ *
+ * Embedded ancestors keep their own `sig`, so each is verified against its own
+ * `pubkey` exactly as a standalone post would be. Returns false on the first
+ * bad signature; a missing `sig` anywhere in the tree is a failure.
+ */
+export function verifyPostTree(post: Post): boolean {
+  const sig = (post as { sig?: string }).sig;
+  if (!sig || !verifyDoc(post, sig, post.pubkey)) return false;
+  if (post.reply_to && !verifyPostTree(post.reply_to)) return false;
+  if (post.repost && !verifyPostTree(post.repost)) return false;
+  return true;
 }
 
 // --- helpers --------------------------------------------------------------

@@ -16,8 +16,9 @@ Deferred items. Each entry: **what / why / context / depends on**.
 - **Context:** `protocol/bank-schema.md` §1.2 (`public` flag) and §1.8 (`Balance`); pagination convention in `bank-rpc.md` §2.4.
 - **Depends on:** Nothing — additive.
 
-### Implement voucher post feeds
+### ~~Implement voucher post feeds~~ — DONE
 - **What:** `Post` doc type + validator in `packages/protocol`; `submit_docs` routing with a bank acceptance-policy hook (spam filter / allowlist / rate limit); `list_posts` + `get_post`; a feed screen in the web UI.
+- **Status:** shipped. `Post` + `validatePost`/`verifyPostTree` in the protocol lib, `submit_docs` acceptance, `list_posts`/`get_post`/`get_post_signatures`, media blobs at `/media`, and a `#/posts` feed with reply/repost in the SPA. Covered by `apps/bank/e2e-posts.ts`. A bank acceptance-policy hook beyond validity is still bank-specific and not implemented here.
 - **Why:** Feeds are the social layer of discovery — issuer announcements, recommendations, testimonials ([`protocol/post-feed.md`](./protocol/post-feed.md)).
 - **Context:** docs/REVIEW.md Part IV ("per-voucher blogs") is the original design sketch.
 - **Depends on:** Nothing — additive.

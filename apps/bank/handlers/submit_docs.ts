@@ -1,10 +1,12 @@
 import {
   getDoc,
   getVoucher,
+  hasMedia,
   storeAccount,
   storeAddress,
   storeOffer,
   storeOrder,
+  storePost,
   storeSignature,
   storeVoucher,
 } from '../db.ts';
@@ -16,9 +18,11 @@ import {
   validateAccount,
   validateAddress,
   validateOrder,
+  validatePost,
   validateSignature,
   validateVoucher,
   verifyDoc,
+  verifyPostTree,
   type Offer,
   type Order,
 } from '@barter.game/protocol';
@@ -101,6 +105,36 @@ export async function submitDocs(
         const s = validateSignature(raw);
         await verifyOrFail(raw, s.sig, s.pubkey);
         const h = await storeSignature(bank, s);
+        if (!stored.includes(h)) stored.push(h);
+        break;
+      }
+      case 'post': {
+        // post-feed.md §2: validate shape, author signature, that `voucher`
+        // resolves to a Voucher THIS bank knows (its own, or one presented to
+        // it — so any bank the issuer uses can carry the feed), that every
+        // embedded reply_to/repost is itself well-formed and correctly signed,
+        // and that referenced media is already stored here (upload precedes
+        // the post, §5). Beyond validity, carriage is bank policy.
+        const p = validatePost(raw);
+        await verifyOrFail(raw, (p as { sig?: string }).sig, p.pubkey);
+        if (p.pubkey !== sender) {
+          throw new RpcError(-32001, 'post must be signed by sender');
+        }
+        if (!(await getVoucher(bank, p.voucher))) {
+          throw new RpcError(-32005, 'post voucher unknown');
+        }
+        // Embedded ancestors keep their own signatures; each verifies against
+        // its own author, so a forged thread cannot ride in on a valid outer
+        // post. Sync check — the tree is already in memory.
+        if (!verifyPostTree(p)) {
+          throw new RpcError(-32001, 'embedded post signature invalid');
+        }
+        for (const m of p.media ?? []) {
+          if (!(await hasMedia(bank, m))) {
+            throw new RpcError(-32005, `media not stored at this bank: ${m}`);
+          }
+        }
+        const h = await storePost(bank, p);
         if (!stored.includes(h)) stored.push(h);
         break;
       }

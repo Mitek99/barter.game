@@ -70,6 +70,7 @@ Hash-routed; the whole router is one function in `app.js`.
 | `#/invoices`, `#/invoices/new` | Credit-only orders (requests for payment) with shareable QR |
 | `#/cheques`, `#/cheques/new` | Debit-only orders with shareable QR |
 | `#/discover` | Poll known banks for published offers; accept one into a deal |
+| `#/posts`, `#/posts/:voucher` | Voucher post feeds. Merges `list_posts` across every trusted author x known bank, newest-first, de-duplicated by content hash; compose, reply and repost; every post's signature tree is verified client-side before it renders |
 | `#/deal/:id` | Deal status with per-leg ready/hold/settle; re-polls every 3 s until settled/rejected |
 | `#/activity` | Transaction history |
 | `#/network` | Trusted issuers (with free-text notes), pinned banks, contacts |

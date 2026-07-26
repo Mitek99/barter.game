@@ -6,12 +6,13 @@ import type {
   Mandate,
   Offer,
   Order,
+  Post,
   BankRecord,
   Signature,
   ULID,
   Voucher,
 } from '@barter.game/protocol';
-import { hashDoc } from '@barter.game/protocol';
+import { base58Encode, hashDoc } from '@barter.game/protocol';
 import type { Bank } from './types.ts';
 
 const REPLAY_WINDOW_MS = 1000 * 60 * 60 * 24; // 24h
@@ -550,8 +551,196 @@ export async function storeSignature(
   const h = await storeDoc(bank, sig);
   if (sig.hash) {
     await bank.kv.set(k(bank, 'record_sig', sig.hash, h), true);
+    // The same Signature shape carries post endorsements. Index under post_sig
+    // only when the target really is a stored Post, so the record index keeps
+    // its exact previous shape and we don't mirror every ledger signature into
+    // a second namespace. Endorsements necessarily accrue AFTER the immutable
+    // post exists (post-feed.md §3), so the post is already stored by then.
+    if (await getPost(bank, sig.hash)) {
+      await bank.kv.set(k(bank, 'post_sig', sig.hash, h), true);
+    }
   }
   return h;
+}
+
+// --- media blobs ----------------------------------------------------------
+
+/**
+ * Content-addressed media for posts (post-feed.md §5). Blobs are immutable and
+ * fetched by hash over plain unauthenticated HTTP, so storage is a flat
+ * namespace with no owner.
+ *
+ * Deno KV caps a single value at 64 KiB, so a blob is split across numbered
+ * chunk keys with a small metadata row. Both caps below are BANK POLICY, not
+ * protocol — §5 leaves size/type/quota entirely to the carrying bank.
+ */
+const MEDIA_CHUNK_BYTES = 48 * 1024;
+export const MEDIA_MAX_BYTES = 1024 * 1024;
+
+export type MediaMeta = {
+  size: number;
+  content_type: string;
+  chunks: number;
+};
+
+async function sha256Base58Bytes(bytes: Uint8Array): Promise<Base58SHA256> {
+  const buf = new Uint8Array(bytes.length);
+  buf.set(bytes);
+  const digest = await crypto.subtle.digest('SHA-256', buf);
+  return base58Encode(new Uint8Array(digest));
+}
+
+export async function hasMedia(
+  bank: Bank,
+  hash: Base58SHA256,
+): Promise<boolean> {
+  const r = await bank.kv.get<MediaMeta>(k(bank, 'media_meta', hash));
+  return r.value !== null;
+}
+
+/** Store a blob and return its sha256 (base58). Re-storing the same bytes is a no-op. */
+export async function storeMedia(
+  bank: Bank,
+  bytes: Uint8Array,
+  contentType: string,
+): Promise<Base58SHA256> {
+  const hash = await sha256Base58Bytes(bytes);
+  if (await hasMedia(bank, hash)) return hash;
+
+  const chunks = Math.max(1, Math.ceil(bytes.length / MEDIA_CHUNK_BYTES));
+  for (let i = 0; i < chunks; i++) {
+    const slice = bytes.slice(i * MEDIA_CHUNK_BYTES, (i + 1) * MEDIA_CHUNK_BYTES);
+    await bank.kv.set(k(bank, 'media_chunk', hash, i), slice);
+  }
+  // Metadata last: its presence is what marks the blob complete, so a partial
+  // write can never be served as if it were whole.
+  const meta: MediaMeta = { size: bytes.length, content_type: contentType, chunks };
+  await bank.kv.set(k(bank, 'media_meta', hash), meta);
+  return hash;
+}
+
+export async function getMedia(
+  bank: Bank,
+  hash: Base58SHA256,
+): Promise<{ bytes: Uint8Array; meta: MediaMeta } | null> {
+  const metaRow = await bank.kv.get<MediaMeta>(k(bank, 'media_meta', hash));
+  const meta = metaRow.value;
+  if (!meta) return null;
+  const bytes = new Uint8Array(meta.size);
+  let offset = 0;
+  for (let i = 0; i < meta.chunks; i++) {
+    const c = await bank.kv.get<Uint8Array>(k(bank, 'media_chunk', hash, i));
+    if (!c.value) return null;
+    bytes.set(c.value, offset);
+    offset += c.value.length;
+  }
+  if (offset !== meta.size) return null;
+  return { bytes, meta };
+}
+
+// --- posts ----------------------------------------------------------------
+
+/**
+ * ULIDs sort ascending lexicographically, but feeds are read newest-first.
+ * Deno KV has no per-query reverse for `list` bounds we can seek into cheaply
+ * across two prefixes, so posts are keyed by an INVERTED ULID: each Crockford
+ * base32 character is mapped to its complement, turning "newest last" into
+ * "newest first" under a plain ascending scan (post-feed.md §8).
+ *
+ * The inversion is its own inverse, so the same function decodes.
+ */
+const ULID_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+export function invertUlid(u: ULID): string {
+  let out = '';
+  for (const ch of u.toUpperCase()) {
+    const i = ULID_ALPHABET.indexOf(ch);
+    out += i < 0 ? ch : ULID_ALPHABET[ULID_ALPHABET.length - 1 - i];
+  }
+  return out;
+}
+
+export async function storePost(
+  bank: Bank,
+  post: Post,
+): Promise<Base58SHA256> {
+  const h = await storeDoc(bank, post);
+  const inv = invertUlid(post.ulid);
+  // Two indexes, both newest-first: the author's whole feed, and the author's
+  // feed filtered to one voucher.
+  await bank.kv.set(k(bank, 'post_by_author', post.pubkey, inv), h);
+  await bank.kv.set(
+    k(bank, 'post_by_author_voucher', post.pubkey, post.voucher, inv),
+    h,
+  );
+  return h;
+}
+
+export async function getPost(
+  bank: Bank,
+  hash: Base58SHA256,
+): Promise<Post | null> {
+  const doc = await getDoc<unknown>(bank, hash);
+  if (!doc || (doc as { type?: string }).type !== 'post') return null;
+  return doc as Post;
+}
+
+/**
+ * Newest-first page of an author's posts, optionally filtered to one voucher.
+ *
+ * `before` is a plain ULID cursor: only posts strictly older than it are
+ * returned. Because keys are inverted, "older than" is "lexicographically
+ * after" — so the scan starts just past the inverted cursor.
+ */
+export async function listPosts(
+  bank: Bank,
+  author: Base58PubKey,
+  voucherHash: Base58SHA256 | 'all',
+  before: ULID | undefined,
+  limit: number,
+): Promise<{ items: Post[]; next_before?: ULID }> {
+  const prefix = voucherHash === 'all'
+    ? k(bank, 'post_by_author', author)
+    : k(bank, 'post_by_author_voucher', author, voucherHash);
+
+  // `start` is inclusive, so a cursored page can re-see the cursor key itself;
+  // it is dropped explicitly below rather than by appending a sentinel char.
+  const selector: Deno.KvListSelector = before
+    ? { prefix, start: [...prefix, invertUlid(before)] as Deno.KvKey }
+    : { prefix };
+  const cursorKey = before ? invertUlid(before) : null;
+
+  // Read one key beyond the page to learn whether more exist (plus one slot for
+  // the possibly-echoed cursor), then resolve bodies. Counting KEYS rather than
+  // resolved bodies keeps the "more" signal honest if a body has gone missing.
+  const hashes: Base58SHA256[] = [];
+  const iter = bank.kv.list<Base58SHA256>(selector, { limit: limit + 2 });
+  for await (const entry of iter) {
+    if (cursorKey && entry.key[entry.key.length - 1] === cursorKey) continue;
+    hashes.push(entry.value);
+  }
+
+  const more = hashes.length > limit;
+  const items: Post[] = [];
+  for (const h of hashes.slice(0, limit)) {
+    const post = await getPost(bank, h);
+    if (post) items.push(post);
+  }
+  const last = items[items.length - 1];
+  return more && last ? { items, next_before: last.ulid } : { items };
+}
+
+export async function getSignaturesForPost(
+  bank: Bank,
+  postHash: Base58SHA256,
+): Promise<Signature[]> {
+  const iter = bank.kv.list<boolean>({ prefix: k(bank, 'post_sig', postHash) });
+  const out: Signature[] = [];
+  for await (const entry of iter) {
+    const hash = entry.key[entry.key.length - 1] as string;
+    const s = await getDoc<unknown>(bank, hash);
+    if (s) out.push(s as Signature);
+  }
+  return out;
 }
 
 export async function getSignaturesForRecord(

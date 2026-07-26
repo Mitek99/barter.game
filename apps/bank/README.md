@@ -29,6 +29,7 @@ may implement it differently or not at all.
 | Discovery | `GET /:bank/barter-bank.json` | `{ pubkey, url, name, protocol_version }` |
 | RPC | `POST /:bank/rpc` | Signed JSON-RPC envelope (protocol) |
 | Address directory | `GET /:bank/address[/:pubkey]` | Newest signed `Address` doc (protocol) |
+| Media | `POST /:bank/media`, `GET /:bank/media/:hash` | Content-addressed blobs for posts. Upload is authed (`X-Barter-Auth`) and takes `{content_type, data_base64}`; download is unauthenticated and immutable-cacheable |
 | Barter Links | `GET /:bank/{i,v,q,o,x}/:value` | `i` profile, `v` invoice (credit-only Order), `q` cheque (debit-only Order), `o` offer, `x` invite. HTML landing page by default; machine envelope via `?format=json` or `Accept: application/barter+json` |
 | UI API (public) | `GET /:bank/ui/handle/:handle`, `POST .../register`, `GET .../keystore/:handle`, `GET .../challenge`, `GET .../config`, `GET .../resolve/:pubkey` | Handle registry, encrypted keystore fetch, auth bootstrap |
 | UI API (authed) | `/:bank/ui/{state, trusted, contacts, banks, prefs, portfolio, history, orders, discover, relay, relay_signatures, propose_deal, deal/:id}`, `PUT .../keystore` | Requires `X-Barter-Auth`: a signed authdoc over method + path + query |
@@ -47,13 +48,13 @@ in a 24h replay window before dispatching via [`registry.ts`](./registry.ts):
 
 | Method | Handler | Does |
 |---|---|---|
-| `submit_docs` | [`handlers/submit_docs.ts`](./handlers/submit_docs.ts) | Validate and store signed docs (Voucher, Account, Order, Address, Signature); optionally derive and publish discovery Offers |
+| `submit_docs` | [`handlers/submit_docs.ts`](./handlers/submit_docs.ts) | Validate and store signed docs (Voucher, Account, Order, Address, Signature, Post); optionally derive and publish discovery Offers |
 | `submit_mandate` | [`handlers/submit_mandate.ts`](./handlers/submit_mandate.ts) | Validate and execute one per-(deal, order) coordinator Mandate; store foreign record bodies; trigger advance |
 | `create_records` | [`handlers/create_records.ts`](./handlers/create_records.ts) | Coordinator creates the deal's paired credit/debit records at this bank |
 | `notify_signatures` | [`handlers/notify_signatures.ts`](./handlers/notify_signatures.ts) | Peers push `ready`/`hold`/`settle`/`reject` signatures; indexed by record hash; triggers re-advance of the owning deal |
 | `get_record_signatures` | [`handlers/get_record_signatures.ts`](./handlers/get_record_signatures.ts) | Return a record and every signature stored on it |
 | `subscribe` | [`handlers/subscribe.ts`](./handlers/subscribe.ts) | Store a Subscription doc for signature fan-out |
-| `get_voucher`, `get_account_balance`, `list_accounts`, `list_offers`, `get_invoice`, `get_cheque`, `get_offer`, `list_vouchers`, `get_address` | [`handlers/get.ts`](./handlers/get.ts) | Reads |
+| `get_voucher`, `get_account_balance`, `list_accounts`, `list_offers`, `get_invoice`, `get_cheque`, `get_offer`, `list_vouchers`, `get_address`, `list_posts`, `get_post`, `get_post_signatures` | [`handlers/get.ts`](./handlers/get.ts) | Reads |
 
 ## The advance engine
 
@@ -84,6 +85,7 @@ implementation detail, not contract (it replaces the old root schema doc):
 | Group | Key prefixes |
 |---|---|
 | Docs | `doc` (every signed doc, content-addressed by hash) |
+| Posts & media | `post_by_author`, `post_by_author_voucher` (both ULID-inverted for newest-first scans), `post_sig`, `media_meta`, `media_chunk` |
 | Ledger | `voucher`, `issuer_voucher`, `account`, `holder_account` |
 | Orders & discovery | `order`, `holder_order`, `order_usage`, `offer`, `order_offer`, `voucher_offer` |
 | Deals & records | `record`, `deal_record`, `account_record`, `deal_pair`, `mandate`, `record_sig`, `foreign_record_deal`, `proposed_deal` |
@@ -172,6 +174,7 @@ Four standalone e2e scripts run against a live server (start one first):
 | [`e2e-crossbank.ts`](./e2e-crossbank.ts) | Bilateral swap across two banks — co-located by default, or two separate deployments via `E2E_BANK_A_URL` / `E2E_BANK_B_URL` (`deno run --allow-net --allow-env ...`) |
 | [`e2e-reject.ts`](./e2e-reject.ts) | An uncoverable debit must reject the whole deal, not stall it |
 | [`e2e-replay.ts`](./e2e-replay.ts) | A replayed settle signature from another deal must be refused by the seen-chain |
+| [`e2e-posts.ts`](./e2e-posts.ts) | Voucher post feeds: write/read, `"all"` vs per-voucher, `before` pagination, reply/repost embedding, media upload + unauthenticated fetch, and the four rejections (unknown voucher, wrong sender, forged embedded ancestor, unstored media) |
 
 ## Known constraints
 
