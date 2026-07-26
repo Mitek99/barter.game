@@ -784,35 +784,84 @@ async function handleProposeDeal(
     return json(422, { code: -32005, message: 'this bank does not hold both orders' });
   }
 
-  // Per bank: mint the record pair for the voucher it issues, then send one
-  // Mandate per Order (the giver's Order clears the debit record, the
-  // receiver's Order clears the credit record). All signed by this bank as
-  // coordinator.
-  const records: Record<string, string[]> = {};
-  const allRecordBodies: Array<Record<string, unknown>> = [];
+  // Mint one record pair per TRANSFER, then send one Mandate per Order (the
+  // giver's Order clears the debit record, the receiver's Order clears the
+  // credit record). All signed by this bank as coordinator.
+  //
+  // The unit of iteration is the transfer, NOT the participating bank. A
+  // two-sided swap moves two vouchers, and when both are issued by the SAME
+  // bank both pairs must be minted at that one bank. Looping over `banks`
+  // (as this once did) produced a single pair for a same-bank swap, leaving
+  // the counterparty Order's legs unmandated — which `aggregateRateCheck`
+  // correctly reads as the permanent missing-leg case and rejects the deal.
+  //
+  // counter_amount is only meaningful when a counter leg exists (the giver
+  // receives something back / the receiver gives something back); for
+  // one-sided pairings (invoice/cheque) the bank requires 0.
+  type Transfer = {
+    giver: string;
+    receiver: string;
+    amount: number;
+    counter: number;
+    bank: Base58PubKey;
+  };
+  const transfers: Transfer[] = [];
+  if (order1.debit) {
+    transfers.push({
+      giver: order1Hash,
+      receiver: order2Hash,
+      amount: amount1,
+      counter: (order1.credit || order2.debit) ? amount2 : 0,
+      bank: order1.debit.bank,
+    });
+  }
+  if (order2.debit) {
+    transfers.push({
+      giver: order2Hash,
+      receiver: order1Hash,
+      amount: amount2,
+      counter: (order2.credit || order1.debit) ? amount1 : 0,
+      bank: order2.debit.bank,
+    });
+  }
+  if (transfers.length === 0) {
+    return json(422, { code: -32000, message: 'neither order has a debit side; nothing to transfer' });
+  }
+
+  const banksByPubkey = new Map(banks.map((b) => [b.pubkey, b]));
+  // Every issuing bank a transfer lands on must be a listed (and pinned) participant.
+  for (const t of transfers) {
+    if (!banksByPubkey.has(t.bank)) {
+      return json(422, {
+        code: -32000,
+        message: `bank ${t.bank} issues a voucher in this deal but was not listed in banks`,
+      });
+    }
+  }
+  // ...and every listed bank must actually issue one of the vouchers.
   for (const b of banks) {
-    let giver: string, receiver: string, amount: number, counter: number;
-    // counter_amount is only meaningful when a counter leg exists (the giver
-    // receives something back / the receiver gives something back); for
-    // one-sided pairings (invoice/cheque) the bank requires 0.
-    if (order1.debit && order1.debit.bank === b.pubkey) {
-      giver = order1Hash; receiver = order2Hash; amount = amount1;
-      counter = (order1.credit || order2.debit) ? amount2 : 0;
-    } else if (order2.debit && order2.debit.bank === b.pubkey) {
-      giver = order2Hash; receiver = order1Hash; amount = amount2;
-      counter = (order2.credit || order1.debit) ? amount1 : 0;
-    } else {
+    if (!transfers.some((t) => t.bank === b.pubkey)) {
       return json(422, { code: -32000, message: `bank ${b.pubkey} issues neither voucher` });
     }
+  }
 
+  const records: Record<string, string[]> = {};
+  const allRecordBodies: Array<Record<string, unknown>> = [];
+  for (const t of transfers) {
+    const b = banksByPubkey.get(t.bank)!;
     const res = await bankRpcCall(bank, b.url, b.pubkey, 'create_records', {
-      giver, receiver, amount, counter_amount: counter, deal_id: dealId,
+      giver: t.giver,
+      receiver: t.receiver,
+      amount: t.amount,
+      counter_amount: t.counter,
+      deal_id: dealId,
     }) as { result?: { records: Array<Record<string, unknown>> }; error?: { code: number; message: string } };
     if (res.error) {
       return json(502, { ok: false, code: res.error.code, message: res.error.message, bank: b.pubkey });
     }
     const recs = (res.result?.records ?? []) as Array<Record<string, unknown>>;
-    records[b.pubkey] = recs.map((r) => hashDoc(r));
+    // Accumulate: a same-bank swap mints two pairs at the same bank.
+    (records[b.pubkey] ??= []).push(...recs.map((r) => hashDoc(r)));
     allRecordBodies.push(...recs);
   }
 
