@@ -449,13 +449,14 @@ function postAuthorLabel(pubkey, names) {
   return names[pubkey] || pubkey.slice(0, 10) + '…';
 }
 
-function renderEmbedded(p, names, kind) {
+function renderEmbedded(p, names, kind, vMap = {}) {
   if (!p) return '';
+  const v = vMap[p.voucher] ? ` · ${escapeHtml(vMap[p.voucher])}` : '';
   return `<div class="card" style="margin:.5rem 0 0;padding:.6rem .8rem;opacity:.85">
-    <div class="small"><b>${escapeHtml(postAuthorLabel(p.pubkey, names))}</b> · ${kind}</div>
+    <div class="small">${escapeHtml(kind)} <b>${escapeHtml(postAuthorLabel(p.pubkey, names))}</b>${v}</div>
     <div class="small">${postBody(p.body_md)}</div>
-    ${renderEmbedded(p.reply_to, names, 'in reply to')}
-    ${renderEmbedded(p.repost, names, 'reposted')}
+    ${renderEmbedded(p.reply_to, names, 'in reply to', vMap)}
+    ${renderEmbedded(p.repost, names, 'reposted', vMap)}
   </div>`;
 }
 
@@ -478,9 +479,24 @@ async function renderPosts(app, voucherFilter) {
     [vouchers, feed] = await Promise.all([knownVouchers().catch(() => []), loadFeed(voucherFilter)]);
   } catch { failed = true; }
 
+  // Resolve labels for EVERY pubkey and voucher the feed actually mentions —
+  // not just the reader's own trust list. A repost embeds a post by someone the
+  // reader may not follow, and it anchors to a voucher the reader may not hold;
+  // both would otherwise render as raw base58.
+  const mentionedAuthors = new Set(feed.authors);
+  const mentionedVouchers = new Set();
+  const walk = p => {
+    if (!p) return;
+    if (p.pubkey) mentionedAuthors.add(p.pubkey);
+    if (p.voucher) mentionedVouchers.add(p.voucher);
+    walk(p.reply_to);
+    walk(p.repost);
+  };
+  feed.posts.forEach(({ post }) => walk(post));
+
   const names = {};
   const bases = await issuerResolveBases().catch(() => []);
-  await Promise.all(feed.authors.map(async pk => {
+  await Promise.all([...mentionedAuthors].map(async pk => {
     if (state.user && pk === state.user.pubkey) return;
     const r = await resolveIssuerAt(bases, pk).catch(() => null);
     if (r && r.handle) names[pk] = r.handle;
@@ -488,6 +504,19 @@ async function renderPosts(app, voucherFilter) {
 
   const vMap = {};
   vouchers.forEach(v => { vMap[v.hash] = v.name; });
+  // Fill the gaps by asking each known bank for the voucher body.
+  const missing = [...mentionedVouchers].filter(h => !vMap[h]);
+  if (missing.length) {
+    const banks = await feedBanks().catch(() => []);
+    await Promise.all(missing.map(async h => {
+      for (const b of banks) {
+        try {
+          const v = await rpcCallAt(b.url, b.pubkey, 'get_voucher', { voucher_hash: h });
+          if (v && v.name) { vMap[h] = v.name; return; }
+        } catch { /* not carried here */ }
+      }
+    }));
+  }
   const selected = voucherFilter && vMap[voucherFilter] ? voucherFilter : '';
 
   const filterBar = `<div class="card">
@@ -521,8 +550,8 @@ async function renderPosts(app, voucherFilter) {
           · ${escapeHtml(vMap[post.voucher] || post.voucher.slice(0, 10) + '…')}</div>
         <div>${postBody(post.body_md)}</div>
         ${renderMedia(post, bankUrl)}
-        ${renderEmbedded(post.reply_to, names, 'in reply to')}
-        ${renderEmbedded(post.repost, names, 'reposted')}
+        ${renderEmbedded(post.reply_to, names, 'in reply to', vMap)}
+        ${renderEmbedded(post.repost, names, 'reposted', vMap)}
         <div class="flex" style="gap:.5rem;margin-top:.5rem">
           <button class="btn secondary" onclick="startReply('${jsStr(hash)}')">Reply</button>
           <button class="btn secondary" onclick="repostPost('${jsStr(hash)}')">Repost</button>
