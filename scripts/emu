@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Thin wrapper around scripts/emulate.ts so the permission flags aren't repeated.
+# Run from the repo root: ./scripts/emu <command> [args]
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec deno run --allow-net --allow-env --allow-read --allow-write scripts/emulate.ts "$@"
