@@ -169,6 +169,9 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) {
 }
 .nav a:hover { color: var(--fg); text-decoration: none; }
 .nav a.active { color: var(--accent); background: var(--accent-soft); }
+/* Log out sits in the same nav list, so mark it as the one destructive item. */
+.nav a.logout { color: var(--danger); }
+.nav a.logout:hover { color: var(--danger); background: var(--accent-soft); }
 .mono { font-family: var(--mono); font-size: 0.8rem; overflow-wrap: anywhere; }
 .small { font-size: 0.85rem; color: var(--muted); }
 .error { color: var(--danger); }

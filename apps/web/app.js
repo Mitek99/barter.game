@@ -706,10 +706,10 @@ function header(title) {
       <a href="#/network"${on('Network')}>Network</a>
       <a href="#/scan"${on('Scan')}>Scan</a>
       <a href="#/settings"${on('Settings')}>Settings</a>
+      <a href="#/unlock" class="logout" onclick="logout();return false">Log out</a>
     </nav>
     <div class="header-actions">
       <button class="btn secondary nav-toggle" onclick="toggleNav()" aria-controls="mainnav" aria-expanded="false" aria-label="Open menu">Menu</button>
-      <button class="btn secondary" onclick="lock()">Lock</button>
     </div>
   </div>
   ${bottomNav(title)}
@@ -829,12 +829,18 @@ function toast(msg, type = 'success') {
   setTimeout(() => t.remove(), 4000);
 }
 
-window.lock = function() {
+// Drops the decrypted key from memory and returns to the login screen. The
+// key only ever lives in memory, so this is the whole of "logging out" — there
+// is no server session to end.
+window.logout = function() {
   state.user = null;
   state.uiState = null;
   location.hash = '#/unlock';
   route();
 };
+// Kept as an alias: the idle timer below still "locks" the session, and any
+// older handler referencing lock() keeps working.
+window.lock = window.logout;
 
 // ---------------- screens ----------------
 
@@ -1721,7 +1727,7 @@ async function renderSettings(app) {
       <button class="btn secondary" onclick="downloadBackup()">Download encrypted backup</button>
     `)}
     ${card('Actions', `
-      <button class="btn danger" onclick="lock()">Lock</button>
+      <button class="btn danger" onclick="logout()">Log out</button>
     `)}
   </div>`;
 }
@@ -2457,12 +2463,12 @@ setInterval(() => {
   if (!state.user) return;
   const idle = Date.now() - lastActivity;
   if (idle > AUTOLOCK_MS) {
-    toast('Locked after inactivity');
-    window.lock();
+    toast('Signed out after inactivity');
+    window.logout();
   } else if (idle > LOCK_WARN_MS && !lockWarned) {
     // Warn before wiping the key so an in-progress form isn't lost silently.
     lockWarned = true;
-    toast('Locking in 1 minute due to inactivity — move to stay signed in', 'error');
+    toast('Signing out in 1 minute due to inactivity — move to stay signed in', 'error');
   }
 }, 15000);
 
