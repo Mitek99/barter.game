@@ -2,11 +2,14 @@
 
 Six invented people living on the two deployed demo banks. They exist to make
 the demo look inhabited, and — because driving them exercises every screen and
-every RPC — to shake out what is broken. Three real bugs fell out; see
+every RPC — to shake out what is broken. Four real bugs fell out, and the one wholly
+missing feature (post feeds) has since been built; see
 [Gaps and defects](#gaps-and-defects).
 
-Current as of `main` **`ece1949`** — checked against every branch in the repo,
-not just `main`.
+Current as of `main` **`a0afd41`+**. Everything below is live on the deployed
+banks: the six users have vouchers, trust links, settled deals, and — since
+post feeds shipped ([#28](https://github.com/ai-1st/barter.game/pull/28)) —
+posts, replies, reposts and cross-bank feeds.
 
 **Target:** the deployed banks, not localhost.
 
@@ -261,64 +264,76 @@ decrypting it with the password, so the file can be deleted at any time.
 
 ---
 
+## Posts and feeds
+
+Each user announced their voucher, then the conversation crossed banks.
+
+| Author | Bank | Post |
+|---|---|---|
+| mira | alice | *"Two logo slots open in August. I'd rather trade than invoice — haircuts, legal hours, bread, all welcome."* |
+| tomas | alice | *"Chair is free Thursday afternoons. First cut of the month goes to whoever brings the most interesting swap."* |
+| priya | alice | *"Visa season. I have four consultation hours to give this month — appeals and paperwork review included."* |
+| yusuf | bob | *"Friday bake is up: 1kg naturally leavened, 48-hour cold ferment. Reserve one and collect it warm."* |
+| lena | bob | *"Winter is coming for your drivetrain. Booking tune-ups now — I take lessons, bread and legal advice."* |
+| kai | bob | *"Two lesson slots free on Tuesdays. Beginners very welcome; jazz voicings if you'd rather."* |
+
+Then the threads:
+
+- **mira → tomas** (reply, same bank): *"Bringing sketches Thursday — swapping you a logo concept for the chair."*
+- **kai → lena** (repost, same bank): *"Can vouch — she rebuilt my rear hub for the price of a lesson."* — an issuer amplifying a neighbour's post to his own followers.
+- **yusuf → priya** (reply, **cross-bank**): *"She sorted my sister's visa and took a loaf for it. Worth crossing banks for."* — yusuf banks at bob, but posted into the feed alice carries, which §2 allows for any bank that knows the voucher.
+
+### Discovery through posts
+
+There is no global timeline. Each reader's feed is their own trust graph merged
+across every bank they have pinned — so **every user sees a different feed**:
+
+```
+feed for mira@alice  — 4 post(s) from 4 author(s) across 2 bank(s)
+feed for priya@alice — 5 post(s) from 3 author(s) across 2 bank(s)
+feed for kai@bob     — 7 post(s) from 4 author(s) across 2 bank(s)
+feed for lena@bob    — 4 post(s) from 3 author(s) across 1 bank
+```
+
+Mira sees kai's piano-lesson post *because she trusts him and pinned bank bob* —
+she discovered a voucher on another bank purely through the feed. Lena sees only
+one bank's worth, because she never pinned alice.
+
+Drive it with `./scripts/emu`:
+
+```bash
+./scripts/emu post  mira@alice <voucher> "Two logo slots open in August."
+./scripts/emu post  mira@alice <voucher> "Bringing sketches Thursday." --reply <postHash>
+./scripts/emu post  kai@bob    <voucher> "Can vouch."                   --repost <postHash>
+./scripts/emu post  yusuf@bob  <voucher> "Worth crossing banks for." --reply <hash> --at alice
+./scripts/emu feed  priya@alice
+./scripts/emu posts mira@alice <authorPubkey> all
+```
+
+Or in the browser: **Posts** in the nav (it was previously an unlinked route).
+The feed filter switches between "everything from people I trust" and a single
+voucher's feed; Reply and Repost embed the parent post.
+
 ## Gaps and defects
 
 Found by driving the six users. Three had fixes worth opening; the rest are
 recorded here.
 
-### 1. Post feeds do not exist
+### 1. ~~Post feeds do not exist~~ — BUILT
 
-**The brief asked for users to announce vouchers via posts and to discover each
-other through those posts. That is not buildable today** — none of it is
-implemented, anywhere.
+When these users were first driven, post feeds were the one part of the brief
+that could not be done: no `Post` type, no handler, no KV namespace, and a
+"Posts — coming soon" card in the UI. The spec existed; nothing implemented it.
 
-The **spec** for post feeds landed in `ceb379a docs(protocol): post feeds —
-embedded reply_to/repost, author+voucher feeds, media (#19)`, and it is
-detailed. But that commit touched exactly two files — `protocol/post-feed.md`
-and `protocol/bank-rpc.md`. **Nothing was implemented.** Easy to conflate: the
-spec is real and thorough, the feature does not exist.
+**Now implemented** ([#28](https://github.com/ai-1st/barter.game/pull/28),
+plus label polish in [#29](https://github.com/ai-1st/barter.game/pull/29)) and
+deployed. The six users now announce their vouchers with real posts, reply to
+each other, repost, and discover each other **through those posts** — see
+[Posts and feeds](#posts-and-feeds) below.
 
-Verified across every branch in the repo, not just `main` — no `Post` doc type
-or `list_posts` exists anywhere:
-
-- No `Post` type and no `'post'` in `DocType` (`packages/protocol/src/index.ts`).
-- No handler, no RPC method, no KV key namespace (`apps/bank/`).
-- The UI route exists but renders a literal "Posts — coming soon" card
-  (`apps/web/app.js`, `renderPostsSoon`).
-
-`UX-REPORT.md` §3 says the same thing in the repo's own words:
-
-> **Post / voucher feeds** — Whole surface unbuilt (write via `submit_docs`,
-> `list_posts`, trust-based read filtering, issuer reposts). Protocol docs now
-> exist on `docs/post-feed-embeds-and-feeds`.
-
-Probed live rather than assumed — `./scripts/emu post mira@alice <voucher> "…"`:
-
-```
-POST PROBE FAILED (expected): submit_docs@alice: -32600 unsupported doc type: post
-LIST_POSTS PROBE FAILED (expected): list_posts@alice: -32601 method not found
-```
-
-`protocol/post-feed.md` specifies the doc, and the branch
-`origin/docs/post-feed-embeds-and-feeds` revises that spec further — but it is
-**docs-only**, no implementation. Tracked in `TODOS.md` as v1.5.
-
-**What the users do instead.** Announcement runs through the implemented
-discovery surface: publishing an Order with `publish_offers` mints a
-bank-signed Offer, indexed by voucher and intention (`sell`/`buy`). Discovery
-then works, including across banks — priya polling both banks:
-
-```
-discover for priya@alice: 8 offers, polled 2, unreachable 0
-```
-
-Plus the voucher Registry (`list_vouchers`) and `/i/<pubkey>` profile Barter
-Links. What is missing versus posts is the *social* layer — free-text
-announcements, reposts, following an issuer's feed.
-
-**To close it:** `Post` type + validator in the protocol lib, `submit_docs`
-acceptance and a bank storage policy, `list_posts`/`get_post`, KV indexes by
-voucher and author, a feed screen, and a regenerated `apps/web/protocol.js`.
+Still bank policy and not implemented here: an acceptance hook beyond validity
+(spam filter, allowlist, paywall, per-key rate limits). §2 makes that
+deliberately bank-specific.
 
 ### 2. CRITICAL: a two-sided swap inside one bank can never settle
 

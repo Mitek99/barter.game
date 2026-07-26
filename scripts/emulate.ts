@@ -30,6 +30,7 @@ import {
   newUlid,
   publicKeyOf,
   signDoc,
+  verifyPostTree,
 } from '@barter.game/protocol';
 
 const BASE = Deno.env.get('BARTER_BASE') ?? 'https://barter-game-banks.ai-1st.deno.net';
@@ -588,9 +589,21 @@ async function cmdResolve(ref: string, pubkey: string): Promise<void> {
  * `submit_docs` rejects unknown types. Kept as an executable probe so
  * EMULATED.md can cite the real error rather than an assumption.
  */
-async function cmdPost(ref: string, voucherHash: string, text: string): Promise<void> {
+/**
+ * Publish a voucher-anchored Post (post-feed.md). `--reply <hash>` and
+ * `--repost <hash>` embed the FULL parent post, fetched from the bank so the
+ * embedded bytes are exactly what its author signed. `--at <bank>` posts into
+ * a feed carried by another bank — §2 lets any bank that knows the voucher
+ * carry its feed, so a user of one bank can join a conversation on another.
+ */
+async function cmdPost(
+  ref: string,
+  voucherHash: string,
+  text: string,
+  opts: Record<string, string> = {},
+): Promise<string> {
   const user = await loadUser(ref);
-  const b = await bank(user.bank);
+  const b = await bank(opts.at ?? user.bank);
   const post: Record<string, unknown> = {
     type: 'post',
     pubkey: user.pubkey,
@@ -598,17 +611,91 @@ async function cmdPost(ref: string, voucherHash: string, text: string): Promise<
     voucher: voucherHash,
     body_md: text,
   };
-  post.sig = signDoc(post, user.privateKey);
-  try {
-    await rpc(user, b, 'submit_docs', { docs: [post] });
-    console.log('post accepted (unexpected — post feeds were thought unimplemented)');
-  } catch (e) {
-    console.log(`POST PROBE FAILED (expected): ${(e as Error).message}`);
+  const parentHash = opts.reply ?? opts.repost;
+  if (parentHash) {
+    const parent = await rpc(user, b, 'get_post', { post_hash: parentHash });
+    post[opts.reply ? 'reply_to' : 'repost'] = parent;
   }
-  try {
-    await rpc(user, b, 'list_posts', { voucher_hash: voucherHash });
-  } catch (e) {
-    console.log(`LIST_POSTS PROBE FAILED (expected): ${(e as Error).message}`);
+  post.sig = signDoc(post, user.privateKey);
+  const res = await rpc(user, b, 'submit_docs', { docs: [post] }) as { stored: string[] };
+  const hash = res.stored[0]!;
+  const kind = opts.reply ? 'reply' : opts.repost ? 'repost' : 'post';
+  console.log(`${kind} by ${ref} @${b.name}: ${hash}\n  "${text}"`);
+  return hash;
+}
+
+/** Raw single-author feed: list_posts(author, voucher|'all') at one bank. */
+async function cmdPosts(
+  ref: string,
+  author: string,
+  voucherHash = 'all',
+  bankName?: string,
+): Promise<void> {
+  const user = await loadUser(ref);
+  const b = await bank(bankName ?? user.bank);
+  const r = await rpc(user, b, 'list_posts', {
+    pubkey: author,
+    voucher_hash: voucherHash,
+  }) as { items: Array<Record<string, unknown>>; next_before?: string };
+  console.log(`${r.items.length} post(s) by ${author.slice(0, 10)}… @${b.name}` +
+    (r.next_before ? ` (more before ${r.next_before})` : ''));
+  for (const p of r.items) console.log(`  ${hashDoc(p)}  "${p.body_md}"`);
+}
+
+/**
+ * The reader's own feed — the client-side merge post-feed.md §7 describes:
+ * list_posts for every trusted author x every known bank, newest-first,
+ * de-duplicated by content hash, each post's signature tree verified locally.
+ * There is no global timeline; what you see is your own trust graph.
+ */
+async function cmdFeed(ref: string, voucherHash = 'all'): Promise<void> {
+  const user = await loadUser(ref);
+  const home = await bank(user.bank);
+
+  const trusted = await uiAuth(user, home, 'GET', '/trusted', null) as
+    Array<{ pubkey: string; note?: string }>;
+  const authors = [user.pubkey, ...trusted.map((t) => t.pubkey)];
+
+  const pinned = await uiAuth(user, home, 'GET', '/banks', null) as
+    Array<{ pubkey: string; url: string }>;
+  const banks: BankRef[] = [home];
+  for (const p of pinned) {
+    if (!banks.some((x) => x.pubkey === p.pubkey)) {
+      banks.push({ name: p.url.split('/').pop() ?? '?', url: p.url, pubkey: p.pubkey });
+    }
+  }
+
+  const st = loadState();
+  const handleOf = (pk: string) =>
+    Object.values(st.users).find((u) => u.pubkey === pk)?.handle ?? pk.slice(0, 10) + '…';
+
+  const seen = new Map<string, Record<string, unknown>>();
+  for (const bk of banks) {
+    for (const author of authors) {
+      try {
+        const r = await rpc(user, bk, 'list_posts', {
+          pubkey: author,
+          voucher_hash: voucherHash,
+        }) as { items: Array<Record<string, unknown>> };
+        for (const p of r.items) {
+          const h = hashDoc(p);
+          if (!seen.has(h) && verifyPostTree(p as never)) seen.set(h, p);
+        }
+      } catch { /* this bank does not carry that author's feed */ }
+    }
+  }
+
+  const posts = [...seen.values()].sort((a, b) =>
+    String(a.ulid) < String(b.ulid) ? 1 : String(a.ulid) > String(b.ulid) ? -1 : 0);
+
+  console.log(`feed for ${ref} — ${posts.length} post(s) from ${authors.length} author(s) across ${banks.length} bank(s)`);
+  for (const p of posts) {
+    console.log(`\n  ${handleOf(String(p.pubkey))}: ${p.body_md}`);
+    const parent = (p.reply_to ?? p.repost) as Record<string, unknown> | undefined;
+    if (parent) {
+      const verb = p.reply_to ? 'in reply to' : 'reposting';
+      console.log(`    ${verb} ${handleOf(String(parent.pubkey))}: "${parent.body_md}"`);
+    }
   }
 }
 
@@ -697,8 +784,18 @@ try {
     case 'resolve':
       await cmdResolve(rest[0]!, rest[1]!);
       break;
-    case 'post':
-      await cmdPost(rest[0]!, rest[1]!, rest.slice(2).join(' '));
+    case 'post': {
+      const f = flags(rest.slice(3));
+      const words = rest.slice(2).filter((w, i, a) =>
+        !w.startsWith('--') && !(a[i - 1] ?? '').startsWith('--'));
+      await cmdPost(rest[0]!, rest[1]!, words.join(' '), f);
+      break;
+    }
+    case 'posts':
+      await cmdPosts(rest[0]!, rest[1]!, rest[2], rest[3]);
+      break;
+    case 'feed':
+      await cmdFeed(rest[0]!, rest[1]);
       break;
     case 'state':
       await cmdState();
@@ -725,7 +822,9 @@ try {
   portfolio <handle@bank>
   balance  <handle@bank> <bankName> <accountHash>
   resolve  <handle@bank> <pubkey>
-  post     <handle@bank> <voucherHash> "<text>"   (probe: post feeds are unimplemented)
+  post     <handle@bank> <voucherHash> "<text>" [--reply <hash>] [--repost <hash>] [--at <bank>]
+  posts    <handle@bank> <authorPubkey> [voucherHash|all] [bankName]
+  feed     <handle@bank> [voucherHash|all]
   state`);
   }
 } catch (e) {
