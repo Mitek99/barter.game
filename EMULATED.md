@@ -283,6 +283,23 @@ Then the threads:
 - **kai → lena** (repost, same bank): *"Can vouch — she rebuilt my rear hub for the price of a lesson."* — an issuer amplifying a neighbour's post to his own followers.
 - **yusuf → priya** (reply, **cross-bank**): *"She sorted my sister's visa and took a loaf for it. Worth crossing banks for."* — yusuf banks at bob, but posted into the feed alice carries, which §2 allows for any bank that knows the voucher.
 
+### Voucher meta releases
+
+Each of the six released an icon and a description for their currency, as a
+post with `voucher_meta: true` (`scripts/emulated-svg/*.svg`):
+
+```bash
+./scripts/emu post mira@alice <voucher> "One original logo concept…" --icon scripts/emulated-svg/logo.svg
+./scripts/emu meta mira@alice <voucher>          # read the cached result back
+```
+
+A Voucher doc is content-addressed and immutable — restyling it directly would
+change its hash and orphan every balance denominated in it. A meta release
+carries the new artwork and description alongside the voucher instead, and the
+bank caches the newest one per voucher, so the currency can be rebranded while
+the ledger underneath it never moves. Only the issuer may release; the bank
+refuses anyone else.
+
 ### Nothing here is free
 
 A first round of newcomer-facing posts offered *free* slots and cuts "on the

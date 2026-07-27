@@ -611,6 +611,13 @@ async function cmdPost(
     voucher: voucherHash,
     body_md: text,
   };
+  // --icon / --square release new artwork for the voucher; the post text
+  // becomes its description. Issuer-only, enforced by the bank.
+  if (opts.icon || opts.square) {
+    post.voucher_meta = true;
+    if (opts.icon) post.icon_svg = Deno.readTextFileSync(opts.icon).trim();
+    if (opts.square) post.square_svg = Deno.readTextFileSync(opts.square).trim();
+  }
   const parentHash = opts.reply ?? opts.repost;
   if (parentHash) {
     const parent = await rpc(user, b, 'get_post', { post_hash: parentHash });
@@ -811,6 +818,12 @@ try {
       console.log(`${rest[0]} unfollowed ${rest[1]}`);
       break;
     }
+    case 'meta': {
+      const u = await loadUser(rest[0]!);
+      const m = await rpc(u, await bank(u.bank), 'get_voucher_meta', { voucher_hash: rest[1]! });
+      console.log(JSON.stringify(m, null, 2));
+      break;
+    }
     case 'follows': {
       const u = await loadUser(rest[0]!);
       const f = await uiAuth(u, await bank(u.bank), 'GET', '/follows', null);
@@ -843,6 +856,8 @@ try {
   balance  <handle@bank> <bankName> <accountHash>
   resolve  <handle@bank> <pubkey>
   post     <handle@bank> <voucherHash> "<text>" [--reply <hash>] [--repost <hash>] [--at <bank>]
+                                                 [--icon <file.svg>] [--square <file.svg>]
+  meta     <handle@bank> <voucherHash>            (show the voucher's current meta)
   posts    <handle@bank> <authorPubkey> [voucherHash|all] [bankName]
   feed     <handle@bank> [voucherHash|all]
   follow   <handle@bank> <pubkey>
