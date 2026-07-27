@@ -9,6 +9,7 @@ import {
   getRecord,
   getSignaturesForPost as dbGetSignaturesForPost,
   getVoucher as dbGetVoucher,
+  getVoucherMeta as dbGetVoucherMeta,
   listAccounts as dbListAccounts,
   listOffers as dbListOffers,
   listPosts as dbListPosts,
@@ -208,4 +209,20 @@ export async function getPostSignatures(
   const hash = params.post_hash;
   if (typeof hash !== 'string') throw new RpcError(-32602, 'post_hash required');
   return { signatures: await dbGetSignaturesForPost(bank, hash) };
+}
+
+/**
+ * The voucher's current presentation, from its issuer's newest meta release
+ * (post-feed.md). Returns null rather than erroring when an issuer has never
+ * released any — a voucher without meta is normal, not missing.
+ */
+export async function getVoucherMeta(
+  bank: Bank,
+  params: Record<string, unknown>,
+): Promise<unknown> {
+  const hash = params.voucher_hash;
+  if (typeof hash !== 'string') {
+    throw new RpcError(-32602, 'voucher_hash required');
+  }
+  return await dbGetVoucherMeta(bank, hash);
 }

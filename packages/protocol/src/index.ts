@@ -142,6 +142,23 @@ export type Post = BaseDoc & {
   voucher: Base58SHA256;
   body_md: string;
   media?: Base58SHA256[];
+  /** Inline SVG: a small round/badge mark for the voucher. */
+  icon_svg?: string;
+  /** Inline SVG: a square card image for the voucher. */
+  square_svg?: string;
+  /**
+   * When true this post is a META RELEASE for its `voucher`: the bank takes
+   * `icon_svg`, `square_svg` and `body_md` (as the description) as the
+   * voucher's current presentation, newest post winning.
+   *
+   * A Voucher doc is content-addressed and therefore immutable — changing its
+   * name or image would change its hash and orphan every balance denominated
+   * in it. Meta releases are how an issuer restyles a live currency without
+   * reissuing it.
+   *
+   * Only the voucher's ISSUER may release meta; the bank enforces that.
+   */
+  voucher_meta?: boolean;
   reply_to?: Post;
   repost?: Post;
 };
@@ -603,6 +620,17 @@ export function validateAddress(d: unknown): Address {
 export const MAX_POST_EMBED_DEPTH = 8;
 
 /**
+ * Per-field cap on inline SVG, in UTF-16 code units.
+ *
+ * Deliberately small. A repost EMBEDS the full post it boosts, and a reply
+ * embeds its whole ancestor chain, so an icon is copied again at every hop —
+ * and a bank that reposts its users duplicates every meta release immediately.
+ * Combined with a storage layer whose values cap out at 64 KiB, generous
+ * artwork limits turn into unstorable posts several hops downstream.
+ */
+export const MAX_POST_SVG_CHARS = 8192;
+
+/**
  * Validate a Post and, recursively, every Post it embeds.
  *
  * Shape only — the AUTHOR SIGNATURE OF EMBEDDED POSTS IS NOT CHECKED HERE,
@@ -630,6 +658,11 @@ export function validatePost(d: unknown, depth = 0): Post {
     }
     b.media.forEach((m, i) => assertBase58(m, `media[${i}]`));
   }
+  assertPostSvg(b.icon_svg, 'icon_svg');
+  assertPostSvg(b.square_svg, 'square_svg');
+  if (b.voucher_meta !== undefined && typeof b.voucher_meta !== 'boolean') {
+    throw new ValidationError('voucher_meta must be boolean');
+  }
   // An embedded ancestor is a full Post, so it validates by the same rules.
   if (b.reply_to !== undefined) validatePost(b.reply_to, depth + 1);
   if (b.repost !== undefined) validatePost(b.repost, depth + 1);
@@ -643,6 +676,26 @@ export function validatePost(d: unknown, depth = 0): Post {
  * `pubkey` exactly as a standalone post would be. Returns false on the first
  * bad signature; a missing `sig` anywhere in the tree is a failure.
  */
+/**
+ * Shape-check an inline SVG field.
+ *
+ * This is NOT a sanitizer and must not be mistaken for one: an SVG can carry
+ * <script>, event handlers and foreignObject, so the rendering side is what
+ * keeps it safe (render via a data: URI in <img>, never inline into the DOM).
+ * What this enforces is that the value is a bounded string that actually looks
+ * like an SVG document, so garbage and oversized blobs never reach storage.
+ */
+function assertPostSvg(v: unknown, name: string): void {
+  if (v === undefined) return;
+  if (typeof v !== 'string') throw new ValidationError(`${name} must be a string`);
+  if (v.length > MAX_POST_SVG_CHARS) {
+    throw new ValidationError(`${name} exceeds ${MAX_POST_SVG_CHARS} characters`);
+  }
+  if (!/^\s*(<\?xml[^>]*\?>\s*)?(<!--[\s\S]*?-->\s*)*<svg[\s>]/i.test(v)) {
+    throw new ValidationError(`${name} must be an <svg> document`);
+  }
+}
+
 export function verifyPostTree(post: Post): boolean {
   const sig = (post as { sig?: string }).sig;
   if (!sig || !verifyDoc(post, sig, post.pubkey)) return false;

@@ -3,6 +3,7 @@ import {
   verifyBytes,
   type Base58PubKey,
   type ULID,
+  ValidationError,
 } from '@barter.game/protocol';
 import { claimReplayId } from './db.ts';
 import { registry } from './registry.ts';
@@ -67,6 +68,14 @@ export async function handleRpc(
   } catch (e) {
     if (isRpcError(e)) {
       return jsonRpcError(env.id, e.code, e.message, e.data);
+    }
+    // A ValidationError is the caller's fault and already carries a precise,
+    // safe message ("voucher name required", "icon_svg exceeds 8192
+    // characters"). Collapsing it into -32603 threw that away and told the
+    // caller their well-formed-but-invalid doc was a server fault, leaving
+    // them nothing to act on.
+    if (e instanceof ValidationError) {
+      return jsonRpcError(env.id, -32600, e.message);
     }
     console.error('RPC handler error', e);
     return jsonRpcError(env.id, -32603, 'internal error');

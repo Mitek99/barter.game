@@ -35,6 +35,14 @@ may implement it differently or not at all.
 | UI API (authed) | `/:bank/ui/{state, trusted, follows, contacts, banks, prefs, portfolio, history, orders, discover, relay, relay_signatures, propose_deal, deal/:id}`, `PUT .../keystore` | Requires `X-Barter-Auth`: a signed authdoc over method + path + query |
 | SPA | `GET /:bank/ui`, `GET /:bank/ui/app/*` | Serves `./apps/web/index.html` with an injected `<base>`, and static assets from `./apps/web/` |
 
+A post with `voucher_meta: true` is a **meta release**: the bank takes its
+`icon_svg`, `square_svg` and `body_md` (as the description) as the voucher's
+current presentation and caches them under `voucher_meta`, newest ULID winning.
+Only the voucher's **issuer** may release — a Voucher doc is content-addressed
+and immutable, so this is how a live currency gets restyled without reissuing
+it and orphaning every balance denominated in it. Read it back with
+`get_voucher_meta`.
+
 `follows` is the feed subscription list — deliberately separate from `trusted`,
 because reading someone and accepting their currency are different decisions. A
 user who has never touched it defaults to following their own bank, and the bank
@@ -60,7 +68,7 @@ in a 24h replay window before dispatching via [`registry.ts`](./registry.ts):
 | `notify_signatures` | [`handlers/notify_signatures.ts`](./handlers/notify_signatures.ts) | Peers push `ready`/`hold`/`settle`/`reject` signatures; indexed by record hash; triggers re-advance of the owning deal |
 | `get_record_signatures` | [`handlers/get_record_signatures.ts`](./handlers/get_record_signatures.ts) | Return a record and every signature stored on it |
 | `subscribe` | [`handlers/subscribe.ts`](./handlers/subscribe.ts) | Store a Subscription doc for signature fan-out |
-| `get_voucher`, `get_account_balance`, `list_accounts`, `list_offers`, `get_invoice`, `get_cheque`, `get_offer`, `list_vouchers`, `get_address`, `list_posts`, `get_post`, `get_post_signatures` | [`handlers/get.ts`](./handlers/get.ts) | Reads |
+| `get_voucher`, `get_account_balance`, `list_accounts`, `list_offers`, `get_invoice`, `get_cheque`, `get_offer`, `list_vouchers`, `get_address`, `list_posts`, `get_post`, `get_post_signatures`, `get_voucher_meta` | [`handlers/get.ts`](./handlers/get.ts) | Reads |
 
 ## The advance engine
 
@@ -91,7 +99,7 @@ implementation detail, not contract (it replaces the old root schema doc):
 | Group | Key prefixes |
 |---|---|
 | Docs | `doc` (every signed doc, content-addressed by hash) |
-| Posts & media | `post_by_author`, `post_by_author_voucher` (both ULID-inverted for newest-first scans), `post_sig`, `media_meta`, `media_chunk` |
+| Posts & media | `post_by_author`, `post_by_author_voucher` (both ULID-inverted for newest-first scans), `post_sig`, `voucher_meta` (latest issuer meta release, newest ULID wins), `media_meta`, `media_chunk` |
 | Ledger | `voucher`, `issuer_voucher`, `account`, `holder_account` |
 | Orders & discovery | `order`, `holder_order`, `order_usage`, `offer`, `order_offer`, `voucher_offer` |
 | Deals & records | `record`, `deal_record`, `account_record`, `deal_pair`, `mandate`, `record_sig`, `foreign_record_deal`, `proposed_deal` |

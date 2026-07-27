@@ -6,6 +6,7 @@ import {
   storeAddress,
   storeOffer,
   storeOrder,
+  putVoucherMeta,
   storePost,
   storeSignature,
   storeVoucher,
@@ -135,8 +136,30 @@ export async function submitDocs(
             throw new RpcError(-32005, `media not stored at this bank: ${m}`);
           }
         }
+        // A meta release restyles a LIVE currency. Only the voucher's issuer
+        // may do it — otherwise anyone could redefine what someone else's
+        // money looks like and says it is, which is a far cheaper attack than
+        // forging a balance.
+        if (p.voucher_meta === true) {
+          const v = await getVoucher(bank, p.voucher);
+          if (!v || v.pubkey !== p.pubkey) {
+            throw new RpcError(-32001, 'only the voucher issuer may release its meta');
+          }
+        }
         const h = await storePost(bank, p);
         if (!stored.includes(h)) stored.push(h);
+        if (p.voucher_meta === true) {
+          await putVoucherMeta(bank, {
+            voucher: p.voucher,
+            icon_svg: p.icon_svg,
+            square_svg: p.square_svg,
+            // The post's own text becomes the voucher's description.
+            description_md: p.body_md || undefined,
+            ulid: p.ulid,
+            post: h,
+            at: Date.now(),
+          });
+        }
         await bankRepost(bank, p);
         break;
       }

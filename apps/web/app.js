@@ -467,6 +467,22 @@ function renderEmbedded(p, names, kind, vMap = {}) {
   </div>`;
 }
 
+/**
+ * Render an issuer-supplied SVG.
+ *
+ * NEVER inline this into the DOM. An SVG can carry <script>, event handlers
+ * and <foreignObject>, and the bank reposts every user post — so an inline
+ * icon would execute in the session of everyone who follows that bank. A
+ * data: URI inside <img> renders the picture with scripting disabled, which
+ * is the whole point of doing it this way.
+ */
+function svgImg(svg, size, alt) {
+  if (typeof svg !== 'string' || !svg.trim()) return '';
+  const url = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+  return `<img src="${url}" alt="${escapeHtml(alt)}" width="${size}" height="${size}"
+    style="width:${size}px;height:${size}px;border-radius:6px;object-fit:contain;flex:0 0 auto">`;
+}
+
 function renderMedia(post, bankUrl) {
   const list = Array.isArray(post.media) ? post.media : [];
   if (!list.length) return '';
@@ -583,6 +599,18 @@ async function renderPosts(app, voucherFilter) {
   }));
   window.__feedVouchers = vInfo;
   void missing;
+
+  // One cheap read per voucher for its current presentation — the bank keeps
+  // the latest release cached, so no feed scanning is needed.
+  const vMeta = {};
+  await Promise.all([...mentionedVouchers].map(async h => {
+    const info = vInfo[h];
+    if (!info) return;
+    try {
+      const m = await rpcCallAt(info.bank_url, info.bank, 'get_voucher_meta', { voucher_hash: h });
+      if (m) vMeta[h] = m;
+    } catch { /* no meta released */ }
+  }));
   const selected = voucherFilter && vMap[voucherFilter] ? voucherFilter : '';
 
   const filterBar = `<div class="card">
@@ -594,6 +622,7 @@ async function renderPosts(app, voucherFilter) {
     <p class="small">Posts are anchored to a voucher. You see the people you <a href="#/network">follow</a> — there is no global timeline. You follow your bank by default, and it reposts what its users publish.</p>
   </div>`;
 
+  const mine = vouchers.filter(v => v.issuer === 'you');
   const composer = vouchers.length
     ? `<div class="card">
         <h3>Say something</h3>
@@ -602,6 +631,16 @@ async function renderPosts(app, voucherFilter) {
         <label for="post-body">Post</label>
         <textarea id="post-body" rows="3" placeholder="Redeem at booth 12 all Saturday…"></textarea>
         <div class="small" id="post-reply-note"></div>
+        ${mine.length ? `
+        <label><input type="checkbox" id="post-meta" onchange="toggleMetaFields()">
+          Also update this voucher's look and description</label>
+        <div id="post-meta-fields" style="display:none">
+          <p class="small">Only you can restyle a voucher you issue. The text above becomes its description, and the newest release wins — the voucher itself never changes, so balances denominated in it are untouched.</p>
+          <label for="post-icon">Icon SVG <span class="small">(small round mark)</span></label>
+          <textarea id="post-icon" rows="2" placeholder="&lt;svg viewBox=&quot;0 0 24 24&quot;…&gt;"></textarea>
+          <label for="post-square">Square SVG <span class="small">(card image)</span></label>
+          <textarea id="post-square" rows="2" placeholder="&lt;svg viewBox=&quot;0 0 100 100&quot;…&gt;"></textarea>
+        </div>` : ''}
         <button class="btn" id="post-submit" onclick="submitPost()">Post</button>
         <div class="error" id="post-err"></div>
       </div>`
@@ -613,8 +652,12 @@ async function renderPosts(app, voucherFilter) {
   const bankUrl = state.bankUrl || state.basePath;
   const list = feed.posts.length
     ? feed.posts.map(({ hash, post }) => `<div class="card">
-        <div class="small"><b>${escapeHtml(postAuthorLabel(post.pubkey, names))}</b>
-          · ${escapeHtml(vMap[post.voucher] || post.voucher.slice(0, 10) + '…')}</div>
+        <div class="flex small" style="align-items:center;gap:.4rem">
+          ${svgImg((vMeta[post.voucher] || {}).icon_svg, 20, '')}
+          <span><b>${escapeHtml(postAuthorLabel(post.pubkey, names))}</b>
+          · ${escapeHtml(vMap[post.voucher] || post.voucher.slice(0, 10) + '…')}</span>
+          ${post.voucher_meta ? '<span class="small">· updated this voucher</span>' : ''}
+        </div>
         <div>${postBody(post.body_md)}</div>
         ${renderMedia(post, bankUrl)}
         ${renderEmbedded(post.reply_to, names, 'in reply to', vMap)}
@@ -636,6 +679,11 @@ async function renderPosts(app, voucherFilter) {
     ${failed ? loadError('the feed') : `${filterBar}${composer}${warn}${list}`}
   </div>`;
 }
+
+window.toggleMetaFields = function() {
+  const on = document.getElementById('post-meta').checked;
+  document.getElementById('post-meta-fields').style.display = on ? '' : 'none';
+};
 
 window.onFeedFilterChange = function() {
   const v = document.getElementById('feed-voucher').value;
@@ -723,6 +771,17 @@ window.submitPost = async function() {
       voucher, body_md: body,
     };
     if (pendingParent) post[pendingParent.kind] = pendingParent.post;
+    const metaBox = document.getElementById('post-meta');
+    if (metaBox && metaBox.checked) {
+      const icon = (document.getElementById('post-icon').value || '').trim();
+      const square = (document.getElementById('post-square').value || '').trim();
+      if (!icon && !square) {
+        err.textContent = 'Add an icon or a square SVG to release meta'; release(); return;
+      }
+      post.voucher_meta = true;
+      if (icon) post.icon_svg = icon;
+      if (square) post.square_svg = square;
+    }
     post.sig = signDoc(post, state.user.privateKey);
     await rpcCall('submit_docs', { docs: [post] });
     pendingParent = null;

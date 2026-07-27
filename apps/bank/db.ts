@@ -729,6 +729,45 @@ export async function listPosts(
   return more && last ? { items, next_before: last.ulid } : { items };
 }
 
+/**
+ * The current presentation of a voucher, derived from its issuer's newest
+ * meta-release post (post-feed.md). Cached here so a client needs one read
+ * instead of scanning the issuer's whole feed for the latest release.
+ *
+ * `ulid` is the releasing post's ULID and is the ordering key: a release only
+ * wins if it is newer than what is stored, so posts arriving out of order
+ * (relayed, or replayed from another bank) cannot roll the meta backwards.
+ */
+export type VoucherMeta = {
+  voucher: Base58SHA256;
+  icon_svg?: string;
+  square_svg?: string;
+  description_md?: string;
+  ulid: ULID;
+  post: Base58SHA256;
+  at: number;
+};
+
+export async function getVoucherMeta(
+  bank: Bank,
+  voucherHash: Base58SHA256,
+): Promise<VoucherMeta | null> {
+  const r = await bank.kv.get<VoucherMeta>(k(bank, 'voucher_meta', voucherHash));
+  return r.value;
+}
+
+/** Store a release only if it is newer than the one already cached. */
+export async function putVoucherMeta(
+  bank: Bank,
+  meta: VoucherMeta,
+): Promise<boolean> {
+  const key = k(bank, 'voucher_meta', meta.voucher);
+  const current = await bank.kv.get<VoucherMeta>(key);
+  if (current.value && current.value.ulid >= meta.ulid) return false;
+  const ok = await bank.kv.atomic().check(current).set(key, meta).commit();
+  return ok.ok;
+}
+
 export async function getSignaturesForPost(
   bank: Bank,
   postHash: Base58SHA256,

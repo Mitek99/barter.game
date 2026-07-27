@@ -107,7 +107,7 @@ Hash-routed; the whole router is one function in `app.js`.
 | `#/invoices`, `#/invoices/new` | Credit-only orders (requests for payment) with shareable QR |
 | `#/cheques`, `#/cheques/new` | Debit-only orders with shareable QR |
 | `#/discover` | Poll known banks for published offers; accept one into a deal |
-| `#/posts`, `#/posts/:voucher` | Voucher post feeds. Each post offers Reply, Repost, Follow author, and **Trade for this** — which trusts the voucher's issuer (pinning their bank if foreign) and opens a swap preloaded with it. Merges `list_posts` across every trusted author x known bank, newest-first, de-duplicated by content hash; compose, reply and repost; every post's signature tree is verified client-side before it renders |
+| `#/posts`, `#/posts/:voucher` | Voucher post feeds. Each post offers Reply, Repost, Follow author, and **Trade for this** — which trusts the voucher's issuer (pinning their bank if foreign) and opens a swap preloaded with it. An issuer composing about their own voucher can tick "update this voucher's look" to release a new icon/square SVG and description. Issuer SVGs render as `data:` URIs inside `<img>`, never inlined, so embedded scripts cannot run. Merges `list_posts` across every trusted author x known bank, newest-first, de-duplicated by content hash; compose, reply and repost; every post's signature tree is verified client-side before it renders |
 | `#/deal/:id` | Deal status with per-leg ready/hold/settle; re-polls every 3 s until settled/rejected |
 | `#/activity` | Transaction history |
 | `#/network` | Following (feed subscriptions, incl. your bank), trusted issuers (with free-text notes), pinned banks, contacts |

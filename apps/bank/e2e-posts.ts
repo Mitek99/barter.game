@@ -313,5 +313,64 @@ await rpc(issuer, alice, 'submit_docs', { docs: [repost] });
     JSON.stringify(f2.body));
 }
 
+// --- 9. voucher meta releases ---------------------------------------------
+{
+  const ICON = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>';
+  const SQUARE = '<svg viewBox="0 0 100 100"><rect width="100" height="100"/></svg>';
+
+  // The issuer restyles their own live currency.
+  const release = mkPost(issuer, voucherHash, 'Now with a proper mark.', {
+    voucher_meta: true, icon_svg: ICON, square_svg: SQUARE,
+  });
+  const r = await rpcRaw(issuer, alice, 'submit_docs', { docs: [release] });
+  check('issuer may release voucher meta', !r.error, r.error ? r.error.message : 'stored');
+
+  const m = await rpc(stranger, alice, 'get_voucher_meta', { voucher_hash: voucherHash }) as
+    Record<string, string>;
+  check('meta cached server-side and readable by anyone',
+    m?.icon_svg === ICON && m?.square_svg === SQUARE,
+    m ? 'icon + square stored' : 'no meta');
+  check('the post text becomes the voucher description',
+    m?.description_md === 'Now with a proper mark.', m?.description_md ?? 'none');
+
+  // A newer release wins.
+  const ICON2 = '<svg viewBox="0 0 24 24"><path d="M2 2h20v20H2z"/></svg>';
+  await rpc(issuer, alice, 'submit_docs', {
+    docs: [mkPost(issuer, voucherHash, 'Restyled again.', { voucher_meta: true, icon_svg: ICON2 })],
+  });
+  const m2 = await rpc(stranger, alice, 'get_voucher_meta', { voucher_hash: voucherHash }) as
+    Record<string, string>;
+  check('a newer release overrides the older one',
+    m2?.icon_svg === ICON2 && m2?.description_md === 'Restyled again.',
+    m2?.description_md ?? 'none');
+
+  // Anyone else must not be able to redefine someone's currency.
+  const hijack = mkPost(holder, voucherHash, 'my branding now', {
+    voucher_meta: true, icon_svg: ICON,
+  });
+  const rj = await rpcRaw(holder, alice, 'submit_docs', { docs: [hijack] });
+  check('non-issuer refused a meta release', rj.error?.code === -32001,
+    rj.error ? rj.error.message : 'ACCEPTED — anyone can restyle any voucher');
+
+  const m3 = await rpc(stranger, alice, 'get_voucher_meta', { voucher_hash: voucherHash }) as
+    Record<string, string>;
+  check('the refused release did not change the meta', m3?.icon_svg === ICON2,
+    m3?.description_md ?? 'none');
+
+  // Oversized artwork is refused before it can be amplified by reposts.
+  const huge = mkPost(issuer, voucherHash, 'too big', {
+    voucher_meta: true, icon_svg: '<svg ' + 'x'.repeat(9000) + '></svg>',
+  });
+  const rh = await rpcRaw(issuer, alice, 'submit_docs', { docs: [huge] });
+  check('oversized SVG refused', !!rh.error, rh.error ? rh.error.message : 'ACCEPTED');
+
+  // And a non-SVG string is not artwork.
+  const bad = mkPost(issuer, voucherHash, 'not svg', {
+    voucher_meta: true, icon_svg: '<script>alert(1)</script>',
+  });
+  const rb = await rpcRaw(issuer, alice, 'submit_docs', { docs: [bad] });
+  check('non-SVG icon refused', !!rb.error, rb.error ? rb.error.message : 'ACCEPTED');
+}
+
 console.log(pass ? 'POST FEEDS OK ✅' : 'POST FEEDS FAILED ❌');
 if (!pass) Deno.exit(1);

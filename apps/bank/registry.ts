@@ -17,6 +17,7 @@ import {
   listPosts,
   getPost,
   getPostSignatures,
+  getVoucherMeta,
 } from './handlers/get.ts';
 
 export type Handler = (
@@ -43,4 +44,5 @@ export const registry: Record<string, Handler> = {
   list_posts: listPosts,
   get_post: getPost,
   get_post_signatures: getPostSignatures,
+  get_voucher_meta: getVoucherMeta,
 };
