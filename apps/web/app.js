@@ -1550,6 +1550,9 @@ async function renderOrders(app) {
         <div>${o.kind === 'two-sided' ? 'Swap' : escapeHtml(String(o.kind))}${o.lead ? ' · settles first' : ''}</div>
         <div class="mono small">${escapeHtml(o.order.slice(0,16))}…</div>
         <div class="small">${o.debit ? `give up to ${escapeHtml(String(o.debit.max))} ${vName(names, o.debit.voucher)}` : ''} ${o.credit ? `· receive up to ${escapeHtml(String(o.credit.max))} ${vName(names, o.credit.voucher)}` : ''}</div>
+        ${o.kind === 'two-sided'
+          ? `<div class="small">at most <b>${escapeHtml(fmtRate(o.rate))} ×</b> ${vName(names, o.debit.voucher)} for each <b>${vName(names, o.credit.voucher)}</b></div>`
+          : ''}
         ${o.kind === 'invoice' ? `<button class="btn secondary" onclick="showShare('v', '${jsStr(o.order)}', 'Invoice — scan to pay')">Share QR</button>` : ''}
         ${o.kind === 'cheque' ? `<button class="btn secondary" onclick="showShare('q', '${jsStr(o.order)}', 'Cheque — scan to claim')">Share QR</button>` : ''}
         ${o.kind === 'two-sided' ? twoSidedShare(o) : ''}
@@ -1569,16 +1572,52 @@ async function renderCreateOrder(app, wantVoucherHash) {
     ${card('Offer a swap', vouchers.length ? `
       <p class="small">Offer to trade one voucher for another. The exchange rate is set by the two amounts you enter.</p>
       ${want ? `<p class="small">Preloaded from a post: you are asking for <b>${escapeHtml(vouchers.find(v => v.hash === want).name)}</b>.</p>` : ''}
-      <label for="o-dv">You give (voucher)</label>${voucherChooser('o-dv', vouchers, giveDefault)}
-      <label for="o-dmax">Amount you give (up to)</label><input id="o-dmax" type="number" min="0" step="any" value="100">
-      <label for="o-cv">You receive (voucher)</label>${voucherChooser('o-cv', vouchers, want)}
-      <label for="o-cmax">Amount you receive (up to)</label><input id="o-cmax" type="number" min="0" step="any" value="90">
+      <label for="o-dv">You give (voucher)</label>${voucherChooser('o-dv', vouchers, giveDefault).replace('<select ', '<select onchange="updateRate()" ')}
+      <label for="o-dmax">Amount you give (up to)</label><input id="o-dmax" type="number" min="0" step="any" value="100" oninput="updateRate()">
+      <label for="o-cv">You receive (voucher)</label>${voucherChooser('o-cv', vouchers, want).replace('<select ', '<select onchange="updateRate()" ')}
+      <label for="o-cmax">Amount you receive (up to)</label><input id="o-cmax" type="number" min="0" step="any" value="90" oninput="updateRate()">
+      <div class="card" style="margin:.6rem 0;padding:.6rem .8rem">
+        <div class="small">Your rate — the <b>most</b> you will pay</div>
+        <div id="o-rate">—</div>
+        <p class="small">A ceiling, not a fixed price: the bank refuses any deal whose total ratio is worse than this, so a partial match can only ever be better for you.</p>
+      </div>
       <label><input type="checkbox" id="o-lead"> Settle my side first <span class="small">(the counterparty may not reciprocate)</span></label>
       <label><input type="checkbox" id="o-pub" checked> List publicly so others can discover this</label>
       <button class="btn" style="width:100%;margin-top:1rem" onclick="doCreateOrder(this)">Create order</button>
       <p class="small error" id="o-err"></p>
     ` : (vouchers.failed ? loadError('your vouchers') : noVouchersNotice()))}
   </div>`;
+  // innerHTML does not run inline scripts, so seed the readout after render.
+  if (vouchers.length) window.updateRate();
+}
+
+/**
+ * Show the rate the two amounts imply. The rate is derived rather than typed
+ * (two inputs cannot then contradict each other) — but deriving it is not a
+ * reason to hide it: it is the price of the trade, and it was previously
+ * invisible at every surface, so the shipped defaults quietly meant "I will
+ * pay up to 1.111 of mine per 1 of yours".
+ */
+window.updateRate = function() {
+  const el = document.getElementById('o-rate');
+  if (!el) return;
+  const d = Number(document.getElementById('o-dmax').value);
+  const c = Number(document.getElementById('o-cmax').value);
+  const dn = voucherNameOf('o-dv'), cn = voucherNameOf('o-cv');
+  if (!(d > 0) || !(c > 0)) { el.textContent = '—'; return; }
+  // Voucher names already carry their unit ("1 hour of tutoring"), so quoting
+  // "per 1 <name>" would read "per 1 1 hour of tutoring".
+  el.innerHTML = `<b>${escapeHtml(fmtRate(d / c))} ×</b> ${escapeHtml(dn)}
+    <span class="small">for each</span> <b>${escapeHtml(cn)}</b>`;
+};
+function voucherNameOf(selectId) {
+  const sel = document.getElementById(selectId);
+  const opt = sel && sel.selectedOptions[0];
+  return opt ? opt.textContent.split(' — ')[0] : 'unit';
+}
+// Trim float noise (100/90 is 1.1111111111111112) without hiding real precision.
+function fmtRate(r) {
+  return String(Math.round(r * 10000) / 10000);
 }
 
 window.doCreateOrder = async function(btn) {
