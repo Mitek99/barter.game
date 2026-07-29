@@ -91,6 +91,26 @@ or voucher hash and lets the reader extend trust deliberately. The chain is
 always explicit: *I trust A; A recommended B; I chose to trust B.* The
 protocol carries the recommendation; the human makes the decision.
 
+**Vouchers surface through the feed.** The recommended client "Discover"
+surface is built entirely from posts by the pubkeys the reader follows
+(post-feed.md §7) — every post is anchored to a voucher, so a merged
+newest-first feed *is* a stream of voucher sightings:
+
+1. Merge `list_posts(author, "all")` across followed authors × known banks,
+   walking embedded reposts/replies too (a bank reposting its users is how a
+   newcomer sees anyone at all).
+2. De-duplicate the anchoring vouchers, newest sighting first; resolve each
+   voucher's doc (issuer, name) and its current presentation
+   (`get_voucher_meta` — icon/square media refs and description, falling back
+   to the Voucher's own `images`).
+3. Render a voucher gallery: image, name, issuer, description, and the
+   actions that close the loop — *trade for this* (build an order preloaded
+   with it), *read its feed* (the per-voucher feed), *follow the issuer*.
+
+There is no bank-side "trending" and no global search: what a reader can
+discover is exactly what the people they chose to follow have posted about —
+the trust graph is the index.
+
 ## 6. Public holdings
 
 By default, balances are private: a bank MUST NOT disclose an account's

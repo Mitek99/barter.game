@@ -126,17 +126,31 @@ Across two banks, the coordinator makes one call to each bank, with `giver`/`rec
 Two read/serve surfaces are plain HTTP (cacheable, no JSON-RPC envelope):
 
 - `GET /address/<pubkey>` — return the newest Address doc for the pubkey, or `404`.
-- `GET /media/<sha256>` — return a content-addressed media blob referenced by a
-  Post ([`post-feed.md`](./post-feed.md) §5). **Unauthenticated:** whoever knows
-  the hash may fetch the bytes. The bank verifies the bytes hash to the requested
-  value; blobs are immutable, so responses are freely cacheable. Unknown hash →
-  `404`.
+- `GET /media/<hash>.<ext>` — return a vault blob by its `MediaRef`
+  ([`post-feed.md`](./post-feed.md) §5), served with the Content-Type the
+  extension implies and immutable caching. **Unauthenticated:** whoever knows
+  the ref may fetch the bytes. The bank verifies the bytes hash to the ref's
+  hash before serving; unknown hash → `404`. A bare `<hash>` (no extension) is
+  the legacy form and serves the content type recorded at upload. Responses
+  carry `X-Content-Type-Options: nosniff` and a sandboxing
+  `Content-Security-Policy`, so a served SVG renders as an image but can never
+  run script on the bank's origin.
 
 Address docs are submitted and updated through the standard `submit_docs`
-JSON-RPC method. Media blobs are uploaded to the carrying bank before the Post
-that references them — `POST /media` with the raw bytes (or multipart), returning
-the `sha256`; acceptance (size caps, types, quotas) is bank policy. This keeps
-the write path uniform: docs via `submit_docs`, blobs via `/media`.
+JSON-RPC method. Media blobs are uploaded to the carrying bank before the doc
+that references them:
+
+```
+POST /media          (authenticated like every /ui write)
+{ "data_base64": "<base64 bytes>", "ext": "svg" }      — or "content_type": "image/svg+xml"
+→ 201 { "hash": "<base58 sha256>", "ref": "<hash>.<ext>", "size": n, "content_type": "…" }
+```
+
+The upload MUST resolve to a known image extension (`svg`, `png`, `jpg`,
+`jpeg`, `webp`, `gif`) — a caller-chosen Content-Type never reaches storage.
+Docs carry the returned `ref`. Further acceptance (size caps, quotas) is bank
+policy. This keeps the write path uniform: docs via `submit_docs`, blobs via
+`/media`.
 
 ---
 

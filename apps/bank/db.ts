@@ -740,6 +740,10 @@ export async function listPosts(
  */
 export type VoucherMeta = {
   voucher: Base58SHA256;
+  /** MediaRef "<hash>.<ext>" — the canonical form; blobs live in the vault. */
+  icon?: string;
+  square?: string;
+  /** @deprecated inline SVG from releases that predate media refs. */
   icon_svg?: string;
   square_svg?: string;
   description_md?: string;

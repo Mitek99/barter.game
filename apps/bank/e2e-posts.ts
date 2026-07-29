@@ -372,5 +372,175 @@ await rpc(issuer, alice, 'submit_docs', { docs: [repost] });
   check('non-SVG icon refused', !!rb.error, rb.error ? rb.error.message : 'ACCEPTED');
 }
 
+// --- 10. media refs "<hash>.<ext>": ext serving, voucher images, meta refs -
+// Stamped so every run's bytes (and therefore hash) are fresh — the local
+// KV persists across runs, and a stale identical blob at bob would make the
+// "refused while bob lacks the blobs" check vacuous.
+const artSvg =
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#c33"/><!-- ${stamp} --></svg>`;
+const artB64 = btoa(String.fromCharCode(...new TextEncoder().encode(artSvg)));
+let artRef = '';
+let imgVoucherHash = '';
+let refPost: Record<string, unknown> = {};
+{
+  const up = await authedPost(issuer, alice, '/media', { ext: 'svg', data_base64: artB64 });
+  check('upload with ext returns the full ref', up.status === 201 &&
+    typeof up.body.ref === 'string' && (up.body.ref as string).endsWith('.svg'),
+    `${up.status} ${JSON.stringify(up.body)}`);
+  artRef = up.body.ref as string;
+
+  // Re-uploading identical bytes lands on the same ref — content addressing
+  // makes "overwrite" a no-op.
+  const again = await authedPost(issuer, alice, '/media', { ext: 'svg', data_base64: artB64 });
+  check('same bytes re-upload is idempotent', again.body.ref === artRef, String(again.body.ref));
+
+  // The extension names the Content-Type, so the immutable URL can sit
+  // behind a caching CDN with no byte sniffing.
+  const res = await fetch(`${alice.url}/media/${artRef}`);
+  const served = new TextDecoder().decode(await res.arrayBuffer());
+  check('GET /media/<hash>.svg serves image/svg+xml, immutable',
+    res.status === 200 && res.headers.get('Content-Type') === 'image/svg+xml' &&
+    (res.headers.get('Cache-Control') ?? '').includes('immutable') && served === artSvg,
+    `${res.status} ${res.headers.get('Content-Type')}`);
+
+  // A voucher carries image REFS; the blobs must already be in the vault.
+  const vBad = sign({
+    type: 'voucher', pubkey: issuer.pubkey, ulid: newUlid(), bank: alice.pubkey,
+    name: 'IMG-BAD-' + stamp, images: [`${hashDoc({ absent: 2 })}.png`],
+  }, issuer);
+  const rBad = await rpcRaw(issuer, alice, 'submit_docs', { docs: [vBad] });
+  check('voucher with unstored images refused', rBad.error?.code === -32005,
+    rBad.error ? rBad.error.message : 'ACCEPTED');
+
+  const vImg = sign({
+    type: 'voucher', pubkey: issuer.pubkey, ulid: newUlid(), bank: alice.pubkey,
+    name: 'IMG-' + stamp, images: [artRef], description_md: 'has a face from birth',
+  }, issuer);
+  const vImgHash = imgVoucherHash = hashDoc(vImg);
+  const rImg = await rpcRaw(issuer, alice, 'submit_docs', { docs: [vImg] });
+  check('voucher with stored images accepted', !rImg.error, rImg.error ? rImg.error.message : 'stored');
+
+  // No release yet — meta falls back to the voucher's own images.
+  const m0 = await rpc(stranger, alice, 'get_voucher_meta', { voucher_hash: vImgHash }) as
+    Record<string, unknown>;
+  check('meta falls back to the voucher images', m0?.icon === artRef,
+    JSON.stringify(m0));
+
+  // A meta release with refs overrides the fallback.
+  const rel = mkPost(issuer, vImgHash, 'fresh coat of paint', {
+    voucher_meta: true, icon: artRef, square: artRef,
+  });
+  await rpc(issuer, alice, 'submit_docs', { docs: [rel] });
+  const m1 = await rpc(stranger, alice, 'get_voucher_meta', { voucher_hash: vImgHash }) as
+    Record<string, unknown>;
+  check('meta release with refs wins over the fallback',
+    m1?.icon === artRef && m1?.square === artRef && typeof m1?.post === 'string',
+    JSON.stringify({ icon: m1?.icon, post: m1?.post }));
+
+  // Ref-form media on a post: refused until the blob exists, accepted after.
+  const missingRefPost = mkPost(issuer, voucherHash, 'see art', {
+    media: [`${hashDoc({ absent: 3 })}.png`],
+  });
+  const rMiss = await rpcRaw(issuer, alice, 'submit_docs', { docs: [missingRefPost] });
+  check('post with unstored ref media refused', rMiss.error?.code === -32005,
+    rMiss.error ? rMiss.error.message : 'ACCEPTED');
+
+  refPost = mkPost(issuer, voucherHash, 'the artwork, hash-addressed', { media: [artRef] });
+  const rOk = await rpcRaw(issuer, alice, 'submit_docs', { docs: [refPost] });
+  check('post with stored ref media accepted', !rOk.error, rOk.error ? rOk.error.message : 'stored');
+
+  // A garbage extension is not a ref and not a legacy hash either.
+  const junk = mkPost(issuer, voucherHash, 'bad ref', { media: [`${artRef.split('.')[0]}.exe`] });
+  const rJunk = await rpcRaw(issuer, alice, 'submit_docs', { docs: [junk] });
+  check('unknown media extension refused', !!rJunk.error,
+    rJunk.error ? rJunk.error.message : 'ACCEPTED');
+}
+
+// --- 11. cross-bank repost requires copying the blobs over ----------------
+{
+  const bob = await discover(`${BASE_URL.replace(/\/$/, '')}/bob`);
+  const reposter = makeUser();
+  // The reposter anchors to a voucher of their own at bob (§4 allows a
+  // different anchor); the embedded original still drags its media refs in.
+  const anchor = sign({
+    type: 'voucher', pubkey: reposter.pubkey, ulid: newUlid(), bank: bob.pubkey,
+    name: 'ANCHOR-' + stamp, integer: true,
+  }, reposter);
+  await rpc(reposter, bob, 'submit_docs', { docs: [anchor] });
+
+  const rp = sign({
+    type: 'post', pubkey: reposter.pubkey, ulid: newUlid(), voucher: hashDoc(anchor),
+    body_md: 'spotted at alice — copying the art over', repost: refPost,
+  }, reposter);
+  const r1 = await rpcRaw(reposter, bob, 'submit_docs', { docs: [rp] });
+  check('cross-bank repost refused while bob lacks the blobs', r1.error?.code === -32005,
+    r1.error ? r1.error.message : 'ACCEPTED');
+
+  // The copy step the client performs: download from the origin bank,
+  // upload to the bank being reposted to. Same bytes ⇒ same ref ⇒ the
+  // embedded signature still verifies.
+  const dl = await fetch(`${alice.url}/media/${artRef}`);
+  const bytes = new Uint8Array(await dl.arrayBuffer());
+  const copied = await authedPost(reposter, bob, '/media', {
+    ext: 'svg', data_base64: btoa(String.fromCharCode(...bytes)),
+  });
+  check('blob copied to bob lands on the same ref', copied.body.ref === artRef,
+    String(copied.body.ref));
+
+  const r2 = await rpcRaw(reposter, bob, 'submit_docs', { docs: [rp] });
+  check('repost accepted once the blobs are copied', !r2.error,
+    r2.error ? r2.error.message : 'stored');
+
+  const servedAtBob = await fetch(`${bob.url}/media/${artRef}`);
+  check('the copied blob serves from bob too', servedAtBob.status === 200 &&
+    servedAtBob.headers.get('Content-Type') === 'image/svg+xml',
+    `${servedAtBob.status}`);
+  await servedAtBob.arrayBuffer();
+}
+
+// --- 12. hardening: ext gate, sandboxed serving, meta merge, media cap -----
+{
+  // Prototype keys are not extensions — `in` on a plain object would say so.
+  const proto = await authedPost(issuer, alice, '/media', { ext: 'constructor', data_base64: artB64 });
+  check('prototype-key ext refused at upload', proto.status === 400, String(proto.status));
+
+  // A caller-chosen Content-Type never reaches storage.
+  const html = await authedPost(issuer, alice, '/media', {
+    content_type: 'text/html',
+    data_base64: btoa('<html><script>alert(1)</script></html>'),
+  });
+  check('non-image content_type refused at upload', html.status === 400, String(html.status));
+
+  // Serving is sniff-proof and sandboxed — a blob can render, never run.
+  const res = await fetch(`${alice.url}/media/${artRef}`);
+  await res.arrayBuffer();
+  check('media serves nosniff + sandboxing CSP',
+    res.headers.get('X-Content-Type-Options') === 'nosniff' &&
+    (res.headers.get('Content-Security-Policy') ?? '').includes('sandbox'),
+    `${res.headers.get('X-Content-Type-Options')} / ${res.headers.get('Content-Security-Policy') ?? 'none'}`);
+
+  // "<hash>.__proto__" is not a ref, and not a stored bare hash either.
+  const weird = await fetch(`${alice.url}/media/${artRef.split('.')[0]}.__proto__`);
+  await weird.body?.cancel();
+  check('prototype-key GET is 404', weird.status === 404, String(weird.status));
+
+  // A description-only release keeps the current artwork (merge, not wipe).
+  const words = mkPost(issuer, imgVoucherHash, 'words only — the art must stay', {
+    voucher_meta: true,
+  });
+  await rpc(issuer, alice, 'submit_docs', { docs: [words] });
+  const m = await rpc(stranger, alice, 'get_voucher_meta', { voucher_hash: imgVoucherHash }) as
+    Record<string, unknown>;
+  check('description-only release keeps the artwork',
+    m?.icon === artRef && m?.description_md === 'words only — the art must stay',
+    JSON.stringify({ icon: m?.icon, description: m?.description_md }));
+
+  // Media list is capped per post.
+  const many = mkPost(issuer, voucherHash, 'too many', { media: Array(13).fill(artRef) });
+  const rMany = await rpcRaw(issuer, alice, 'submit_docs', { docs: [many] });
+  check('post with more than 12 media entries refused', !!rMany.error,
+    rMany.error ? rMany.error.message : 'ACCEPTED');
+}
+
 console.log(pass ? 'POST FEEDS OK ✅' : 'POST FEEDS FAILED ❌');
 if (!pass) Deno.exit(1);

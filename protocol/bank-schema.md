@@ -33,7 +33,13 @@ Voucher: BaseDoc & {
   type: "voucher";
   bank: Base58PubKey;     // pubkey of the issuing bank
   name: string;           // "1 logo", "1 hour consulting"
-  image_svn?: string;     // inlined square image
+  images?: MediaRef[];    // content-addressed images, "<hash>.<ext>" each;
+                          // [0] icon, [1] square card by convention; at most
+                          // 8 (protocol-level cap, enforced at validation).
+                          // Blobs must be stored at the bank before the
+                          // voucher is accepted (post-feed.md §5); a later
+                          // voucher_meta release overrides. Replaces the
+                          // never-used inline image_svn of early drafts.
   description_md?: string; // markdown
   due?: DateString;       // optional maturity date (ISO 8601 datetime)
   expires?: DateString;   // optional expiration date (ISO 8601 datetime)

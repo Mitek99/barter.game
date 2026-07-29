@@ -1,6 +1,7 @@
 import {
   getDoc,
   getVoucher,
+  getVoucherMeta,
   hasMedia,
   storeAccount,
   storeAddress,
@@ -12,7 +13,9 @@ import {
   storeVoucher,
 } from '../db.ts';
 import {
+  collectMediaRefs,
   hashDoc,
+  mediaRefHash,
   newUlid,
   offerSideFromOrderSide,
   signDoc,
@@ -64,6 +67,14 @@ export async function submitDocs(
           throw new RpcError(-32000, 'voucher bank mismatch');
         }
         await verifyOrFail(raw, v.sig, v.pubkey);
+        // Images live in the vault, not the doc — the doc only carries refs,
+        // and the blobs must already be here (upload precedes the doc, same
+        // rule as post media, post-feed.md §5).
+        for (const ref of v.images ?? []) {
+          if (!(await hasMedia(bank, mediaRefHash(ref)))) {
+            throw new RpcError(-32005, `voucher image not stored at this bank: ${ref}`);
+          }
+        }
         const h = await storeVoucher(bank, v);
         if (!stored.includes(h)) stored.push(h);
         break;
@@ -131,8 +142,20 @@ export async function submitDocs(
         if (!verifyPostTree(p)) {
           throw new RpcError(-32001, 'embedded post signature invalid');
         }
-        for (const m of p.media ?? []) {
-          if (!(await hasMedia(bank, m))) {
+        // Every ref in the WHOLE embedded tree, not just the outer post: a
+        // repost/reply carries its ancestors, and serving a thread whose
+        // images 404 here would silently break exactly the posts a bank
+        // amplifies. This is also what makes cross-bank reposting explicit —
+        // the reposting client must copy the blobs over first (§5).
+        const treeRefs = collectMediaRefs(p);
+        // Per-post media is capped by validatePost; this bounds the whole
+        // embedded tree, since checking (and client-side copying) is per-ref
+        // work an attacker could otherwise multiply through deep embeds.
+        if (treeRefs.length > 64) {
+          throw new RpcError(-32000, 'post tree references too many media blobs');
+        }
+        for (const m of treeRefs) {
+          if (!(await hasMedia(bank, mediaRefHash(m)))) {
             throw new RpcError(-32005, `media not stored at this bank: ${m}`);
           }
         }
@@ -149,10 +172,22 @@ export async function submitDocs(
         const h = await storePost(bank, p);
         if (!stored.includes(h)) stored.push(h);
         if (p.voucher_meta === true) {
+          // A release that carries artwork defines the look completely; a
+          // release that carries NONE is a description update and keeps the
+          // current artwork (from the previous release, or the Voucher doc's
+          // own images) — otherwise a text-only release would silently strip
+          // a live currency of its face.
+          const carriesArt = !!(p.icon || p.square || p.icon_svg || p.square_svg);
+          const prev = carriesArt ? null : await getVoucherMeta(bank, p.voucher);
+          const v = carriesArt ? null : await getVoucher(bank, p.voucher);
+          const keepIcon = prev?.icon ?? v?.images?.[0];
+          const keepSquare = prev?.square ?? v?.images?.[1];
           await putVoucherMeta(bank, {
             voucher: p.voucher,
-            icon_svg: p.icon_svg,
-            square_svg: p.square_svg,
+            icon: carriesArt ? p.icon : keepIcon,
+            square: carriesArt ? p.square : keepSquare,
+            icon_svg: carriesArt ? p.icon_svg : prev?.icon_svg,
+            square_svg: carriesArt ? p.square_svg : prev?.square_svg,
             // The post's own text becomes the voucher's description.
             description_md: p.body_md || undefined,
             ulid: p.ulid,

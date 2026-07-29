@@ -224,5 +224,21 @@ export async function getVoucherMeta(
   if (typeof hash !== 'string') {
     throw new RpcError(-32602, 'voucher_hash required');
   }
-  return await dbGetVoucherMeta(bank, hash);
+  const released = await dbGetVoucherMeta(bank, hash);
+  if (released) return released;
+  // No release yet — fall back to the images minted into the Voucher doc
+  // itself (images[0] = icon, images[1] = square card, by convention), so a
+  // voucher has a face from the moment it exists. The issuer's first meta
+  // release overrides this.
+  const v = await dbGetVoucher(bank, hash);
+  if (!v || (!v.images?.length && !v.description_md)) return null;
+  return {
+    voucher: hash,
+    icon: v.images?.[0],
+    square: v.images?.[1],
+    description_md: v.description_md,
+    ulid: v.ulid,
+    post: null,
+    at: 0,
+  };
 }

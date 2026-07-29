@@ -37,7 +37,15 @@ export type Voucher = BaseDoc & {
   type: 'voucher';
   bank: Base58PubKey;
   name: string;
+  /** @deprecated never used; superseded by `images` media refs. */
   image_svn?: string;
+  /**
+   * Content-addressed images, each a `MediaRef` ("<hash>.<ext>"). The blobs
+   * must be stored at the accepting bank before the voucher is submitted
+   * (post-feed.md §5). By convention `images[0]` is the icon and `images[1]`
+   * the square card image; a later meta release (Post.voucher_meta) overrides.
+   */
+  images?: MediaRef[];
   description_md?: string;
   due?: string;
   expires?: string;
@@ -141,15 +149,26 @@ export type Post = BaseDoc & {
   type: 'post';
   voucher: Base58SHA256;
   body_md: string;
-  media?: Base58SHA256[];
-  /** Inline SVG: a small round/badge mark for the voucher. */
+  /**
+   * Content-addressed attachments. Canonical form is a `MediaRef`
+   * ("<hash>.<ext>"); a bare base58 hash is accepted for legacy posts already
+   * signed before extensions existed. Every ref in the whole embedded tree
+   * must be stored at the accepting bank (post-feed.md §5).
+   */
+  media?: MediaRef[];
+  /** MediaRef of a small round/badge mark for the voucher. */
+  icon?: MediaRef;
+  /** MediaRef of a square card image for the voucher. */
+  square?: MediaRef;
+  /** @deprecated Inline SVG icon — superseded by the `icon` media ref. */
   icon_svg?: string;
-  /** Inline SVG: a square card image for the voucher. */
+  /** @deprecated Inline SVG card — superseded by the `square` media ref. */
   square_svg?: string;
   /**
    * When true this post is a META RELEASE for its `voucher`: the bank takes
-   * `icon_svg`, `square_svg` and `body_md` (as the description) as the
-   * voucher's current presentation, newest post winning.
+   * `icon`/`square` (media refs; or the legacy inline SVGs) and `body_md` (as
+   * the description) as the voucher's current presentation, newest post
+   * winning.
    *
    * A Voucher doc is content-addressed and therefore immutable — changing its
    * name or image would change its hash and orphan every balance denominated
@@ -477,6 +496,15 @@ export function validateVoucher(d: unknown, bankPubkey: Base58PubKey): Voucher {
   if (b.integer !== undefined && typeof b.integer !== 'boolean') {
     throw new ValidationError('integer must be boolean');
   }
+  if (b.images !== undefined) {
+    if (!Array.isArray(b.images)) {
+      throw new ValidationError('images must be an array');
+    }
+    if (b.images.length > MAX_VOUCHER_IMAGES) {
+      throw new ValidationError(`images: at most ${MAX_VOUCHER_IMAGES}`);
+    }
+    b.images.forEach((m, i) => assertMediaRefField(m, `images[${i}]`));
+  }
   return d as Voucher;
 }
 
@@ -611,6 +639,101 @@ export function validateAddress(d: unknown): Address {
   return d as Address;
 }
 
+// --- media refs -----------------------------------------------------------
+
+/**
+ * A content-addressed media reference: `"<base58(sha256(bytes))>.<ext>"`.
+ *
+ * The hash is the identity — two uploads of the same bytes are the same blob
+ * at every bank that stores them, which is what lets an embedded repost's refs
+ * resolve anywhere the blobs were copied to. The extension exists for the
+ * DELIVERY path: a bank serves `GET /:bank/media/<hash>.<ext>` with the
+ * Content-Type the extension implies, so the immutable URL can sit behind any
+ * caching CDN without the CDN having to sniff bytes.
+ */
+export type MediaRef = string;
+
+/** Extensions a ref may carry, and the Content-Type each one serves as. */
+export const MEDIA_EXT_TYPES: Record<string, string> = {
+  svg: 'image/svg+xml',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+};
+
+/** Content-Type → canonical extension (the reverse of MEDIA_EXT_TYPES). */
+export function extForContentType(ct: string): string | null {
+  const base = ct.split(';')[0].trim().toLowerCase();
+  for (const [ext, type] of Object.entries(MEDIA_EXT_TYPES)) {
+    if (type === base) return ext;
+  }
+  return null;
+}
+
+/**
+ * Parse `"<hash>.<ext>"` into its parts, or null when the string is not a
+ * well-formed ref (unknown extension, or a hash that is not plausible base58
+ * sha256). A bare hash with no extension parses as null — callers that accept
+ * the legacy bare form use `mediaRefHash` instead.
+ */
+export function parseMediaRef(
+  ref: unknown,
+): { hash: Base58SHA256; ext: string } | null {
+  if (typeof ref !== 'string') return null;
+  const dot = ref.lastIndexOf('.');
+  if (dot <= 0 || dot === ref.length - 1) return null;
+  const hash = ref.slice(0, dot);
+  const ext = ref.slice(dot + 1).toLowerCase();
+  // Own-key check, not `in`: a plain object inherits Object.prototype, so
+  // `in` would bless "constructor" or "__proto__" as extensions.
+  if (!Object.hasOwn(MEDIA_EXT_TYPES, ext)) return null;
+  if (!/^[1-9A-HJ-NP-Za-km-z]{32,60}$/.test(hash)) return null;
+  return { hash, ext };
+}
+
+/** The content hash of a ref — or the string itself for a legacy bare hash. */
+export function mediaRefHash(ref: string): Base58SHA256 {
+  const parsed = parseMediaRef(ref);
+  return parsed ? parsed.hash : ref;
+}
+
+/**
+ * Every media ref a post commits to, across its whole embedded
+ * `reply_to`/`repost` tree — attachments plus icon/square meta refs,
+ * de-duplicated. This is the set a bank checks for presence at intake, and
+ * the set a client must copy over before submitting a repost/reply of a post
+ * whose blobs live at another bank (post-feed.md §5).
+ */
+export function collectMediaRefs(post: Post): MediaRef[] {
+  const out = new Set<MediaRef>();
+  const walk = (p: Post | undefined): void => {
+    if (!p) return;
+    for (const m of p.media ?? []) out.add(m);
+    if (p.icon) out.add(p.icon);
+    if (p.square) out.add(p.square);
+    walk(p.reply_to);
+    walk(p.repost);
+  };
+  walk(post);
+  return [...out];
+}
+
+/**
+ * Protocol-level cap on how many images a Voucher doc may carry — enforced by
+ * `validateVoucher` at every bank, so it must be documented, not policy
+ * (bank-schema.md §1.1).
+ */
+export const MAX_VOUCHER_IMAGES = 8;
+
+/**
+ * Protocol-level cap on `media` entries per post. A repost embeds its whole
+ * ancestor tree and the accepting bank checks (and a reposting client copies)
+ * every ref in it, so an uncapped list is a copy-amplification lever.
+ */
+export const MAX_POST_MEDIA = 12;
+
 /**
  * Maximum `reply_to`/`repost` nesting a validator will walk (post-feed.md §6:
  * "banks cap embed depth and total post size at intake"). The cap is a
@@ -656,8 +779,18 @@ export function validatePost(d: unknown, depth = 0): Post {
     if (!Array.isArray(b.media)) {
       throw new ValidationError('media must be an array');
     }
-    b.media.forEach((m, i) => assertBase58(m, `media[${i}]`));
+    if (b.media.length > MAX_POST_MEDIA) {
+      throw new ValidationError(`media: at most ${MAX_POST_MEDIA} per post`);
+    }
+    // Canonical form is "<hash>.<ext>"; a bare base58 hash remains valid so
+    // that posts signed before extensions existed still verify when embedded.
+    b.media.forEach((m, i) => {
+      if (parseMediaRef(m)) return;
+      assertBase58(m, `media[${i}]`);
+    });
   }
+  assertMediaRefField(b.icon, 'icon');
+  assertMediaRefField(b.square, 'square');
   assertPostSvg(b.icon_svg, 'icon_svg');
   assertPostSvg(b.square_svg, 'square_svg');
   if (b.voucher_meta !== undefined && typeof b.voucher_meta !== 'boolean') {
@@ -685,6 +818,14 @@ export function validatePost(d: unknown, depth = 0): Post {
  * What this enforces is that the value is a bounded string that actually looks
  * like an SVG document, so garbage and oversized blobs never reach storage.
  */
+/** An optional field that, when present, must be a well-formed MediaRef. */
+function assertMediaRefField(v: unknown, name: string): void {
+  if (v === undefined) return;
+  if (!parseMediaRef(v)) {
+    throw new ValidationError(`${name} must be a media ref "<hash>.<ext>"`);
+  }
+}
+
 function assertPostSvg(v: unknown, name: string): void {
   if (v === undefined) return;
   if (typeof v !== 'string') throw new ValidationError(`${name} must be a string`);

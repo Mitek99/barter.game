@@ -20,13 +20,36 @@ interface Post extends BaseDoc {
   pubkey: Base58PubKey;    // the AUTHOR — any keypair (bank, issuer, or user)
   ulid: ULID;              // feed ordering key (reverse-chronological)
   voucher: Base58SHA256;   // the Voucher this post is anchored to
-  body_md: string;         // markdown body; may reference media by hash
-  media?: Base58SHA256[];  // content-addressed media blobs (see §5)
+  body_md: string;         // markdown body; may reference media by ref
+  media?: MediaRef[];      // content-addressed media refs "<hash>.<ext>" (§5)
+  icon?: MediaRef;         // voucher icon (meta releases; see voucher_meta)
+  square?: MediaRef;       // voucher square card image (meta releases)
+  voucher_meta?: boolean;  // true ⇒ this post RELEASES the voucher's meta:
+                           // icon/square + body_md become the voucher's
+                           // current presentation, newest release winning.
+                           // Only the voucher's issuer may release.
   reply_to?: Post;         // the FULL parent Post, embedded (see §4)
   repost?: Post;           // the FULL reposted Post, embedded (see §4)
   sig: Base58Signature;    // author's signature
 }
+
+type MediaRef = string;    // "<base58(sha256(bytes))>.<ext>" — see §5
 ```
+
+**Legacy forms (normative).** Posts signed before media extensions existed
+carry `media` entries that are **bare base58 hashes** (no extension); such
+entries remain valid forever — signed docs are immutable, and any validator
+walking an embedded tree MUST accept them. Likewise, early meta releases used
+inline-SVG fields `icon_svg` / `square_svg` (bounded `<svg>` strings) instead
+of refs; the fields are deprecated in favor of `icon`/`square` but remain
+valid and still feed a release when the ref fields are absent.
+
+**Meta releases merge, artwork-wise.** A release that carries any artwork
+(`icon`/`square`, or the legacy inline fields) defines the voucher's look
+completely. A release that carries none is a **description update**: the bank
+keeps the current artwork (from the previous release, or the Voucher doc's
+own `images`) — otherwise a text-only release would silently strip a live
+currency of its face.
 
 Posts are ordinary content-addressed docs: canonicalized, hashed, signed by
 their author. Every post anchors to exactly one Voucher — the feed is the
@@ -53,8 +76,9 @@ Posts are submitted through the standard `submit_docs` write path. The bank MUST
 validate shape, author signature, that `voucher` resolves to a Voucher known to
 this bank (its own, or one whose doc was presented to it — so any bank the
 issuer uses can carry the feed), and that every embedded `reply_to`/`repost`
-Post is itself well-formed and correctly signed. Any `media` hashes the post
-references MUST already be stored at this bank (upload precedes the post, §5).
+Post is itself well-formed and correctly signed. Every media ref the post
+commits to — across its whole embedded tree — MUST already be stored at this
+bank (upload precedes the post, §5).
 Beyond validity, **acceptance is bank policy** — a spam filter, an allowlist, a
 paywall, per-key rate limits, or nothing at all. A rejected post gets `-32000`;
 nothing obliges a bank to store any post.
@@ -125,23 +149,48 @@ A client that still wants the *canonical current* form of an embedded post (e.g.
 to fetch its accrued endorsements) resolves it by hash via `get_post` /
 `get_post_signatures`.
 
-## 5. Embedded media
+## 5. Embedded media — the vault
 
-Media referenced by a post — images, video — is **content-addressed** and stored
-by the carrying bank. Each blob is identified by `sha256` (base58); a post names
-the blobs it uses in `media` (and/or references them inline in `body_md` by the
-same hash).
+Images (and later, other media) live **separately from the documents that use
+them**, in the bank's content-addressed **vault**. A Voucher, a Post, an
+Address never embeds image bytes — it carries **refs**:
 
-- **Upload** precedes the post: the author uploads each blob to the bank
-  (`bank-rpc.md` §2.5), which returns the hash; the post then references it.
-  Acceptance (size caps, types, quotas) is bank policy, like posts.
-- **Download** is a plain, **unauthenticated** `GET <bank-url>/media/<hash>` —
-  whoever knows the hash can fetch the bytes directly. Blobs are immutable and
-  content-addressed, so responses are freely cacheable. A bank verifies the
-  bytes hash to the requested value before serving.
+```
+MediaRef = "<base58(sha256(bytes))>.<ext>"     e.g. "8fJk…Qz2.svg"
+```
 
-Media inherits the same carriage-is-policy stance as posts: a bank MAY decline
-or stop serving a blob without affecting the post's signature.
+The **hash is the identity**: two uploads with the same content hash are the
+same blob, and re-storing it overwrites (a no-op — the bytes are identical by
+construction). The **extension is for delivery**: a bank serves
+
+```
+GET <bank-url>/media/<hash>.<ext>      — unauthenticated
+```
+
+with the `Content-Type` the extension implies (`svg` → `image/svg+xml`,
+`png`, `jpg`/`jpeg`, `webp`, `gif`, …) and immutable caching headers. Because
+the URL is content-addressed and the extension names the type, blobs can be
+statically hosted and pushed through any caching CDN — fast, cheap public
+downloads with no byte-sniffing anywhere. The bank verifies the bytes hash to
+the ref's hash before serving.
+
+- **Upload precedes the doc.** The author uploads each blob to the bank
+  (`bank-rpc.md` §2.5), which returns the ref; the doc then carries the ref.
+  Acceptance (size caps, formats, quotas) is bank policy, like posts.
+- **Accepting a doc means holding its images.** When a bank accepts a Post it
+  MUST already hold every ref the post commits to — across the **whole
+  embedded `reply_to`/`repost` tree**, `media` lists and `icon`/`square`
+  alike. The same applies to a Voucher's `images`. A doc whose blobs are
+  missing is rejected (`-32005`).
+- **Reposting across banks copies the blobs.** A repost embeds the original
+  post — whose refs may name blobs stored only at the origin bank. Since the
+  accepting bank requires presence, the reposting **client downloads each blob
+  from the origin bank and uploads it to the bank it is reposting to** before
+  submitting. Content addressing makes this safe: the copied bytes hash to the
+  same ref everywhere, so the embedded post's signature still verifies.
+- **Moderation is the bank's.** A bank MAY refuse a blob at intake or stop
+  serving one it holds; the protocol does not prescribe how a bank moderates
+  images. Refusing a blob effectively refuses the posts that need it.
 
 ## 6. Moderation and limits
 
@@ -183,8 +232,11 @@ scan (Deno KV: a reverse range, or an inverted-ULID key):
 - `post_by_author_voucher/<pubkey>/<voucher>/<ulid>` → hash — serves
   `list_posts(pubkey, voucher)`.
 
-Media blobs are stored by content hash (`media/<sha256>` → bytes + sniffed
-content-type) and served by the REST GET in §5. Endorsement signatures are
+Media blobs are stored in the vault keyed by content hash (`media/<sha256>` →
+bytes, plus size/chunking metadata and the upload-time content type). The
+ref's extension names the Content-Type for canonical `"<hash>.<ext>"` GETs;
+the recorded type serves legacy bare-hash GETs (§5). Blobs are served by the
+REST GET in §5. Endorsement signatures are
 indexed by their target post hash (`post_sig/<post_hash>/<sig_hash>`), exactly
 like `record_sig` for records, so `get_post_signatures` is a prefix scan.
 

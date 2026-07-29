@@ -2,6 +2,7 @@ import {
   base58Encode,
   base58Decode,
   canonicalizeWithoutSig,
+  collectMediaRefs,
   genKeyPair,
   hashDoc,
   newUlid,
@@ -414,7 +415,9 @@ async function loadFeed(voucherFilter, limit = 30) {
         const r = await rpcCallAt(b.url, b.pubkey, 'list_posts', {
           pubkey: author, voucher_hash: voucherFilter || 'all', limit,
         });
-        return (r && r.items) || [];
+        // Keep the serving bank with each post: its media refs resolve THERE
+        // (and copying them is the reposter's job, post-feed.md §5).
+        return ((r && r.items) || []).map(p => ({ p, src: b.url }));
       } catch {
         const label = b.url;
         if (!unreachable.includes(label)) unreachable.push(label);
@@ -424,17 +427,17 @@ async function loadFeed(voucherFilter, limit = 30) {
   );
 
   const byHash = new Map();
-  results.flat().forEach(p => {
+  results.flat().forEach(({ p, src }) => {
     let hash;
     try { hash = hashDoc(p); } catch { return; }
     if (byHash.has(hash)) return;
     // Fail closed: an unverifiable post is dropped, not rendered with a warning.
     try { if (!verifyPostTree(p)) return; } catch { return; }
-    byHash.set(hash, p);
+    byHash.set(hash, { post: p, bankUrl: src });
   });
 
   const posts = [...byHash.entries()]
-    .map(([hash, post]) => ({ hash, post }))
+    .map(([hash, { post, bankUrl }]) => ({ hash, post, bankUrl }))
     .sort((a, b) => (a.post.ulid < b.post.ulid ? 1 : a.post.ulid > b.post.ulid ? -1 : 0));
   return { posts, authors, unreachable };
 }
@@ -478,16 +481,128 @@ function renderEmbedded(p, names, kind, vMap = {}) {
  */
 function svgImg(svg, size, alt) {
   if (typeof svg !== 'string' || !svg.trim()) return '';
-  const url = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+  // As a standalone document (which a data: URI is) an SVG only renders when
+  // its root declares the SVG namespace — hand-typed icons routinely omit it.
+  let s = svg;
+  if (!/<svg[^>]*\sxmlns=/i.test(s)) {
+    s = s.replace(/<svg/i, '<svg xmlns="http://www.w3.org/2000/svg"');
+  }
+  const url = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(s)))}`;
   return `<img src="${url}" alt="${escapeHtml(alt)}" width="${size}" height="${size}"
     style="width:${size}px;height:${size}px;border-radius:6px;object-fit:contain;flex:0 0 auto">`;
+}
+
+// ---------------- media vault (post-feed.md §5) ----------------
+// Images live in the bank's content-addressed vault; docs carry refs
+// "<hash>.<ext>". The extension makes GET /media/<ref> statically servable
+// with the right Content-Type (CDN-friendly); the hash makes it immutable.
+
+const EXT_BY_MIME = {
+  'image/svg+xml': 'svg', 'image/png': 'png', 'image/jpeg': 'jpg',
+  'image/webp': 'webp', 'image/gif': 'gif',
+};
+
+function mediaSrc(bankUrl, ref) {
+  return `${(bankUrl || state.bankUrl || state.basePath).replace(/\/$/, '')}/media/${ref}`;
+}
+
+/** Upload bytes to OUR bank's vault; returns the "<hash>.<ext>" ref. */
+async function uploadMediaBytes(bytes, ext) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  const body = { data_base64: btoa(bin), ext };
+  const authdoc = {
+    pubkey: state.user.pubkey, method: 'POST', path: `${state.basePath}/media`,
+    id: newUlid(), ts: Date.now(), body_sha256: sha256Base58(JSON.stringify(body)),
+  };
+  const sig = signDoc(authdoc, state.user.privateKey);
+  const token = `${arrayBufferToBase64url(new TextEncoder().encode(canonicalizeWithoutSig(authdoc)))}.${sig}`;
+  const res = await fetch(`${state.basePath}/media`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Barter-Auth': token },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (data.code && data.code < 0) throw bankError(data.code, data.message);
+  return data.ref || data.hash;
+}
+
+async function uploadMediaFile(file) {
+  const ext = EXT_BY_MIME[file.type];
+  if (!ext) throw new Error(`Unsupported image type: ${file.type || 'unknown'} — use SVG, PNG, JPEG, WebP or GIF`);
+  return uploadMediaBytes(new Uint8Array(await file.arrayBuffer()), ext);
+}
+
+/**
+ * Make OUR bank hold every media ref an embedded tree commits to, copying
+ * missing blobs from the bank the post came from. The accepting bank rejects
+ * a post whose blobs it does not hold (post-feed.md §5) — so replying to or
+ * reposting a post from another bank starts with this copy step. Content
+ * addressing keeps the embedded signatures valid: the same bytes are the same
+ * ref at every bank.
+ */
+async function copyTreeMedia(post, sourceBankUrl) {
+  const refs = collectMediaRefs(post);
+  if (refs.length > 64) throw new Error('This thread references too many attachments to copy');
+  // The parent's serving bank first, then every bank we know — a pre-existing
+  // embed may reference blobs its own bank never held (they live where the
+  // ORIGINAL post was stored), and content addressing makes any holder a
+  // valid source.
+  const known = await feedBanks().catch(() => []);
+  const sources = [sourceBankUrl, ...known.map(b => b.url)]
+    .filter(Boolean).filter((u, i, a) => a.indexOf(u) === i);
+  for (const ref of refs) {
+    const ours = await fetch(mediaSrc(null, ref))
+      .then(r => { if (r.body) r.body.cancel(); return r.ok; }).catch(() => false);
+    if (ours) continue;
+    let copied = false;
+    for (const src of sources) {
+      try {
+        const res = await fetch(mediaSrc(src, ref));
+        if (!res.ok) { if (res.body) res.body.cancel(); continue; }
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        const dot = ref.lastIndexOf('.');
+        // A legacy bare-hash ref carries no extension — take the type the
+        // source actually served, never a guess.
+        const ext = dot > 0 ? ref.slice(dot + 1)
+          : EXT_BY_MIME[(res.headers.get('Content-Type') || '').split(';')[0].trim()];
+        if (!ext) throw new Error(`Attachment ${ref.slice(0, 12)}… is not an image type this bank stores`);
+        await uploadMediaBytes(bytes, ext);
+        copied = true;
+        break;
+      } catch (e) {
+        if (e && /is not an image type/.test(e.message || '')) throw e;
+        /* try the next source */
+      }
+    }
+    if (!copied) throw new Error(`Couldn't copy attachment ${ref.slice(0, 12)}… from any bank you know`);
+  }
+}
+
+/**
+ * A voucher's icon/square from its cached meta: prefer the media ref (an
+ * immutable vault URL at the voucher's bank), fall back to the legacy inline
+ * SVG (rendered via data: URI — never inlined into the DOM).
+ */
+function metaImg(meta, info, size, which) {
+  if (!meta) return '';
+  const ref = which === 'square' ? (meta.square || meta.icon) : (meta.icon || meta.square);
+  if (ref) {
+    return `<img src="${escapeHtml(mediaSrc(info && info.bank_url, ref))}" alt=""
+      width="${size}" height="${size}" loading="lazy"
+      style="width:${size}px;height:${size}px;border-radius:6px;object-fit:cover;flex:0 0 auto">`;
+  }
+  const svg = which === 'square' ? (meta.square_svg || meta.icon_svg) : (meta.icon_svg || meta.square_svg);
+  return svgImg(svg, size, '');
 }
 
 function renderMedia(post, bankUrl) {
   const list = Array.isArray(post.media) ? post.media : [];
   if (!list.length) return '';
   return `<div class="flex" style="gap:.5rem;flex-wrap:wrap;margin-top:.5rem">` +
-    list.map(h => `<img src="${escapeHtml(bankUrl.replace(/\/$/, ''))}/media/${escapeHtml(h)}"
+    list.map(h => `<img src="${escapeHtml(mediaSrc(bankUrl, h))}"
       alt="attachment" loading="lazy" style="max-width:100%;max-height:280px;border-radius:8px">`).join('') +
     `</div>`;
 }
@@ -543,9 +658,12 @@ window.wantVoucher = async function(voucherHash) {
   route();
 };
 
-async function renderPosts(app, voucherFilter) {
-  app.innerHTML = header('Posts') + `<div class="container"><p class="small">Loading feed…</p></div>`;
-
+/**
+ * Everything a feed-driven screen needs, assembled once: the merged feed,
+ * display names, and per-voucher {name, issuer, bank, meta}. Shared by the
+ * Posts screen and Discover — both are views over the same follows graph.
+ */
+async function buildFeedContext(voucherFilter) {
   let vouchers = [];
   let feed = { posts: [], authors: [], unreachable: [] };
   let failed = false;
@@ -583,7 +701,6 @@ async function renderPosts(app, voucherFilter) {
   // someone else's voucher.
   const vInfo = {};
   vouchers.forEach(v => { vMap[v.hash] = v.name; });
-  const missing = [...mentionedVouchers].filter(h => !vMap[h]);
   const knownBanks = await feedBanks().catch(() => []);
   await Promise.all([...mentionedVouchers].map(async h => {
     for (const b of knownBanks) {
@@ -598,10 +715,10 @@ async function renderPosts(app, voucherFilter) {
     }
   }));
   window.__feedVouchers = vInfo;
-  void missing;
 
   // One cheap read per voucher for its current presentation — the bank keeps
-  // the latest release cached, so no feed scanning is needed.
+  // the latest release cached (or synthesizes it from the Voucher's own
+  // images), so no feed scanning is needed.
   const vMeta = {};
   await Promise.all([...mentionedVouchers].map(async h => {
     const info = vInfo[h];
@@ -611,6 +728,14 @@ async function renderPosts(app, voucherFilter) {
       if (m) vMeta[h] = m;
     } catch { /* no meta released */ }
   }));
+
+  return { vouchers, feed, failed, names, vMap, vInfo, vMeta };
+}
+
+async function renderPosts(app, voucherFilter) {
+  app.innerHTML = header('Posts') + `<div class="container"><p class="small">Loading feed…</p></div>`;
+
+  const { vouchers, feed, failed, names, vMap, vMeta, vInfo } = await buildFeedContext(voucherFilter);
   const selected = voucherFilter && vMap[voucherFilter] ? voucherFilter : '';
 
   const filterBar = `<div class="card">
@@ -630,16 +755,18 @@ async function renderPosts(app, voucherFilter) {
         ${voucherChooser('post-voucher', vouchers, selected || vouchers[0].hash)}
         <label for="post-body">Post</label>
         <textarea id="post-body" rows="3" placeholder="Redeem at booth 12 all Saturday…"></textarea>
+        <label for="post-files">Attach images <span class="small">(optional — stored by hash in the bank's vault)</span></label>
+        <input type="file" id="post-files" accept="image/svg+xml,image/png,image/jpeg,image/webp,image/gif" multiple>
         <div class="small" id="post-reply-note"></div>
         ${mine.length ? `
         <label><input type="checkbox" id="post-meta" onchange="toggleMetaFields()">
           Also update this voucher's look and description</label>
         <div id="post-meta-fields" style="display:none">
-          <p class="small">Only you can restyle a voucher you issue. The text above becomes its description, and the newest release wins — the voucher itself never changes, so balances denominated in it are untouched.</p>
-          <label for="post-icon">Icon SVG <span class="small">(small round mark)</span></label>
-          <textarea id="post-icon" rows="2" placeholder="&lt;svg viewBox=&quot;0 0 24 24&quot;…&gt;"></textarea>
-          <label for="post-square">Square SVG <span class="small">(card image)</span></label>
-          <textarea id="post-square" rows="2" placeholder="&lt;svg viewBox=&quot;0 0 100 100&quot;…&gt;"></textarea>
+          <p class="small">Only you can restyle a voucher you issue. The text above becomes its description, and the newest release wins — the voucher itself never changes, so balances denominated in it are untouched. Images are uploaded to the vault and referenced by hash.</p>
+          <label for="post-icon-file">Icon <span class="small">(small round mark — SVG or PNG)</span></label>
+          <input type="file" id="post-icon-file" accept="image/svg+xml,image/png,image/jpeg,image/webp,image/gif">
+          <label for="post-square-file">Square card image</label>
+          <input type="file" id="post-square-file" accept="image/svg+xml,image/png,image/jpeg,image/webp,image/gif">
         </div>` : ''}
         <button class="btn" id="post-submit" onclick="submitPost()">Post</button>
         <div class="error" id="post-err"></div>
@@ -649,11 +776,10 @@ async function renderPosts(app, voucherFilter) {
         <a class="btn secondary" href="#/vouchers/new">Mint a voucher</a>`);
 
   const followSet = new Set(feed.authors);
-  const bankUrl = state.bankUrl || state.basePath;
   const list = feed.posts.length
-    ? feed.posts.map(({ hash, post }) => `<div class="card">
+    ? feed.posts.map(({ hash, post, bankUrl }) => `<div class="card">
         <div class="flex small" style="align-items:center;gap:.4rem">
-          ${svgImg((vMeta[post.voucher] || {}).icon_svg, 20, '')}
+          ${metaImg(vMeta[post.voucher], vInfo[post.voucher], 20, 'icon')}
           <span><b>${escapeHtml(postAuthorLabel(post.pubkey, names))}</b>
           · ${escapeHtml(vMap[post.voucher] || post.voucher.slice(0, 10) + '…')}</span>
           ${post.voucher_meta ? '<span class="small">· updated this voucher</span>' : ''}
@@ -700,16 +826,19 @@ async function fetchPostByHash(hash) {
   for (const b of banks) {
     try {
       const p = await rpcCallAt(b.url, b.pubkey, 'get_post', { post_hash: hash });
-      if (p) return p;
+      // The serving bank travels with the post: its media refs resolve there,
+      // and a reply/repost must copy those blobs to OUR bank before submit.
+      if (p) return { post: p, bankUrl: b.url };
     } catch { /* try the next bank */ }
   }
   return null;
 }
 
 window.startReply = async function(hash) {
-  const parent = await fetchPostByHash(hash);
-  if (!parent) return toast('Could not load that post', 'error');
-  pendingParent = { kind: 'reply_to', post: parent };
+  const found = await fetchPostByHash(hash);
+  if (!found) return toast('Could not load that post', 'error');
+  const parent = found.post;
+  pendingParent = { kind: 'reply_to', post: parent, bankUrl: found.bankUrl };
   const note = document.getElementById('post-reply-note');
   if (note) note.innerHTML = `Replying to <b>${escapeHtml((parent.body_md || '').slice(0, 60))}</b> — <a href="#" onclick="clearParent();return false">cancel</a>`;
   const sel = document.getElementById('post-voucher');
@@ -719,9 +848,10 @@ window.startReply = async function(hash) {
 };
 
 window.repostPost = async function(hash) {
-  const parent = await fetchPostByHash(hash);
-  if (!parent) return toast('Could not load that post', 'error');
-  pendingParent = { kind: 'repost', post: parent };
+  const found = await fetchPostByHash(hash);
+  if (!found) return toast('Could not load that post', 'error');
+  const parent = found.post;
+  pendingParent = { kind: 'repost', post: parent, bankUrl: found.bankUrl };
   const note = document.getElementById('post-reply-note');
   if (note) note.innerHTML = `Reposting <b>${escapeHtml((parent.body_md || '').slice(0, 60))}</b> — <a href="#" onclick="clearParent();return false">cancel</a>`;
   const sel = document.getElementById('post-voucher');
@@ -770,17 +900,29 @@ window.submitPost = async function() {
       type: 'post', pubkey: state.user.pubkey, ulid: newUlid(),
       voucher, body_md: body,
     };
-    if (pendingParent) post[pendingParent.kind] = pendingParent.post;
+    if (pendingParent) {
+      post[pendingParent.kind] = pendingParent.post;
+      // Our bank rejects a post whose embedded tree references blobs it does
+      // not hold — copy them over from the parent's bank first (§5).
+      await copyTreeMedia(pendingParent.post, pendingParent.bankUrl);
+    }
+    // Attachments upload first; the post then carries their refs.
+    const filesEl = document.getElementById('post-files');
+    const files = filesEl ? [...(filesEl.files || [])] : [];
+    if (files.length) {
+      post.media = [];
+      for (const f of files) post.media.push(await uploadMediaFile(f));
+    }
     const metaBox = document.getElementById('post-meta');
     if (metaBox && metaBox.checked) {
-      const icon = (document.getElementById('post-icon').value || '').trim();
-      const square = (document.getElementById('post-square').value || '').trim();
-      if (!icon && !square) {
-        err.textContent = 'Add an icon or a square SVG to release meta'; release(); return;
+      const iconFile = (document.getElementById('post-icon-file').files || [])[0];
+      const squareFile = (document.getElementById('post-square-file').files || [])[0];
+      if (!iconFile && !squareFile && !body) {
+        err.textContent = 'Add an image or a description to release meta'; release(); return;
       }
       post.voucher_meta = true;
-      if (icon) post.icon_svg = icon;
-      if (square) post.square_svg = square;
+      if (iconFile) post.icon = await uploadMediaFile(iconFile);
+      if (squareFile) post.square = await uploadMediaFile(squareFile);
     }
     post.sig = signDoc(post, state.user.privateKey);
     await rpcCall('submit_docs', { docs: [post] });
@@ -1259,6 +1401,10 @@ function renderCreateVoucher(app) {
       <label for="v-desc">Description (markdown)</label><textarea id="v-desc" rows="3"></textarea>
       <label for="v-limit">Supply limit <span class="small">(optional — max you will ever issue)</span></label><input id="v-limit" type="number" min="0" step="any" placeholder="unlimited">
       <label for="v-expires">Expires <span class="small">(optional — the voucher is void after this date)</span></label><input id="v-expires" type="date">
+      <label for="v-icon">Icon <span class="small">(optional — stored by hash in the bank's vault; a later meta release can replace it)</span></label>
+      <input type="file" id="v-icon" accept="image/svg+xml,image/png,image/jpeg,image/webp,image/gif">
+      <label for="v-square">Square card image <span class="small">(optional)</span></label>
+      <input type="file" id="v-square" accept="image/svg+xml,image/png,image/jpeg,image/webp,image/gif">
       <label><input type="checkbox" id="v-int"> Integer amounts only</label>
       <button class="btn" style="width:100%;margin-top:1rem" onclick="doCreateVoucher(this)">Create & sign</button>
       <p class="small error" id="v-err"></p>
@@ -1278,6 +1424,16 @@ window.doCreateVoucher = async function(btn) {
   const release = lockBtn(btn);
   try {
     const voucher = { type: 'voucher', pubkey: state.user.pubkey, ulid: newUlid(), bank: state.bankPubkey, name };
+    // Images upload to the vault first; the doc carries only their refs, and
+    // the bank refuses a voucher whose blobs it does not hold.
+    const iconFile = (document.getElementById('v-icon').files || [])[0];
+    const squareFile = (document.getElementById('v-square').files || [])[0];
+    if (iconFile || squareFile) {
+      const icon = iconFile ? await uploadMediaFile(iconFile) : null;
+      const square = squareFile ? await uploadMediaFile(squareFile) : null;
+      // images[0] = icon, images[1] = square, by convention (bank-schema.md).
+      voucher.images = square ? [icon || square, square] : [icon];
+    }
     if (desc) voucher.description_md = desc;
     if (limit) voucher.limit = Number(limit);
     // Protocol wants an ISO 8601 datetime; treat the picked day as end-of-day UTC.
@@ -1658,13 +1814,70 @@ window.doCreateOrder = async function(btn) {
   }
 };
 
+/**
+ * Discover — vouchers surfacing through posts from the people you follow
+ * (discovery.md §5). Every post is anchored to a voucher, so the merged feed
+ * IS a stream of voucher sightings: de-duplicate them newest-first, dress
+ * each in its released meta (image, description), and offer the actions that
+ * close the loop — trade for it, read its feed, follow its issuer. Open
+ * offers on vouchers you already know remain below as a second channel.
+ */
 async function renderDiscover(app) {
+  app.innerHTML = header('Discover') + `<div class="container"><p class="small">Loading…</p></div>`;
+
+  const { feed, failed, names, vInfo, vMeta } = await buildFeedContext('');
   const known = await knownVouchers().catch(() => []);
   const nameByHash = {};
   known.forEach(v => { nameByHash[v.hash] = v.name; });
   let body = header('Discover') + `<div class="container">`;
+
+  // --- vouchers seen in the feed, newest sighting first --------------------
+  const seenVouchers = [];
+  const seenSet = new Set();
+  const noteVoucher = p => {
+    if (!p) return;
+    if (p.voucher && !seenSet.has(p.voucher)) { seenSet.add(p.voucher); seenVouchers.push(p.voucher); }
+    noteVoucher(p.reply_to);
+    noteVoucher(p.repost);
+  };
+  feed.posts.forEach(({ post }) => noteVoucher(post));
+
+  const followSet = new Set(feed.authors);
+  const cards = seenVouchers.map(h => {
+    const info = vInfo[h];
+    if (!info) return '';
+    const meta = vMeta[h];
+    const mine = state.user && info.issuer === state.user.pubkey;
+    const issuerLabel = postAuthorLabel(info.issuer, names);
+    const desc = meta && meta.description_md
+      ? `<p class="small">${escapeHtml(meta.description_md.slice(0, 160))}${meta.description_md.length > 160 ? '…' : ''}</p>` : '';
+    return `<div class="card">
+      <div class="flex" style="gap:.75rem;align-items:flex-start">
+        ${metaImg(meta, info, 56, 'square')}
+        <div style="min-width:0;flex:1">
+          <div><strong>${escapeHtml(info.name)}</strong></div>
+          <div class="small">issued by <b>${escapeHtml(issuerLabel)}</b></div>
+          ${desc}
+        </div>
+      </div>
+      <div class="flex" style="gap:.5rem;margin-top:.6rem;flex-wrap:wrap">
+        ${mine ? '<span class="small">This is your voucher.</span>'
+          : `<button class="btn" onclick="wantVoucher('${jsStr(h)}')">Trade for this</button>`}
+        <a class="btn secondary" href="#/posts/${escapeHtml(h)}">Read its feed</a>
+        ${!mine && !followSet.has(info.issuer)
+          ? `<button class="btn secondary" onclick="followAuthor('${jsStr(info.issuer)}')">Follow issuer</button>` : ''}
+      </div>
+    </div>`;
+  }).filter(Boolean).join('');
+
+  body += `<p class="small">Vouchers surface here through <a href="#/posts">posts</a> from the people you <a href="#/network">follow</a> — your bank reposts what its users publish, so following your bank is enough to start. There is no global search: your follows are the index.</p>`;
+  body += failed
+    ? loadError('the feed')
+    : (cards || `<div class="card"><p class="small">Nothing discovered yet. Follow more people under <a href="#/network">Network</a>, browse <a href="#/registry">the registry</a>, or check back once the people you follow have posted.</p></div>`);
+
+  // --- open offers on vouchers you already know (second channel) -----------
   if (!known.length) {
-    body += card('Discover trades', `<p class="small">To discover trades you first need a voucher you issue, or an issuer you trust. <a href="#/vouchers/new">Create a voucher</a> or <a href="#/network">trust an issuer</a>, then come back.</p>`);
+    body += card('Open offers', `<p class="small">To see tradable offers you first need a voucher you issue, or an issuer you trust. <a href="#/vouchers/new">Create a voucher</a> or trade for one above.</p>`);
     app.innerHTML = body + `</div>`;
     return;
   }

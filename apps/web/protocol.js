@@ -256,6 +256,15 @@ export function validateVoucher(d, bankPubkey) {
     if (b.integer !== undefined && typeof b.integer !== 'boolean') {
         throw new ValidationError('integer must be boolean');
     }
+    if (b.images !== undefined) {
+        if (!Array.isArray(b.images)) {
+            throw new ValidationError('images must be an array');
+        }
+        if (b.images.length > MAX_VOUCHER_IMAGES) {
+            throw new ValidationError(`images: at most ${MAX_VOUCHER_IMAGES}`);
+        }
+        b.images.forEach((m, i) => assertMediaRefField(m, `images[${i}]`));
+    }
     return d;
 }
 export function validateAccount(d) {
@@ -393,6 +402,87 @@ export function validateAddress(d) {
     }
     return d;
 }
+/** Extensions a ref may carry, and the Content-Type each one serves as. */
+export const MEDIA_EXT_TYPES = {
+    svg: 'image/svg+xml',
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    webp: 'image/webp',
+    gif: 'image/gif',
+};
+/** Content-Type → canonical extension (the reverse of MEDIA_EXT_TYPES). */
+export function extForContentType(ct) {
+    const base = ct.split(';')[0].trim().toLowerCase();
+    for (const [ext, type] of Object.entries(MEDIA_EXT_TYPES)) {
+        if (type === base)
+            return ext;
+    }
+    return null;
+}
+/**
+ * Parse `"<hash>.<ext>"` into its parts, or null when the string is not a
+ * well-formed ref (unknown extension, or a hash that is not plausible base58
+ * sha256). A bare hash with no extension parses as null — callers that accept
+ * the legacy bare form use `mediaRefHash` instead.
+ */
+export function parseMediaRef(ref) {
+    if (typeof ref !== 'string')
+        return null;
+    const dot = ref.lastIndexOf('.');
+    if (dot <= 0 || dot === ref.length - 1)
+        return null;
+    const hash = ref.slice(0, dot);
+    const ext = ref.slice(dot + 1).toLowerCase();
+    // Own-key check, not `in`: a plain object inherits Object.prototype, so
+    // `in` would bless "constructor" or "__proto__" as extensions.
+    if (!Object.hasOwn(MEDIA_EXT_TYPES, ext))
+        return null;
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,60}$/.test(hash))
+        return null;
+    return { hash, ext };
+}
+/** The content hash of a ref — or the string itself for a legacy bare hash. */
+export function mediaRefHash(ref) {
+    const parsed = parseMediaRef(ref);
+    return parsed ? parsed.hash : ref;
+}
+/**
+ * Every media ref a post commits to, across its whole embedded
+ * `reply_to`/`repost` tree — attachments plus icon/square meta refs,
+ * de-duplicated. This is the set a bank checks for presence at intake, and
+ * the set a client must copy over before submitting a repost/reply of a post
+ * whose blobs live at another bank (post-feed.md §5).
+ */
+export function collectMediaRefs(post) {
+    const out = new Set();
+    const walk = (p) => {
+        if (!p)
+            return;
+        for (const m of p.media ?? [])
+            out.add(m);
+        if (p.icon)
+            out.add(p.icon);
+        if (p.square)
+            out.add(p.square);
+        walk(p.reply_to);
+        walk(p.repost);
+    };
+    walk(post);
+    return [...out];
+}
+/**
+ * Protocol-level cap on how many images a Voucher doc may carry — enforced by
+ * `validateVoucher` at every bank, so it must be documented, not policy
+ * (bank-schema.md §1.1).
+ */
+export const MAX_VOUCHER_IMAGES = 8;
+/**
+ * Protocol-level cap on `media` entries per post. A repost embeds its whole
+ * ancestor tree and the accepting bank checks (and a reposting client copies)
+ * every ref in it, so an uncapped list is a copy-amplification lever.
+ */
+export const MAX_POST_MEDIA = 12;
 /**
  * Maximum `reply_to`/`repost` nesting a validator will walk (post-feed.md §6:
  * "banks cap embed depth and total post size at intake"). The cap is a
@@ -435,8 +525,19 @@ export function validatePost(d, depth = 0) {
         if (!Array.isArray(b.media)) {
             throw new ValidationError('media must be an array');
         }
-        b.media.forEach((m, i) => assertBase58(m, `media[${i}]`));
+        if (b.media.length > MAX_POST_MEDIA) {
+            throw new ValidationError(`media: at most ${MAX_POST_MEDIA} per post`);
+        }
+        // Canonical form is "<hash>.<ext>"; a bare base58 hash remains valid so
+        // that posts signed before extensions existed still verify when embedded.
+        b.media.forEach((m, i) => {
+            if (parseMediaRef(m))
+                return;
+            assertBase58(m, `media[${i}]`);
+        });
     }
+    assertMediaRefField(b.icon, 'icon');
+    assertMediaRefField(b.square, 'square');
     assertPostSvg(b.icon_svg, 'icon_svg');
     assertPostSvg(b.square_svg, 'square_svg');
     if (b.voucher_meta !== undefined && typeof b.voucher_meta !== 'boolean') {
@@ -465,6 +566,14 @@ export function validatePost(d, depth = 0) {
  * What this enforces is that the value is a bounded string that actually looks
  * like an SVG document, so garbage and oversized blobs never reach storage.
  */
+/** An optional field that, when present, must be a well-formed MediaRef. */
+function assertMediaRefField(v, name) {
+    if (v === undefined)
+        return;
+    if (!parseMediaRef(v)) {
+        throw new ValidationError(`${name} must be a media ref "<hash>.<ext>"`);
+    }
+}
 function assertPostSvg(v, name) {
     if (v === undefined)
         return;
