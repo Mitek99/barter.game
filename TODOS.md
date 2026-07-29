@@ -11,8 +11,9 @@ Deferred items. Each entry: **what / why / context / depends on**.
 - **Depends on:** Stable v1 Order semantics; a decision on rate semantics for multi-leg Orders.
 
 ### Implement the new protocol read surfaces
-- **What:** Implement in `apps/bank` what [`protocol/bank-rpc.md`](./protocol/bank-rpc.md) §2.4 now specifies: `list_voucher_records` (issuer backup export — **MUST** for compliance), `list_account_records` (holder history), `get_balance` (bank-signed `Balance` doc — needs the `Balance` type + validator in `packages/protocol`), `list_public_balances` + `Account.public`, and pagination + the issuer filter on `list_vouchers`. Enforce the privacy default while at it: `get_account_balance`/`list_account_records` restricted to the holder unless the account is public.
-- **Why:** The spec now leads the implementation. Issuer backup/re-issue (ETHOS §7) and public-holdings discovery ([`protocol/discovery.md`](./protocol/discovery.md) §6) hang off these surfaces; the unrestricted `get_account_balance` disclosure gap (docs/REVIEW.md S10) closes as a side effect.
+- **What:** Implement in `apps/bank` what [`protocol/bank-rpc.md`](./protocol/bank-rpc.md) §2.4 now specifies: `list_voucher_records` (issuer backup export — **MUST** for compliance), `list_account_records` (holder history, restricted to the holder unless the account is public), `get_balance` (bank-signed `Balance` doc — needs the `Balance` type + validator in `packages/protocol`), `list_public_balances` + `Account.public`, and pagination on `list_vouchers`.
+- **Done already:** the `get_account_balance` privacy default is enforced — holder or the voucher's issuer only (covered by `apps/bank/e2e-account-privacy.ts`), which closed the docs/REVIEW.md S10 disclosure gap — and `list_vouchers` honors an explicit `issuer` param and `filter:'mine'`.
+- **Why:** The spec now leads the implementation. Issuer backup/re-issue (ETHOS §7) and public-holdings discovery ([`protocol/discovery.md`](./protocol/discovery.md) §6) hang off these surfaces.
 - **Context:** `protocol/bank-schema.md` §1.2 (`public` flag) and §1.8 (`Balance`); pagination convention in `bank-rpc.md` §2.4.
 - **Depends on:** Nothing — additive.
 
@@ -24,7 +25,7 @@ Deferred items. Each entry: **what / why / context / depends on**.
 - **Depends on:** Nothing — additive.
 
 ### Rebuild the demo scripts
-- **What:** `scripts/demo-local.sh` and `scripts/demo-deploy.sh` still invoke the removed CLI (`apps/cli/src/index.ts`) and are broken; rebuild them against the RPC/web flow (the `apps/bank/e2e-*.ts` scripts are the working seeds) or delete them. `scripts/genkey-deno.ts` imports a nonexistent module (`apps/bank/protocol.ts`) — fix or remove (`apps/bank/genkey.ts` is the working keygen).
+- **What:** `scripts/demo-local.sh` and `scripts/demo-deploy.sh` still invoke the removed CLI (`apps/cli/src/index.ts`) and are broken. A working command-line client has since shipped — [`scripts/emulate.ts`](./scripts/emulate.ts) (documented in [`EMULATED.md`](./EMULATED.md)) speaks the same signed RPC + `/ui` surface as the SPA, with web-compatible keystores — so rebuild the demo scripts as thin wrappers over it (or delete them) rather than reconstructing a CLI from the `apps/bank/e2e-*.ts` scripts. `scripts/genkey-deno.ts` imports a nonexistent module (`apps/bank/protocol.ts`) — fix or remove (`apps/bank/genkey.ts` is the working keygen).
 - **Why:** A README that points at broken scripts costs trust; right now the README routes around them.
 - **Depends on:** Nothing.
 
@@ -34,10 +35,14 @@ Deferred items. Each entry: **what / why / context / depends on**.
 - **Context:** Subsumes the "Counterparty-blind coordinator" idea in the AI-agents section below; `scenarios/builder-event.md` and `scenarios/coordinator-arbitrage.md` show the manual version.
 - **Depends on:** Public Offer polling at enough banks to matter; the federated directory (below) helps.
 
-### Post replies, media, and embedded documents
-- **What:** Threaded replies (`reply_to`), embedded images/video, and first-class embedded protocol docs (pubkeys, Vouchers, Orders) inside posts — so a recommendation can carry the thing it recommends.
-- **Why:** Reserved as future work in [`protocol/post-feed.md`](./protocol/post-feed.md) §6; to be figured out as real feeds appear.
-- **Depends on:** Post feeds shipped and used.
+### ~~Post replies and media~~ — DONE
+- **What:** Threaded replies (`reply_to`), reposts, and embedded media inside posts.
+- **Status:** shipped as normative protocol ([`protocol/post-feed.md`](./protocol/post-feed.md) §4–§5). `reply_to`/`repost` embed the full parent post; `media` carries content-addressed vault refs (`MAX_POST_MEDIA` = 12 is a protocol-level validator cap), served at `GET /:bank/media/<hash>.<ext>`; the reference bank refuses posts whose embedded tree references unstored blobs, with a 64-ref tree cap as intake policy.
+
+### Embedded protocol documents in posts
+- **What:** First-class embedded protocol docs (pubkeys, Vouchers, Orders) inside posts — so a recommendation can carry the thing it recommends. Today a `Post` embeds only other Posts and media refs.
+- **Why:** Reserved as future work in [`protocol/post-feed.md`](./protocol/post-feed.md) §9; to be figured out as real feeds appear.
+- **Depends on:** Post feeds in real use.
 
 ### Cross-bank inbox aggregation
 - **What:** A single inbox view that shows all of a user's balances and in-flight deals across every bank that issued a Voucher they hold.

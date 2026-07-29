@@ -4,9 +4,17 @@ layout: hextra-home
 ---
 
 {{< hextra/hero-container >}}
-  {{< hextra/hero-headline >}}Be your own bank.{{< /hextra/hero-headline >}}
-  {{< hextra/hero-subtitle >}}A federated mutual-credit ledger. Mint personal currencies, trade them with people you trust, and settle cryptographically — no central authority, no middleman.{{< /hextra/hero-subtitle >}}
+  {{< hextra/hero-headline >}}Mint your own currency.{{< /hextra/hero-headline >}}
+  {{< hextra/hero-subtitle >}}A federated mutual-credit ledger. Mint personal currencies, hold them at any bank you trust — your own or somebody else's — and settle cryptographically. No central authority, no middleman.{{< /hextra/hero-subtitle >}}
 {{< /hextra/hero-container >}}
+
+<div class="content hx:mt-10">
+
+{{< callout type="info" >}}
+**Why "game"?** barter.game is designed as a game first. We suggest treating it as a practice environment for trading skills — a safe space to experiment with personal currencies, negotiation, and settlement. Only use it for real economic transactions if your local laws and circumstances permit. The "game" framing keeps the stakes appropriate while the protocol itself is serious cryptography.
+{{< /callout >}}
+
+</div>
 
 <div class="hx:mt-20 hx:mb-20">
 {{< hextra/feature-grid >}}
@@ -53,7 +61,7 @@ layout: hextra-home
 
 ## How it works in one paragraph
 
-Every user and every bank is an **ed25519 keypair**. Voucher, Account, Signature, Subscription, and Order docs are canonicalized via RFC 8785 JSON, SHA-256-hashed, and content-addressed. Ledger records are bank-minted with ULIDs. In a cross-bank trade the coordinator creates the record pairs (`create_records`), holders submit signed Orders (`submit_docs`), and the coordinator clears each Order at each bank with a signed `Mandate` (`submit_mandate`). From there the banks self-advance: per-record approvals, holds, then settlement. Banks discover each other via the `bank` fields in Orders and call each other directly through the Address registry; subscriptions are optional. No bank ever sees the full transaction. The math binds everyone together.
+Every user and every bank is an **ed25519 keypair**. Voucher, Account, Order, Mandate, Offer, Signature, Address, and Post docs are canonicalized via RFC 8785 JSON, SHA-256-hashed, and content-addressed. Ledger records are bank-minted with ULIDs. In a cross-bank trade the coordinator creates the record pairs (`create_records`), holders submit signed Orders (`submit_docs`), and the coordinator clears each Order at each bank with a signed `Mandate` (`submit_mandate`). From there the banks self-advance: per-record approvals, holds, then settlement. Banks discover each other via the `bank` fields in Orders and call each other directly through the Address registry; a lost push can be relayed by hand. There is no global ledger: only the banks party to a deal see its records — a bank receives exactly the records that satisfy the Orders it stores. The math binds everyone together.
 
 [Read the full docs →](docs)
 

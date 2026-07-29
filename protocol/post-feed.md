@@ -21,13 +21,15 @@ interface Post extends BaseDoc {
   ulid: ULID;              // feed ordering key (reverse-chronological)
   voucher: Base58SHA256;   // the Voucher this post is anchored to
   body_md: string;         // markdown body; may reference media by ref
-  media?: MediaRef[];      // content-addressed media refs "<hash>.<ext>" (§5)
+  media?: MediaRef[];      // content-addressed media refs "<hash>.<ext>" (§5);
+                           // at most 12 per post (protocol cap, §5)
   icon?: MediaRef;         // voucher icon (meta releases; see voucher_meta)
   square?: MediaRef;       // voucher square card image (meta releases)
   voucher_meta?: boolean;  // true ⇒ this post RELEASES the voucher's meta:
                            // icon/square + body_md become the voucher's
                            // current presentation, newest release winning.
-                           // Only the voucher's issuer may release.
+                           // Only the voucher's issuer may release; clients
+                           // read the result via get_voucher_meta (§3).
   reply_to?: Post;         // the FULL parent Post, embedded (see §4)
   repost?: Post;           // the FULL reposted Post, embedded (see §4)
   sig: Base58Signature;    // author's signature
@@ -60,9 +62,11 @@ bank chooses to *store and serve* is another matter (§6).
 own `sig`, and its own `reply_to`/`repost` in turn), rather than a hash. A reply
 or repost is therefore **self-contained and independently verifiable**: a reader
 checks the whole thread's signatures from the bytes in hand, with no follow-up
-fetch. Because the embed is recursive, a deep thread nests its ancestors; banks
-cap embed depth and total post size at intake (§6), and a client renders as
-deep as it received.
+fetch. Because the embed is recursive, a deep thread nests its ancestors; the
+protocol caps nesting at **8 levels** of `reply_to`/`repost` — validation
+rejects deeper trees at every bank and client, a termination guarantee rather
+than a tunable — banks additionally cap total post size at intake (§6), and a
+client renders as deep as it received.
 
 > **Invariant:** A Post's content hash is `base58(sha256(canonical(post minus
 > top-level sig)))`, as for every signed doc. An embedded `reply_to`/`repost`
@@ -75,10 +79,16 @@ deep as it received.
 Posts are submitted through the standard `submit_docs` write path. The bank MUST
 validate shape, author signature, that `voucher` resolves to a Voucher known to
 this bank (its own, or one whose doc was presented to it — so any bank the
-issuer uses can carry the feed), and that every embedded `reply_to`/`repost`
-Post is itself well-formed and correctly signed. Every media ref the post
-commits to — across its whole embedded tree — MUST already be stored at this
-bank (upload precedes the post, §5).
+issuer uses can carry the feed), that every embedded `reply_to`/`repost`
+Post is itself well-formed and correctly signed, and — when `voucher_meta` is
+true — that the author's pubkey equals the Voucher's issuer pubkey (`-32001`
+otherwise; only the issuer may restyle its own currency). Every media ref the
+post commits to — across its whole embedded tree — MUST already be stored at
+this bank (upload precedes the post, §5). The reference bank additionally
+accepts a post only from the author's own authenticated session — the author
+pubkey must equal the RPC sender (`-32001`), so a third party cannot relay
+someone else's signed post there; a bank that wants relayed submission may
+allow it as policy.
 Beyond validity, **acceptance is bank policy** — a spam filter, an allowlist, a
 paywall, per-key rate limits, or nothing at all. A rejected post gets `-32000`;
 nothing obliges a bank to store any post.
@@ -98,6 +108,10 @@ list_posts(pubkey: Base58PubKey,
 
 get_post(post_hash) → Post
 get_post_signatures(post_hash) → { signatures: Signature[] }
+
+get_voucher_meta(voucher_hash)
+→ { voucher, icon?, square?, icon_svg?, square_svg?,
+    description_md?, post, ulid } | null
 ```
 
 - **`pubkey`** — the **author** whose feed is being read. Any keypair: a bank, an
@@ -120,9 +134,20 @@ post is signed, so they cannot live in the post body; they are fetched
 separately with `get_post_signatures(post_hash)`, mirroring
 `get_record_signatures` for records.
 
-`list_posts` and `get_post`/`get_post_signatures` are public reads. Because the
-results are immutable and content-addressed, banks MAY also expose them as
-cacheable REST GETs (`bank-rpc.md` §2.5).
+**`get_voucher_meta`** answers "what does this voucher look like right now":
+the bank caches the newest issuer meta release per voucher at intake and
+returns it here (`post` names the releasing Post's hash). When the issuer has
+never released, it falls back to the Voucher doc's own fields — `images[0]` as
+icon, `images[1]` as square card (by convention) and `description_md` — and
+returns `null` only when the voucher carries neither. This is the read half of
+`voucher_meta` releases (§1); the Discover surface
+([`discovery.md`](./discovery.md) §5) resolves every sighted voucher through
+it.
+
+`list_posts`, `get_post`/`get_post_signatures`, and `get_voucher_meta` are
+public reads. Because post bodies are immutable and content-addressed, banks
+MAY also expose the post reads as cacheable REST GETs (`bank-rpc.md` §2.5);
+`get_voucher_meta` is mutable (newest release wins) and caches accordingly.
 
 **Visibility is client-side curation.** There is no global timeline and no
 bank-side ranking. A reader's client polls the banks an author uses and shows
@@ -167,8 +192,10 @@ construction). The **extension is for delivery**: a bank serves
 GET <bank-url>/media/<hash>.<ext>      — unauthenticated
 ```
 
-with the `Content-Type` the extension implies (`svg` → `image/svg+xml`,
-`png`, `jpg`/`jpeg`, `webp`, `gif`, …) and immutable caching headers. Because
+with the `Content-Type` the extension implies and immutable caching headers.
+The extension set is **closed at the protocol level** — exactly `svg`
+(`image/svg+xml`), `png`, `jpg`/`jpeg`, `webp`, `gif`; a ref with any other
+extension fails validation at every bank (`bank-rpc.md` §2.5). Because
 the URL is content-addressed and the extension names the type, blobs can be
 statically hosted and pushed through any caching CDN — fast, cheap public
 downloads with no byte-sniffing anywhere. The bank verifies the bytes hash to
@@ -176,7 +203,14 @@ the ref's hash before serving.
 
 - **Upload precedes the doc.** The author uploads each blob to the bank
   (`bank-rpc.md` §2.5), which returns the ref; the doc then carries the ref.
-  Acceptance (size caps, formats, quotas) is bank policy, like posts.
+  Acceptance (size caps, quotas) is bank policy, like posts; the format set
+  is the closed protocol list above.
+- **Media counts are protocol caps.** A post carries at most **12** `media`
+  refs — enforced by validation, so it binds every post in an embedded tree
+  at every compliant bank. Separately, the reference bank's intake bounds the
+  media refs across the **whole embedded tree** at **64** (`-32000`); that
+  bound is reference-bank policy, since per-ref checking and cross-bank
+  copying are work deep embeds could otherwise multiply.
 - **Accepting a doc means holding its images.** When a bank accepts a Post it
   MUST already hold every ref the post commits to — across the **whole
   embedded `reply_to`/`repost` tree**, `media` lists and `icon`/`square`
@@ -196,9 +230,19 @@ the ref's hash before serving.
 
 Consistent with the bank openness posture (`README.md` §1.1): validity checks
 are protocol, carriage is policy. A bank MAY decline posts or media at intake,
-blocklist an abusive author key, cap embed depth / post size / media size, or
-stop serving stored content. None of that revokes the author's signature — a
-post, once signed, is a fact; the bank only controls its own distribution of it.
+blocklist an abusive author key, cap post size / media size, bound the total
+media refs across an embedded tree (the reference bank allows 64, §5), or
+stop serving stored content. Embed depth is **not** a per-bank knob: the
+protocol itself caps nesting at 8 (§1). None of that revokes the author's
+signature — a post, once signed, is a fact; the bank only controls its own
+distribution of it.
+
+*Non-normative:* the reference bank **reposts every user post it accepts**
+under its own key — a bank-signed post whose `repost` embeds the stored post.
+Because new users follow their host bank by default
+([`discovery.md`](./discovery.md) §5), this carriage-policy amplification is
+what seeds a newcomer's feed; unfollowing the bank is the opt-out. The repost
+is best-effort and never fails the author's write.
 
 ## 7. Client-side feeds (non-normative)
 

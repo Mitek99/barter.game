@@ -20,7 +20,7 @@ So strangers *can* trade here safely. What the protocol declines to do is tell y
 | Traditional alt-currency | barter.game |
 |---|---|
 | Strangers must trust each other | Trust the voucher's **issuer** and the **bank** — never your counterparty |
-| Central clearing house | Every user is their own bank; federation is native |
+| Central clearing house | Anyone can run a bank; users hold accounts at a bank they trust — their own or someone else's. Federation is native |
 | Reputation scores and arbitration | Social enforcement; the protocol records, it does not judge |
 | Pre-funded collateral | Mutual credit: issuers go negative, holders go positive, sum = 0 |
 
@@ -30,8 +30,6 @@ Every bank is its own URL, its own ed25519 key, its own ledger. Banks talk to ea
 
 If barter.game ever centralized — even subtly, even for "the demo" — we have built the wrong thing.
 
-## Be your own bank
+## Be your own bank — if you want to
 
-The fantasy is older than money: you, sovereign, issuing your own currency backed by something you can deliver. Not a token wrapping a stablecoin. Not a loyalty point. A signed voucher — "1 logo, by Alice, due on demand." Yours. You decide how many exist. You decide who gets them. You decide what they cost.
-
-The system exists to make this fantasy practical, not theoretical.
+The sovereignty lives in your keys, not your hosting: you may run your own bank, but you don't need to — you can host your vouchers in a bank run by somebody else, and leave it the moment your trust does. The full creed is [ethos §1](ethos).

@@ -36,11 +36,11 @@ barter.game/
 ├── tsconfig.json             # Shared TypeScript config (strict, ES2022, bundler resolution)
 ├── deno.json                 # Deno config: import map, test includes, Deno Deploy app
 ├── bun.lock                  # Bun lockfile
-├── README.md TODOS.md WORKAROUNDS.md
+├── README.md TODOS.md WORKAROUNDS.md EMULATED.md
 ├── protocol/                 # THE CONTRACT — invariant protocol spec
 │   ├── README.md             #   overview, trust model, settlement model
 │   ├── base.md               #   BaseDoc, Signature, Address, envelope, replay, discovery doc
-│   ├── bank-schema.md        #   Voucher/Account/Record/Order/Offer/Mandate/Subscription/Balance + ledger semantics
+│   ├── bank-schema.md        #   Voucher/Account/Record/Order/Offer/Mandate/Balance + ledger semantics (Post lives in post-feed.md)
 │   ├── bank-rpc.md           #   bank RPC methods, pagination, orchestration recipe
 │   ├── discovery.md          #   registries, offers, QR profile bundles, public holdings
 │   └── post-feed.md          #   Post doc, voucher-anchored feeds, moderation
@@ -51,20 +51,25 @@ barter.game/
 │       └── test-deno/        #   cross-runtime parity tests
 ├── apps/
 │   ├── bank/                 # Deno bank server (see its README.md)
-│   │   ├── main.ts           #   HTTP router: RPC + UI API + SPA + Barter Links
+│   │   ├── main.ts           #   HTTP router: RPC + UI API + SPA + Barter Links + media vault (/:bank/media)
 │   │   ├── rpc.ts            #   JSON-RPC envelope verification + replay
 │   │   ├── registry.ts       #   method → handler map
 │   │   ├── advance.ts        #   self-advance engine (ready → hold → settle)
 │   │   ├── db.ts env.ts peer.ts local.ts ui.ts genkey.ts
-│   │   ├── handlers/         #   submit_docs, submit_mandate, create_records, notify_signatures, get_*, subscribe
-│   │   └── e2e-*.ts          #   end-to-end settlement checks (local, crossbank, reject, replay)
+│   │   ├── handlers/         #   submit_docs, submit_mandate, create_records, notify_signatures,
+│   │   │                     #   get_record_signatures, and get.ts (get_voucher, list_vouchers, list_accounts,
+│   │   │                     #   list_offers, get_offer, get_invoice, get_cheque, get_address, get_account_balance,
+│   │   │                     #   list_posts, get_post, get_post_signatures, get_voucher_meta)
+│   │   └── e2e-*.ts          #   nine end-to-end checks (local, cheque-local, crossbank, sameswap, reject,
+│   │                         #   replay, forged-sigs, account-privacy, posts)
 │   └── web/                  # Browser SPA served by the bank (see its README.md)
 │       ├── index.html app.js protocol.js qr.js styles.css vendor/
 │       └── sw.js icon.svg favicon.ico icon-*.png apple-touch-icon.png
 │                             #   installable PWA (home-screen install offer);
 │                             #   the manifest is generated per bank by ui.ts
 ├── scenarios/                # Step-by-step interaction traces (cheque, invoice, swaps, builder event)
-├── scripts/                  # genkey.ts (bun) — NOTE: demo-*.sh are stale (invoke the removed CLI)
+├── scripts/                  # emulate.ts + emu (emulated-user CLI, see EMULATED.md), genkey.ts (bun),
+│                             #   genkey-deno.ts, emulated-svg/ — NOTE: demo-*.sh are stale (invoke the removed CLI)
 ├── docs/                     # Design notes, reviews, UI specs, legacy material
 └── website/                  # Hugo site (Hextra theme)
 ```
@@ -89,11 +94,11 @@ bun run test:all
 | `bun run test` | Bun | Protocol library: canonical JSON golden vectors, crypto, all doc validators |
 | `bun run test:deno` | Deno | The SAME golden vectors under Deno (**cross-runtime parity**) |
 | `deno test` | Deno | Parity vectors + bank tests per `deno.json` `test.include` |
-| `deno run --allow-net --allow-env --allow-read --allow-write --unstable-kv apps/bank/e2e-<name>.ts` | Deno | End-to-end settlement: `local` (single-bank lifecycle), `crossbank` (bilateral swap, lead/follow cascade), `reject` (uncoverable debit rejects the deal), `replay` (settle-replay resistance) |
+| `deno run --allow-net --allow-env --allow-read --allow-write --unstable-kv apps/bank/e2e-<name>.ts` | Deno | Nine end-to-end suites: `local` (single-bank lifecycle), `cheque-local` (single-bank cheque settlement), `crossbank` (bilateral swap, lead/follow cascade), `sameswap` (same-bank two-voucher swap minting two record pairs), `reject` (uncoverable debit rejects the deal), `replay` (settle-replay resistance), `forged-sigs` (peer signature-authority checks), `account-privacy` (balance-read authorization), `posts` (posts/feeds/follows, bank auto-repost, media vault) |
 
 The **cross-runtime parity suite is load-bearing**. If Bun and Deno disagree on a canonical hash, every signature in the protocol becomes unverifiable across implementations. Run it before every release.
 
-> `scripts/demo-local.sh` and `scripts/demo-deploy.sh` are currently **broken** — they invoke the removed CLI (`apps/cli/`). Rebuilding them is tracked in `TODOS.md`. Do not cite them as working.
+> `scripts/demo-local.sh` and `scripts/demo-deploy.sh` are currently **broken** — they invoke the removed CLI (`apps/cli/`). Rebuilding them is tracked in `TODOS.md`. Do not cite them as working. The working command-line client is `scripts/emu` (`scripts/emulate.ts`) — see `EMULATED.md`.
 
 ### Website
 
@@ -141,11 +146,12 @@ cd website && hugo mod get && hugo --gc --minify
 
 - **Private keys (user)**: generated in the browser; only the PBKDF2+AES-GCM ciphertext reaches the bank. There is no password recovery — lost password means lost account.
 - **Bank keys**: loaded from `BANK_<NAME>_PRIV_KEY` env vars. Never log them, never return them in RPC responses.
-- **Signing model**: Users sign Voucher, Account, Order, Address, and Post docs. The coordinator signs Mandates. Banks sign Offer and Balance docs plus every ledger `Signature` (`ready`/`hold`/`settle`/`reject`). Records are bank-minted (bank-assigned ULIDs) and referenced by content hash; only the `pair`/`deal_id` grouping uses ULIDs.
+- **Signing model**: Users sign Voucher, Account, Order, Address, and Post docs. The coordinator signs Mandates. Banks sign Offer and Balance docs plus every ledger `Signature` (`ready`/`hold`/`settle`/`reject`) — and banks also sign Post docs: on every accepted user post the bank mints a bank-signed auto-repost embedding the original into its own feed (`apps/bank/handlers/submit_docs.ts` `bankRepost`; carriage per `protocol/post-feed.md`). Records are bank-minted (bank-assigned ULIDs) and referenced by content hash; only the `pair`/`deal_id` grouping uses ULIDs.
 - **Replay protection / idempotency**: Every RPC envelope carries a ULID `id` bound to `(sender_pubkey, recipient_pubkey)`. The bank stores seen triples in KV with a 24h TTL and rejects duplicates with `-32002`. `create_records` is idempotent on `(deal_id, giver, receiver)` and rejects the same key with different amounts.
 - **Signature verification**: Every inbound request is verified against its `pubkey` before any handler runs. The `to` field must match the recipient bank's pubkey.
-- **Account privacy**: Accounts are private by default; a bank MUST NOT disclose balances or history to third parties unless the account sets `public: true` (`protocol/bank-schema.md` §1.2). Account names never leave the holder's control.
-- **Double-spend gate**: an atomic KV check-and-set on the active-hold key enforces at most one active hold per account per external deal. Conflicts surface as `-32003` or a quiet back-off inside the advance engine.
+- **Account privacy**: Accounts are private; the reference bank discloses a balance only to the account holder and the voucher's issuer (`apps/bank/handlers/get.ts`, verified by `e2e-account-privacy.ts`). The spec's `public: true` opt-in (`protocol/bank-schema.md` §1.2) is specified but not yet implemented in the reference bank. Account names never leave the holder's control.
+- **Media vault**: content-addressed blobs served at `/:bank/media` by ref `<hash>.<ext>` (`apps/bank/ui.ts` `handleMedia`). Upload sits behind write auth and refuses anything outside the svg/png/jpg/jpeg/webp/gif extension allowlist (plus a size cap), so a caller-chosen Content-Type can never make the unauthenticated GET host arbitrary pages on the bank origin; GET re-verifies the content hash and serves immutable responses with `X-Content-Type-Options: nosniff` and a sandboxing CSP. `submit_docs` accepts a post only if every media ref in its whole embedded tree is already stored at this bank — cross-bank reposts copy the blobs first. Details in `protocol/post-feed.md`.
+- **Double-spend gate**: an atomic KV check-and-set on the active-hold key enforces at most one active hold per account per external deal. Conflicts never error outward: the advance engine quietly issues no hold signatures that pass and re-attempts on later events (a stalled deal is eventually rejected by the bank's stall timeout).
 - **Sum invariant**: on every settle, balances across all accounts for a Voucher must sum to zero (or the agreed limit).
 - **Pubkey pinning**: clients pin `pubkey + url`; `<bank-url>/barter-bank.json` is compared against the pin and divergence fails closed.
 
@@ -160,6 +166,7 @@ cd website && hugo mod get && hugo --gc --minify
 | `apps/bank/README.md` | Bank server: routes, KV key-space, config, deploy | Modifying server code |
 | `apps/web/README.md` | Web SPA: screens, keystore model, transports | Modifying the web UI |
 | `packages/protocol/README.md` | Library API, parity tests, porting guide | Touching protocol primitives |
+| `EMULATED.md` | Emulated-user playbook: driving the deployed demo banks / reproducing demo state with `scripts/emu` (`scripts/emulate.ts`) | Scripting flows against live or local banks from the command line |
 | `WORKAROUNDS.md` | In-effect implementation compromises (keystore KDF, in-process peer dispatch on Deno Deploy, ...) | Changing fan-out, auth, or deploy behavior |
 | `TODOS.md` | Roadmap and deferred work | Planning new features |
 
@@ -184,7 +191,7 @@ deno run --allow-net --allow-env --allow-read --allow-write --unstable-kv apps/b
 
 ### Syncing protocol changes
 
-`apps/bank/` imports `@barter.game/protocol` via the `deno.json` import map — no sync step. `apps/web/protocol.js` is a **vendored compiled copy** of the library and must be regenerated manually when `packages/protocol/src/index.ts` changes (see `apps/web/README.md`).
+`apps/bank/` imports `@barter.game/protocol` via the `deno.json` import map — no sync step. `apps/web/protocol.js` is a **vendored compiled copy** of the library and must be regenerated manually when `packages/protocol/src/index.ts` changes: run `npx tsc -p tsconfig.web.json` from `packages/protocol/` (it emits `apps/web/index.js`), then rename `apps/web/index.js` to `protocol.js` and review the diff (see `apps/web/README.md`).
 
 ### Website
 

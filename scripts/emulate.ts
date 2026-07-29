@@ -661,12 +661,6 @@ async function cmdResolve(ref: string, pubkey: string): Promise<void> {
 }
 
 /**
- * Attempt to publish a voucher-anchored Post (protocol/post-feed.md).
- * Expected to fail: no Post doc type exists in the protocol library and
- * `submit_docs` rejects unknown types. Kept as an executable probe so
- * EMULATED.md can cite the real error rather than an assumption.
- */
-/**
  * Publish a voucher-anchored Post (post-feed.md). `--reply <hash>` and
  * `--repost <hash>` embed the FULL parent post, fetched from the bank so the
  * embedded bytes are exactly what its author signed. `--at <bank>` posts into

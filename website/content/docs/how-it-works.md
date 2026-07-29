@@ -6,10 +6,10 @@ A barter.game trade is a cascade of signed documents across independent banks. H
 
 ## The setup
 
-**Alice** runs `bank-alice`. She issues "1 logo" — a voucher to design one logo.
-**Bob** runs `bank-bob`. He issues "1 hour" — a voucher to do one hour of consulting.
+**Alice** banks at `bank-alice`. She issues "1 logo" — a voucher to design one logo.
+**Bob** banks at `bank-bob`. He issues "1 hour" — a voucher to do one hour of consulting.
 
-Alice and Bob agree to trade 1 logo for 1 hour. They happen to know each other here, but they needn't — each only has to trust the *other's voucher issuer* and the bank that settles it.
+Neither has to *run* their bank — an account at a bank they trust is enough, though either could operate one. Alice and Bob agree to trade 1 logo for 1 hour. They happen to know each other here, but they needn't — each only has to trust the *other's voucher issuer* and the bank that settles it.
 
 ## Step 1: Publish intent
 
@@ -70,4 +70,4 @@ Sum per Voucher = 0. The cryptographic version of "we're even."
 
 What if bank-bob refuses to settle after bank-alice already did? Alice's logo moved; Bob's hour didn't. This is the **lead/follow risk**, and it is **accepted by design**. The protocol has no rollback. In our trust model, Alice knows Bob (or his bank operator) personally. She yells at him. The protocol records the deal; it does not arbitrate it.
 
-For multi-party rings and complex graphs, the same machinery scales: every holder signs their own Order, the coordinator creates the records and clears each Order with a Mandate, and the banks settle themselves in topological order — leads first, then followers, each citing upstream proof in `Signature.seen`. The coordinator is the only party that knows the full graph; the banks each see only their own voucher's records.
+For multi-party rings and complex graphs, the same machinery scales: every holder signs their own Order, the coordinator creates the records and clears each Order with a Mandate, and the banks settle themselves in topological order — leads first, then followers, each citing upstream proof in `Signature.seen`. The coordinator is the only party that knows the full graph; each bank sees only the records that satisfy the Orders it stores — its own leg plus the counter-legs listed in those Orders' Mandates.

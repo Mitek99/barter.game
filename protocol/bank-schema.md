@@ -4,7 +4,7 @@ This file defines the banking entities and the ledger invariants that operate on
 
 - `Voucher`, `Account`
 - `Record`, `Order`, `Offer`, `Mandate`
-- `Balance` (bank-signed position statement)
+- `Balance` (bank-signed position statement) *(specified, not yet implemented)*
 - Per-record, per-bank state machine
 - Concurrency and balance semantics
 
@@ -23,6 +23,8 @@ type BaseDoc = {
   ulid: ULID;
 }
 ```
+
+> **Status: specified, not yet implemented.** The `"balance"` member of the union is reserved for the Balance doc (§1.7); the reference bank does not serve this yet (tracked in TODOS.md).
 
 ### 1.1 Voucher
 
@@ -61,13 +63,16 @@ Account: BaseDoc & {
   type: "account";
   name: string;           // local label, typically not public
   voucher: Base58SHA256;  // hash of the Voucher this account holds
-  public?: boolean;       // opt in to third-party balance/history reads (default false)
+  public?: boolean;       // opt in to third-party balance/history reads
+                          // (default false; specified, not yet implemented)
 }
 ```
 
 `Account.pubkey` is the holder. `Account.ulid` uniquely identifies this account. The holder signs the Account doc; the bank stores it by hash after verifying the signature.
 
-**Visibility.** Accounts are private by default: a bank MUST NOT disclose an account's balance or record history to anyone but its holder — and the Voucher's issuer, who reads all records of their own voucher via `list_voucher_records` (the backup path, [`bank-rpc.md`](./bank-rpc.md) §2.4). Setting `public: true` opts the account into third-party reads — it appears in `list_public_balances` and any caller may read its balance and records ([`bank-rpc.md`](./bank-rpc.md) §2.4, [`discovery.md`](./discovery.md) §6). Going public discloses the balance facts (holder pubkey, voucher, account hash, amounts) — the account `name` stays private either way.
+**Visibility.** Accounts are private by default: a bank MUST NOT disclose an account's balance or record history to anyone but its holder — and the Voucher's issuer, who may read the position of any account denominated in their own voucher via `get_account_balance` ([`bank-rpc.md`](./bank-rpc.md) §2.4). The issuer's voucher-wide record export, `list_voucher_records` (the backup path, [`bank-rpc.md`](./bank-rpc.md) §2.4), extends that read to full history. Setting `public: true` opts the account into third-party reads — it appears in `list_public_balances` and any caller may read its balance and records ([`bank-rpc.md`](./bank-rpc.md) §2.4, [`discovery.md`](./discovery.md) §6). Going public discloses the balance facts (holder pubkey, voucher, account hash, amounts) — the account `name` stays private either way.
+
+> **Status: specified, not yet implemented.** The `public` opt-in, `list_public_balances`, and `list_voucher_records` are not served by the reference bank yet (tracked in TODOS.md); the shipped allow-list is exactly the holder and the voucher's issuer, via `get_account_balance`.
 
 > **Invariant:** A bank MUST reject a record whose `details.account` hash does not resolve to a stored Account owned by the record's holder. Account names are private, but the Account doc itself is part of the bank's verified state.
 
@@ -242,6 +247,8 @@ The coordinator sends a Mandate per Order per bank; the `records` list is identi
 
 ### 1.7 Balance
 
+> **Status: specified, not yet implemented.** The reference bank does not serve this yet (tracked in TODOS.md). Today the shipped read is `get_account_balance`, which returns an unsigned `{ current, pending }` position to the account's holder or the voucher's issuer only.
+
 A bank-signed statement that a specific holder has a specific amount of a specific voucher on a specific account. The ledger stays authoritative — a Balance doc is a **portable attestation** of the position as of its `ulid`, verifiable by anyone against the bank's pubkey without calling the bank.
 
 ```ts
@@ -257,7 +264,7 @@ Balance: BaseDoc & {
 }
 ```
 
-Balance docs are issued on demand (`get_balance`) and served for public accounts (`list_public_balances`) — see [`bank-rpc.md`](./bank-rpc.md) §2.4. Like all signed docs they are irrevocable; a Balance is a true statement *about the moment it was issued*, and a newer ULID for the same account supersedes it. Banks MUST NOT issue a Balance for a non-public account to anyone but its holder or the Voucher's issuer.
+Balance docs are issued on demand (`get_balance`) and served for public accounts (`list_public_balances`) — see [`bank-rpc.md`](./bank-rpc.md) §2.4 *(both methods specified, not yet implemented)*. Like all signed docs they are irrevocable; a Balance is a true statement *about the moment it was issued*, and a newer ULID for the same account supersedes it. Banks MUST NOT issue a Balance for a non-public account to anyone but its holder or the Voucher's issuer.
 
 Use cases: a holder proving a position to a counterparty; public holdings in discovery ([`discovery.md`](./discovery.md) §6); an issuer's backup snapshots alongside `list_voucher_records`.
 
@@ -318,7 +325,7 @@ The coordinator is the only party that calls `create_records`. Holders submit Or
 
 ### 3.1 Double-spend prevention
 
-When the advance engine attempts to acquire a hold on a debit account, it aggregates all records of the **same deal** that debit that account and locks the **total** amount once. If that account is already locked by a **different** deal, the hold attempt returns `-32003` for the record. The affected bank fans out the conflict signature; the coordinator (or any participant) may call `reject` on individual records to release holds and abort. Holds span the full participant set, but each per-account lock is independent and bank-local.
+When the advance engine attempts to acquire a hold on a debit account, it aggregates all records of the **same deal** that debit that account and locks the **total** amount once. If that account is already locked by a **different** deal, the engine simply issues no hold signatures on that pass and re-attempts on later events: the deal proceeds when the competing hold releases, or is eventually rejected by a bank's own stall timeout (§2). Holds span the full participant set, but each per-account lock is independent and bank-local.
 
 The approve-time balance check is computed net of active holds, so a deal cannot be approved against balance that another in-flight deal has locked.
 

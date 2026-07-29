@@ -74,13 +74,15 @@ type BaseDoc = {
 }
 ```
 
+> **`"balance"` — Status: specified, not yet implemented.** The reference bank does not serve this doc type yet (tracked in TODOS.md); its `DocType` union omits it.
+
 Encoded fields:
 
 - `Base58PubKey`, `Base58Signature`, `Base58SHA256` — base58 strings.
 - `ULID` — `01ABC...` 26-char. Used as both identity and time ordering.
 - `DateString` — `2024-05-02T00:00:00Z` -  ISO 8601 datetime  
 
-The concrete types defined in this file are `Signature` and `Address`. Voucher, Account, Record, Order, Offer, Mandate, and Balance are defined in [`bank-schema.md`](./bank-schema.md); Post is defined in [`post-feed.md`](./post-feed.md).
+The concrete types defined in this file are `Signature` and `Address`. Voucher, Account, Record, Order, Offer, Mandate, and Balance *(specified, not yet implemented)* are defined in [`bank-schema.md`](./bank-schema.md); Post is defined in [`post-feed.md`](./post-feed.md).
 
 ### 3.1 Signature
 
@@ -89,7 +91,7 @@ Attestations are first-class docs. A signature with an `action` anchors to **exa
 ```ts
 Signature: BaseDoc & {
   type: "signature";
-  hash?: Base58SHA256;       // content-addressed target (record hash, Order hash, Offer hash, Address hash)
+  hash?: Base58SHA256;       // content-addressed target (record hash, Order hash, Offer hash, Address hash, Post hash)
   action?: "ready" | "hold" | "settle" | "reject";
   seen?: Base58SHA256[];     // hashes of prior Signature docs
   reason?: string;
@@ -106,7 +108,7 @@ Signature: BaseDoc & {
 | `settle` | bank | `hash` = a record hash | this bank applied this record's delta |
 | `reject` | bank | `hash` = a record hash | this record is rejected; holds released |
 
-A holder's signature on an Order (no `action`) is the holder's authorization for the transfers described in that Order. A bank's signature on an Offer or Address (no `action`) is a pure attestation that the bank has stored/derived the doc.
+A holder's signature on an Order (no `action`) is the holder's authorization for the transfers described in that Order. A bank's signature on an Offer or Address (no `action`) is a pure attestation that the bank has stored/derived the doc. A signature (no `action`) on a `Post` hash is an endorsement of that post ([`post-feed.md`](./post-feed.md)), served by `get_post_signatures`.
 
 #### `seen` is a causal chain that binds the cascade to one deal
 

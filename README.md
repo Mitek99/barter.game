@@ -1,11 +1,13 @@
 # barter.game
 
-A federated mutual-credit ledger. **Be your own bank.**
+A federated mutual-credit ledger. **Your currency, your keys.**
 
 Mint a personal currency — "1 logo", "1 hour of consulting", "1 home-cooked
-dinner" — issued by you, signed by you, redeemable from you. Trade it with
-people who know and trust you. No central authority. No middleman. Just
-signed vouchers and their atomic settlement.
+dinner" — issued by you, signed by you, redeemable from you. Host it at a
+bank somebody else runs, or run your own — sovereignty lives in your keys,
+not in who operates the bank. Trade it with people who know and trust you.
+No central authority. No middleman. Just signed vouchers and their atomic
+settlement.
 
 ## The big idea
 
@@ -50,6 +52,15 @@ https://barter-game-banks.ai-1st.deno.net/bob/ui
 | Bob   | "1 hour" | bank-bob (issuer)   | **−1** (he owes it) |
 | Alice | "1 hour" | bank-bob   | **+1** (she holds it) |
 
+The demo client is also a small social layer: publish a post about your
+voucher (artwork rides along via the bank's media vault), follow people —
+your host bank is followed by default, and a bank reposts every user post it
+accepts into its own feed — and browse **Discover**, a voucher gallery built
+from your follows' posts with a "Trade for this" shortcut that trusts the
+issuer and preloads the swap. The wire format is in
+[`protocol/post-feed.md`](./protocol/post-feed.md); discovery surfaces in
+[`protocol/discovery.md`](./protocol/discovery.md).
+
 Machine access works too — every bank publishes its identity document:
 
 ```bash
@@ -65,8 +76,9 @@ bun run test:all     # Bun protocol suite + the same golden vectors under Deno
 deno test            # cross-runtime parity + the bank integration suite
 ```
 
-End-to-end settlement checks (local bank boot, cross-bank swap, reject
-cascade, settle-replay resistance) live in `apps/bank/e2e-*.ts` — see
+Nine end-to-end suites (bank boot, cross- and same-bank swaps, single-bank
+cheque, reject cascade, settle-replay resistance, forged peer signatures,
+account privacy, post feeds and media) live in `apps/bank/e2e-*.ts` — see
 [`apps/bank/README.md`](./apps/bank/README.md) for how to run them.
 
 Step-by-step protocol walkthroughs — who signs what, in which order —
@@ -132,6 +144,7 @@ barter.game/
 ├── AGENTS.md             ← orientation for AI coding agents
 ├── TODOS.md              ← roadmap and deferred work
 ├── WORKAROUNDS.md        ← in-effect implementation compromises
+├── EMULATED.md           ← emulated-users playbook for the live demo banks
 ├── protocol/             ← the INVARIANT protocol contract
 ├── scenarios/            ← step-by-step interaction traces
 ├── packages/protocol/    ← @barter.game/protocol — shared TS primitives
@@ -144,8 +157,10 @@ barter.game/
 
 > `scripts/demo-local.sh` and `scripts/demo-deploy.sh` predate the removal
 > of the CLI and are currently broken; rebuilding them against the web/RPC
-> flow is tracked in [`TODOS.md`](./TODOS.md). Use the e2e scripts in
-> `apps/bank/` instead.
+> flow is tracked in [`TODOS.md`](./TODOS.md). `scripts/emu`
+> (`scripts/emulate.ts`) is a working CLI client — it speaks the same signed
+> RPC envelopes and auth as the web client and targets the live demo banks
+> by default; see [`EMULATED.md`](./EMULATED.md).
 
 ## Tests
 

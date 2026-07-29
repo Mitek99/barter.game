@@ -5,10 +5,10 @@
 > If you are building your own bank or client, read this overview first, then see:
 >
 > - [`base.md`](./base.md) — identity, canonical JSON, `BaseDoc`, `Signature`, `Address`, the JSON-RPC envelope, replay protection, and request signing.
-> - [`bank-schema.md`](./bank-schema.md) — bank document schemas (`Voucher`, `Account`, `Record`, `Order`, `Offer`, `Mandate`, `Balance`) and ledger semantics (state machine, concurrency, balance invariants).
-> - [`bank-rpc.md`](./bank-rpc.md) — the bank JSON-RPC API and REST address-directory endpoints.
-> - [`discovery.md`](./discovery.md) — how parties find banks, vouchers, issuers, offers, and public holdings.
-> - [`post-feed.md`](./post-feed.md) — voucher-anchored post feeds (`Post` doc, publishing, reading, moderation).
+> - [`bank-schema.md`](./bank-schema.md) — bank document schemas (`Voucher`, `Account`, `Record`, `Order`, `Offer`, `Mandate`, `Balance` *(specified, not yet implemented)*) and ledger semantics (state machine, concurrency, balance invariants).
+> - [`bank-rpc.md`](./bank-rpc.md) — the bank JSON-RPC API and REST endpoints (address directory, media vault).
+> - [`discovery.md`](./discovery.md) — how parties find banks, vouchers, issuers, offers, and posts through follows (the Discover surface); public holdings are specified there but not yet implemented.
+> - [`post-feed.md`](./post-feed.md) — voucher-anchored post feeds (`Post` doc, publishing, reading, moderation, the embedded media vault, voucher meta releases).
 > - [`../scenarios/`](../scenarios/) — step-by-step interaction traces.
 >
 > The reference implementation documents its own choices in [`../apps/bank/README.md`](../apps/bank/README.md), [`../apps/web/README.md`](../apps/web/README.md), and [`../packages/protocol/README.md`](../packages/protocol/README.md).
@@ -23,7 +23,7 @@ A **Voucher** is a signed, content-addressed document in which one party (the **
 
 - **Issuer**: the owner of the Voucher. The issuer decides what the Voucher means and how many may exist. The issuer is personally accountable for redemption.
 - **Holder**: any user with a positive balance in an Account for that Voucher. Holders trade Vouchers among themselves; they are not accountable for the issuer's delivery, only for their own ledger position.
-- **Bank**: the ledger operator whose pubkey appears in `Voucher.bank`. The bank is the sole source of truth for balances of that Voucher. It stores the docs presented to it, verifies signatures, and applies transfers. **The only artifacts a bank creates are ledger records, signatures, and the derived statements it publishes from them** (discovery `Offer`s and signed `Balance` attestations). It does not guarantee the issuer's performance — that trust is social, out-of-band.
+- **Bank**: the ledger operator whose pubkey appears in `Voucher.bank`. The bank is the sole source of truth for balances of that Voucher. It stores the docs presented to it, verifies signatures, and applies transfers. **The artifacts a bank creates under its own key are ledger records, signatures, and the statements it derives from stored docs** — discovery `Offer`s, per-voucher meta, and the bank-signed repost `Post`s that seed its host feed ([`post-feed.md`](./post-feed.md)). It does not guarantee the issuer's performance — that trust is social, out-of-band.
 
 A **transfer** moves a Voucher from one holder to another. The debit holder's balance decreases; the credit holder's balance increases. The sum across all Accounts for a given Voucher is always zero.
 
@@ -36,7 +36,7 @@ A **transfer** moves a Voucher from one holder to another. The debit holder's ba
 barter.game v1 is built on three behavioral assumptions. They are not enforced by cryptography; they are the social substrate that makes the protocol's risk posture coherent.
 
 1. **Users already know the issuers of the Vouchers they hold.**
-   Trust formation is out of band — DM, in-person, group chat. The protocol ships discovery surfaces for *facts* — voucher registries, Offers, profile QR bundles, public holdings, post feeds ([`discovery.md`](./discovery.md), [`post-feed.md`](./post-feed.md)) — but it does not rate issuers, rank search results, or verify goods/service delivery. Deciding whom to trust stays human.
+   Trust formation is out of band — DM, in-person, group chat. The protocol ships discovery surfaces for *facts* — voucher registries, Offers, profile QR bundles, post feeds and the follows-based Discover galleries, voucher meta ([`discovery.md`](./discovery.md), [`post-feed.md`](./post-feed.md)) — but it does not rate issuers, rank search results, or verify goods/service delivery. Deciding whom to trust stays human. Balances are not a discovery surface: a bank discloses an account's balance only to its holder or the Voucher's issuer (public holdings are specified in [`discovery.md`](./discovery.md) §6 but not yet implemented).
 
 2. **Trust is socially enforced.**
    If Alice delivers and Bob ghosts, Alice yells at Bob. The protocol records the deal cryptographically; it does not arbitrate. Recourse is human, not algorithmic.
@@ -50,7 +50,7 @@ Banks are open by default. The v1 reference posture:
 
 - Banks allow **any** Voucher to be registered by its issuer.
 - Banks accept new ledger records for new accounts and new vouchers; they only check that the voucher references the bank.
-- Banks accept and store any docs/signatures linked to vouchers that reference this bank, **from anyone** — the sender of a request need not be the doc's owner (counterparties legitimately carry each other's Account docs and relay each other's signatures).
+- Banks accept and store docs/signatures linked to vouchers that reference this bank. `Voucher`, `Address`, and `Signature` docs are accepted **from anyone** — the sender of the request need not be the doc's owner (counterparties legitimately present each other's Vouchers and relay each other's signatures). `Account`, `Order`, and `Post` docs MUST be submitted by their signing owner: `submit_docs` rejects them when the sender is not the doc's `pubkey`.
 - All calls to bank APIs are signed by the sender's key. Moderation is **key-blocking**, not gatekeeping: banks MAY refuse or rate-limit service to spammers and abusers based on their pubkey.
 
 > **Extensibility:** Implementers MAY add additional trust, reputation, KYC, or audit mechanisms on top of the protocol. Such extensions MUST be backward-compatible: they must not prevent a client and bank from interacting using only the base v1 wire format.
@@ -163,7 +163,7 @@ barter://<inviter-pubkey>@<inviter-bank-url>
 
 - `give`: what the inviter offers — voucher, amount, and the inviter's **funded account** it will be debited from.
 - `get`: what the inviter wants — voucher, amount, and the inviter's **receiving account** (authored locally; accounts are implicit).
-- `accs`: the inviter's Account docs referenced by the records, so the initiator can present them to the banks.
+- `accs`: the inviter's Account docs referenced by the records, so the initiator can verify them and build the deal against the right account hashes. (Account docs reach a bank only from their owner — §1.1 — so the inviter submits them itself; the bundle is for the initiator's validation, not relay.)
 - `sig`: ed25519 over canonical JSON of the invite minus `sig`, by the inviter's pubkey.
 
 ### 3.2 Deep links
@@ -193,7 +193,7 @@ Signed documents — an issuer profile, a voucher, an invoice or cheque Order �
 | Voucher fungibility | Fungible: any "1 logo" issued by Alice is interchangeable; NFT-style is v2 | **Yes** |
 | Order cardinality | Open: `K ≥ 1` transfer pairs across 1..N banks; bilateral (`K=2`) is the simplest case | **Yes** |
 | Order ownership | **One Order per participating holder**, containing the records that touch that holder's accounts | **Yes** |
-| Holder authorization | Holders sign Voucher, Order, and Address docs; banks sign Record and Offer docs | **Yes** |
+| Holder authorization | Holders sign Voucher, Account, Order, Address, and Post docs; banks sign Record, Offer, and lifecycle Signature (`ready`/`hold`/`settle`/`reject`) docs, plus their own Address and bank-repost Post docs | **Yes** |
 | Balance floor | Non-issuer holder-authorized transfers cannot overdraw the debit account; issuers may go negative via their own Orders | **Yes** |
 | Offers | Banks MAY derive and publish Offer docs from Orders; Offers hide holder identity and account hashes | **Yes** |
 

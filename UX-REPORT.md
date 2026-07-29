@@ -2,12 +2,15 @@
 
 Scope: the reference SPA (`apps/web/`) served by the two live banks
 (`https://barter-game-banks.ai-1st.deno.net/{alice,bob}/ui/`). Current as of
-`main` **`7d3e58b`** (UX round 3, PR #20) — what the banks serve now.
+`main` **`02960fe`** — what the banks serve now.
 
 **Status: the UX-defect backlog is clear.** Four shipped rounds
 (PR #14/#15 → #17 → #18 → #20) closed every finding from the original audit and
-the follow-up re-audit — 40+ items, each verified live. What remains (§3) is
-product work that needs protocol or schema changes, not client polish.
+the follow-up re-audit — 40+ items, each verified live. Since then a further
+stretch of work (#24–#42, row 5+ in §2) fixed defects found after that "clear"
+and added major UX surfaces: post feeds, follows, the Discover gallery, the
+implied-rate readout, and PWA install. What remains (§3) is product work that
+needs protocol or schema changes, not client polish.
 
 ---
 
@@ -41,6 +44,7 @@ Verified on production after the round-3 deploy:
 | 2 | #17 | Focus-to-heading + skip link, accessible QR modal, dark mode, contrast, mobile tap targets, foreign-bank issuer resolution, offer/invite landings, cross-bank "use my account at another bank", voucher expiry, public registry browser, auto-lock warning |
 | 3 | #18 | Mobile bottom nav + Menu drawer |
 | 4 | #20 | Router/poll/focus regressions (R2/R6/R7), `list_vouchers filter:'mine'` (R1), error states on Dashboard/Network/choosers (R3), voucher names in own lists (R4), recovery-kit restore (R9), integer-voucher enforcement (R10), double-submit guards (R11), invoice QR (R12), foreign-issuer QR target (R13), cross-origin scan origin (R14), sheet a11y (R15), plus R5/R8/R16/R17/R18/R20 and the final a11y residue (contrast, nav label, `<main>`) |
+| 5+ | #24–#42 | Defect fixes: same-bank swap minting one record pair per transfer (#24), swap-share Offer-vs-Order hash (#25), account-balance privacy (#26), embedded author/voucher name resolution (#29), feed bank naming (#36). New surfaces: post feeds with replies and reposts (#28), PWA install (#31), Logout in the menu replacing the header Lock button (#34), follows as a separate list from trusted issuers with Network UI (#35/#36), "Trade for this" (#38), the implied-rate readout — a ceiling, not a fixed price (#41), follows-feed Discover gallery + media vault (#42) |
 
 Two classes of bug are worth calling out, because they'd recur:
 
@@ -64,9 +68,9 @@ and [`TODOS.md`](TODOS.md).
 |---|---|---|
 | **Atomic 1→2 split** (package → mug + shirt) | One Order carries one debit + one credit block + one scalar rate; `integer:true` blocks fractional workarounds. Even the non-atomic honored-offer workaround has no UI path — both deal-proposing paths pass exactly two orders to `propose_deal`. | A client-side "split" coordinator composing the package cheque + the issuer's component offers into one multi-pair deal |
 | **Public-holdings discovery** ("X holds Y of Z, I'll get some" — INPUTS 33, discovery.md §6) | No `list_public_balances` RPC, no `Account.public` flag, no holder-balance view | Read-only `list_public_balances` + an account "public" toggle + a simple holdings view |
-| ~~**Post / voucher feeds**~~ | **Built.** Write via `submit_docs`, read via `list_posts`, trust-graph read filtering client-side, replies and issuer reposts, media blobs. `#/posts` is now linked in the nav. | — |
+| ~~**Post / voucher feeds**~~ | **Built.** Write via `submit_docs`, read via `list_posts` merged client-side across a dedicated follows list (separate from trusted issuers; default: your own bank, which auto-reposts its users' accepted posts), replies and reposts, issuer voucher-meta releases, and the content-addressed media vault. `#/posts` is now linked in the nav. | — |
 | **Profile-QR bundle selection** (discovery.md §4) | Sharing a profile advertises *all* of an issuer's vouchers; no shape for a curated subset | A bundle link/QR carrying a chosen voucher set |
-| **Issuer backup / export of record history** | `list_voucher_records` exists but has no UI, so an issuer can't back up and re-issue holder records after a bank loss | An export button on the issuer's voucher (paginated, newest-first) |
+| **Issuer backup / export of record history** | `list_voucher_records` is specified (`bank-rpc.md` §2.4) but not implemented at the bank (see TODOS: new protocol read surfaces), and there is no UI — so an issuer can't back up and re-issue holder records after a bank loss | An export button on the issuer's voucher (paginated, newest-first) |
 | **Booth live view** (builder-event Phase 5) | Only the deal screen self-refreshes; Activity/Dashboard are static snapshots | Opt-in polling on an "Incoming" view filtered to credits on a chosen voucher |
 | **Deal searcher** across public offers | Needs an LP solver + multi-bank offer scan | Out of scope for the reference client for now |
 
@@ -90,8 +94,9 @@ adversarially re-verified against the source before it was accepted. The
 re-audit confirmed 41 findings and rejected 7 as already-fixed or unreachable.
 
 Each fix was verified against a local two-bank federation before merge and
-re-verified on production after deploy; the four e2e suites (local, cross-bank,
-cheque, reject-cascade) pass, and a full claim → settle was driven in a browser
+re-verified on production after deploy; the e2e suites (now nine: local,
+cross-bank, cheque, reject-cascade, replay, forged-sigs, account-privacy, posts,
+same-bank swap) pass, and a full claim → settle was driven in a browser
 each round.
 
 *Historical note: this file previously tracked open findings as U1–U20 (round 1)

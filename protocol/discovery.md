@@ -92,7 +92,7 @@ always explicit: *I trust A; A recommended B; I chose to trust B.* The
 protocol carries the recommendation; the human makes the decision.
 
 **Vouchers surface through the feed.** The recommended client "Discover"
-surface is built entirely from posts by the pubkeys the reader follows
+surface is built from posts by the pubkeys the reader follows
 (post-feed.md §7) — every post is anchored to a voucher, so a merged
 newest-first feed *is* a stream of voucher sightings:
 
@@ -104,8 +104,16 @@ newest-first feed *is* a stream of voucher sightings:
    (`get_voucher_meta` — icon/square media refs and description, falling back
    to the Voucher's own `images`).
 3. Render a voucher gallery: image, name, issuer, description, and the
-   actions that close the loop — *trade for this* (build an order preloaded
-   with it), *read its feed* (the per-voucher feed), *follow the issuer*.
+   actions that close the loop — *trade for this* (trust the voucher's
+   issuer, pin the issuer's bank when it is not the reader's own, then build
+   an order preloaded with the voucher — trusting the issuer is the
+   deliberate act that makes the voucher usable in orders at all), *read its
+   feed* (the per-voucher feed), *follow the issuer*.
+
+Below the gallery, the reference Discover surface adds a second channel: it
+lists **open Offers (§3)** on vouchers the reader already knows, polled via
+`list_offers` from the reader's own bank and every pinned bank, each with an
+accept-the-swap action.
 
 There is no bank-side "trending" and no global search: what a reader can
 discover is exactly what the people they chose to follow have posted about —

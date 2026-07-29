@@ -10,7 +10,7 @@ The barter.game protocol is intentionally small. You can read the full contract 
 
 **Read [the `protocol/` spec](https://github.com/ai-1st/barter.game/blob/main/protocol/README.md) first.** It defines:
 
-- The document types: Voucher, Account, Order, Mandate, Record, Offer, Signature, Subscription, Address — Records are bank-minted and identified by ULID
+- The document types: Voucher, Account, Order, Mandate, Record, Offer, Signature, Address, Post — Records are bank-minted and identified by ULID; posts, reposts, and media refs are specified in [`protocol/post-feed.md`](https://github.com/ai-1st/barter.game/blob/main/protocol/post-feed.md)
 - RFC 8785 canonical JSON (cross-runtime parity is load-bearing)
 - ed25519 signatures over SHA-256 hashes
 - The JSON-RPC envelope and replay protection
@@ -42,7 +42,7 @@ If you're building a bank from scratch:
 2. [ ] Implement ed25519 sign/verify and SHA-256. Use audited libraries.
 3. [ ] Define the doc types and their validators.
 4. [ ] Build the JSON-RPC envelope handler with replay protection.
-5. [ ] Implement `submit_docs`, `create_records`, `submit_mandate`, `subscribe`, `notify_signatures`, `get_record_signatures`, and the read methods (`get_voucher`, `get_balance`, `list_accounts`, `list_account_records`, `list_offers`, …).
+5. [ ] Implement `submit_docs`, `create_records`, `submit_mandate`, `notify_signatures`, `get_record_signatures`, and the read methods (`get_voucher`, `get_account_balance`, `list_accounts`, `list_offers`, `list_vouchers`, `get_offer`, `get_invoice`, `get_cheque`, `list_posts`, `get_post`, `get_post_signatures`, `get_voucher_meta`, …).
 6. [ ] Implement the advance engine: records self-advance created → approved → held → settled, evaluated on every incoming signature.
 7. [ ] Enforce **sum-to-zero** on every settle.
 8. [ ] Enforce **at most one active hold per account**.
@@ -58,7 +58,7 @@ The reference `packages/protocol/` is MIT-licensed, dependency-light, and a **si
 |---|---|
 | Canonicalizer | RFC 8785 canonical JSON. **Must be byte-identical.** |
 | Crypto | ed25519 + SHA-256 + base58. Thin wrappers; easy to replicate. |
-| Doc types + validators | Voucher, Account, Order, Mandate, Record, Offer, Signature, Subscription, Address. Replicate in your type system of choice. |
+| Doc types + validators | Voucher, Account, Order, Mandate, Record, Offer, Signature, Address, Post. Replicate in your type system of choice. |
 
 ## Read more
 

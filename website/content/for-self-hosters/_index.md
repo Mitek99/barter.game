@@ -56,6 +56,8 @@ Any language, any framework. You just need to handle:
 - `POST /<name>/rpc` — the JSON-RPC envelope
 - `GET /<name>/barter-bank.json` — bank identity discovery
 - `GET /<name>/address/<pubkey>` — address directory reads (optional but recommended; Address docs are written via the `submit_docs` RPC)
+- `GET /<name>/media/<hash>.<ext>` — content-addressed media blobs; public and immutable-cacheable, needed for voucher images and posts carrying media
+- `POST /<name>/media` — authenticated blob upload, restricted to image types (`svg`, `png`, `jpg`, `jpeg`, `webp`, `gif`)
 
 ### 2. An ed25519 keypair
 

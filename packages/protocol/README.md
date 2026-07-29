@@ -25,7 +25,7 @@ Hand-rolled serializer — object keys sorted by UTF-16 code units, ECMAScript n
 | `genKeyPair()` / `publicKeyOf(priv)` | ed25519 keypair generation / public-key derivation, with base58 pubkey |
 | `signBytes(msg, priv)` / `verifyBytes(msg, sig, pub)` | Raw ed25519 over bytes; base58 signatures; verify returns `false` (never throws) on malformed input |
 | `signDoc(doc, priv)` / `verifyDoc(doc, sig, pub)` | ed25519 over `sha256(canonicalizeWithoutSig(doc))` |
-| `hashDoc(doc)` | Content address: `base58(sha256(canonicalBytes(doc)))` — includes `sig` if present |
+| `hashDoc(doc)` | Content address: `base58(sha256(canonicalBytes(canonicalizeWithoutSig(doc))))` — the same preimage `signDoc` commits to, so a doc's hash is stable whether or not it is signed; embedded docs keep their own `sig` inside the preimage |
 | `sha256Base58(s)` | `base58(sha256(utf8(s)))` |
 | `base58Encode` / `base58Decode` | Bitcoin-alphabet base58 |
 | `newUlid()` | Fresh ULID |
@@ -34,13 +34,40 @@ Hand-rolled serializer — object keys sorted by UTF-16 code units, ECMAScript n
 
 | Export | What it covers |
 | --- | --- |
-| `BaseDoc`, `DocType`, `AnyDoc` | Common envelope (`type`, `pubkey`, `ulid`, optional `sig`); `DocType` is the 10-value union `voucher \| account \| credit \| debit \| signature \| order \| offer \| mandate \| subscription \| address` |
-| `Voucher`, `Account` | Issued voucher (incl. optional `due`, `expires`, `limit`, `integer`) and holder account |
+| `BaseDoc`, `DocType`, `AnyDoc` | Common envelope (`type`, `pubkey`, `ulid`, optional `sig`); `DocType` is the 10-value union `voucher \| account \| credit \| debit \| signature \| order \| offer \| mandate \| address \| post` |
+| `Voucher`, `Account` | Issued voucher (incl. optional `due`, `expires`, `limit`, `integer`, and `images` — up to 8 content-addressed `MediaRef`s, `images[0]` the icon and `images[1]` the square card by convention, overridable by a later `voucher_meta` post) and holder account |
 | `BankRecord`, `RecordDetails` | On-ledger `credit`/`debit` record and the hashed-away details (`pair`, `deal_id`, `coordinator`, `holder`, `account`) |
 | `Order`, `OrderSide`, `Offer` | Holder trade authorization and its published projection |
 | `Mandate`, `Signature` | Deal settlement mandate; status/ack signature doc (`ready \| hold \| settle \| reject`) |
-| `Subscription`, `Address` | Webhook subscription and bank address record |
+| `Address` | Bank address record |
+| `Post` | Voucher-anchored post (`body_md`, `media`/`icon`/`square` `MediaRef`s, deprecated inline `icon_svg`/`square_svg`, `voucher_meta` release flag); `reply_to`/`repost` embed the **full** parent Post, signatures included — see [`post-feed.md`](../../protocol/post-feed.md) |
 | `Base58PubKey`, `Base58Signature`, `Base58SHA256`, `ULID` | String aliases used throughout |
+
+### Media refs
+
+A `MediaRef` is `"<base58(sha256(bytes))>.<ext>"` — a content-addressed reference to an image blob in a bank's media vault, with the served Content-Type derived from the extension ([`post-feed.md`](../../protocol/post-feed.md) §5).
+
+| Export | What it does |
+| --- | --- |
+| `MediaRef` | String alias for the `"<hash>.<ext>"` form |
+| `MEDIA_EXT_TYPES` | Allowed extensions (`svg`, `png`, `jpg`, `jpeg`, `webp`, `gif`) → the Content-Type each serves as |
+| `extForContentType(ct)` | Content-Type → canonical extension, or `null` for anything outside the table |
+| `parseMediaRef(ref)` | `{ hash, ext }`, or `null` when the string is not a well-formed ref (unknown extension, implausible hash); a legacy bare hash parses as `null` |
+| `mediaRefHash(ref)` | The content hash of a ref — or the string itself for a legacy bare hash |
+| `collectMediaRefs(post)` | Every ref a post commits to across its whole embedded `reply_to`/`repost` tree, de-duplicated — the set a bank checks for presence at intake, and the set a client copies over before a cross-bank repost |
+
+### Constants
+
+Protocol-level caps, enforced by the validators at every bank (not bank policy):
+
+| Export | Caps |
+| --- | --- |
+| `MAX_VOUCHER_IMAGES` = 8 | `Voucher.images` entries (`validateVoucher`) |
+| `MAX_POST_MEDIA` = 12 | `media` entries per post (`validatePost`) |
+| `MAX_POST_EMBED_DEPTH` = 8 | `reply_to`/`repost` nesting a validator will walk |
+| `MAX_POST_SVG_CHARS` = 8192 | Each deprecated inline `icon_svg`/`square_svg` field, in UTF-16 code units |
+
+The reference bank additionally caps the whole embedded tree of a submitted post at 64 media refs — that is intake policy in `apps/bank`, not a protocol export.
 
 ### Validators
 
@@ -50,7 +77,9 @@ All validators throw `ValidationError` on failure and return the narrowed type o
 | --- | --- |
 | `validateBaseDoc(d)` | Shape + base58 `pubkey` + ULID |
 | `validateVoucher(d, bankPubkey)` | Also enforces `voucher.bank === bankPubkey` |
-| `validateAccount` / `validateOrder` / `validateOffer` / `validateRecord` / `validateMandate` / `validateSignature` / `validateSubscription` / `validateAddress` | Per-type required fields, `min <= max`, positive `rate`/`amount`, http(s) URLs, non-empty `records`, etc. |
+| `validateAccount` / `validateOrder` / `validateOffer` / `validateRecord` / `validateMandate` / `validateSignature` / `validateAddress` | Per-type required fields, `min <= max`, positive `rate`/`amount`, http(s) URLs, non-empty `records`, etc. |
+| `validatePost(d, depth?)` | Sync shape validation of a Post and, recursively, every embedded ancestor (depth-capped at `MAX_POST_EMBED_DEPTH`); does **not** verify embedded signatures |
+| `verifyPostTree(post)` | The signature half: verifies the author signature of the post and of every embedded `reply_to`/`repost` against each post's own `pubkey`; a missing `sig` anywhere fails. A bank must call both this and `validatePost` ([`post-feed.md`](../../protocol/post-feed.md) §2) |
 | `isValidBase58(s)` / `isValidUlid(s)` | Boolean predicates |
 | `offerSideFromOrderSide(side)` | Helper: project an `OrderSide` to an `Offer` side (drops the private `account` hash) |
 

@@ -2,10 +2,10 @@
 title: Ethos
 ---
 
-> **Why "game"?** barter.game is designed as a game first. We suggest treating it as a practice environment for trading skills — a safe space to experiment with personal currencies, negotiation, and settlement. Only use it for real economic transactions if your local laws and circumstances permit. The "game" framing keeps the stakes appropriate while the protocol itself is serious cryptography.
-
 The beliefs driving barter.game. These are not requirements written into the
 spec; they are the priors that shape every decision when the spec runs out.
+(Why it is called a *game* is on [the front page](/) — the framing belongs
+where a newcomer lands, not buried here.)
 
 ## 1. Be your own bank
 
@@ -15,9 +15,12 @@ loyalty point. A signed voucher — "1 logo, by Alice, due on demand." Yours.
 You decide how many exist. You decide who gets them. You decide what they
 cost.
 
-The system exists to make this fantasy practical, not theoretical. Anyone
-with a cloud account or own server can deploy a bank. Anyone with a
-keyboard can mint a voucher.
+The system exists to make this fantasy practical, not theoretical. The
+sovereignty lives in your keys, not your hosting: you may run your own
+bank, but you don't need to — you can host your vouchers in a bank run by
+somebody else, and leave it the moment your trust does. Anyone with a
+cloud account or own server can deploy a bank. Anyone with a keyboard can
+mint a voucher.
 
 ## 2. Trust is local — and it attaches to issuers, not counterparties
 
@@ -188,14 +191,18 @@ have built the wrong thing.
 
 ## 11. Content-addressed docs — almost all the way down
 
-Voucher, Account, Order, and Signature docs are hashed by their
-canonical JSON form. References between these docs use those hashes.
-Nothing has an ID assigned by a server. Two banks that store the same
-Voucher doc store it under the same hash. Audit means walking the hash
-graph; verification means re-hashing. Banks store the docs presented to
-them; the artifacts a bank creates are ledger records, signatures, and
-the derived statements it publishes from them (Offers, Balance
-attestations).
+Voucher, Account, Order, Mandate, Offer, Address, Post, and Signature
+docs are hashed by their canonical JSON form — canonical(doc minus its
+top-level `sig`), so the hash names the content while the signature rides
+alongside; docs embedded inside another (a Post's `reply_to`/`repost`)
+keep their own sigs inside the preimage, which is what makes an embedded
+doc independently verifiable. References between these docs use those
+hashes. Nothing has an ID assigned by a server. Two banks that store the
+same Voucher doc store it under the same hash. Audit means walking the
+hash graph; verification means re-hashing. Banks store the docs presented
+to them; the artifacts a bank creates are ledger records, signatures, the
+derived statements it publishes from them (Offers), and the bank-signed
+reposts it broadcasts for the user posts it accepts.
 
 **Ledger records are the exception.** A record is minted by the
 bank that issues it, assigned a ULID by that bank, and referenced by
@@ -220,7 +227,9 @@ protocol supports exactly the discovery a trust-local network needs
   ([`protocol/post-feed.md`](https://github.com/ai-1st/barter.game/blob/main/protocol/post-feed.md)).
 - Learn from a scanned QR that X holds Y vouchers from Z — backed by
   bank-signed Balance docs on accounts X chose to make public — and decide
-  to get a few yourself.
+  to get a few yourself. *(Specified, not yet implemented: the reference
+  bank does not serve public balances yet — balances are readable only by
+  the holder or the voucher's issuer; tracked in TODOS.md.)*
 
 Every one of these hands you verifiable documents and leaves the trust
 decision where it belongs: with you.

@@ -60,9 +60,9 @@ than invoicing for money. She has already paid for a haircut with a logo.
    pinned and trusts him, but no order exists yet.
 2. Mint a second, cheaper voucher (`1 brand palette`) so she has something to
    offer below the price of a full logo.
-3. Once [PR #24](https://github.com/ai-1st/barter.game/pull/24) ships, redo the
-   tomas trade as a single atomic swap instead of the two one-sided deals it
-   took today.
+3. [PR #24](https://github.com/ai-1st/barter.game/pull/24) has shipped — redo
+   the tomas trade as a single atomic swap instead of the two one-sided deals
+   it took today. The retry has not happened yet.
 
 #### tomas — Tomás Reyes, barber
 
@@ -149,7 +149,7 @@ cash. His sister's visa is the reason he crossed banks at all.
 **Memory.** Trusts kai ("teaches my daughter — patient, turns up on time") and
 yusuf ("best loaf in the neighbourhood, no argument"). Traded a tune-up for a
 lesson, and hit the same-bank swap bug doing it
-([gap 2](#2-critical-a-two-sided-swap-inside-one-bank-can-never-settle)) before
+([gap 2](#2-critical-a-two-sided-swap-inside-one-bank-can-never-settle--fixed)) before
 falling back to two one-sided deals.
 
 **Intentions.** Keep the neighbourhood's bikes running and take payment in
@@ -158,7 +158,7 @@ things her daughter needs.
 **Next steps.**
 1. Trade with yusuf — she trusts him and they share a bank, but no order exists.
 2. Advertise winter servicing before the season.
-3. Retry the kai swap atomically once [PR #24](https://github.com/ai-1st/barter.game/pull/24) lands.
+3. Retry the kai swap atomically — [PR #24](https://github.com/ai-1st/barter.game/pull/24) has shipped, so a same-bank swap settles now. Not yet re-run.
 
 #### kai — Kai Nakamura, piano teacher
 
@@ -217,8 +217,8 @@ them ([gap 5](#5-contacts-are-readable-and-removable-in-the-ui-but-cannot-be-add
 | `01KYCK854HPYBFYP8752T34K1Y` | mira → tomas, 1 logo concept | alice | **settled** |
 | `01KYCK9TYZF4VKJKEWDS4GAAE9` | lena → kai, 1 bike tune-up | bob | **settled** |
 | `01KYCKA5MBCTZJTZWDKGQNNZ9G` | kai → lena, 1 piano lesson | bob | **settled** |
-| `01KYC7PDD1FT1BY67C9BWK66KF` | mira ⇄ tomas atomic swap | alice | **rejected — [gap 2](#2-critical-a-two-sided-swap-inside-one-bank-can-never-settle)** |
-| `01KYC7VWRZRQV2E3QSMW5QFN41` | lena ⇄ kai atomic swap | bob | **rejected — [gap 2](#2-critical-a-two-sided-swap-inside-one-bank-can-never-settle)** |
+| `01KYC7PDD1FT1BY67C9BWK66KF` | mira ⇄ tomas atomic swap | alice | **rejected — [gap 2](#2-critical-a-two-sided-swap-inside-one-bank-can-never-settle--fixed)** |
+| `01KYC7VWRZRQV2E3QSMW5QFN41` | lena ⇄ kai atomic swap | bob | **rejected — [gap 2](#2-critical-a-two-sided-swap-inside-one-bank-can-never-settle--fixed)** |
 
 Every voucher sums to zero across its accounts. The two rejected deals are the
 bug, not a scenario: the same-bank pairs had to be re-run as two one-sided
@@ -367,8 +367,12 @@ fact, and the correction is itself part of the record):
 
 ### Discovery through posts
 
-There is no global timeline. Each reader's feed is their own trust graph merged
-across every bank they have pinned — so **every user sees a different feed**:
+There is no global timeline. Each reader's feed is their **follows list** — a
+separate list from trusted issuers, since [#35](https://github.com/ai-1st/barter.game/pull/35) —
+merged across every bank they have pinned, so **every user sees a different
+feed**. A user with no follows record follows their host bank by default, and
+the bank **reposts every user post it accepts** as a bank-signed Post, so a
+newcomer sees their bank's whole output from day one:
 
 ```
 feed for mira@alice  — 4 post(s) from 4 author(s) across 2 bank(s)
@@ -377,7 +381,7 @@ feed for kai@bob     — 7 post(s) from 4 author(s) across 2 bank(s)
 feed for lena@bob    — 4 post(s) from 3 author(s) across 1 bank
 ```
 
-Mira sees kai's piano-lesson post *because she trusts him and pinned bank bob* —
+Mira sees kai's piano-lesson post *because she follows him and pinned bank bob* —
 she discovered a voucher on another bank purely through the feed. Lena sees only
 one bank's worth, because she never pinned alice.
 
@@ -388,13 +392,17 @@ Drive it with `./scripts/emu`:
 ./scripts/emu post  mira@alice <voucher> "Bringing sketches Thursday." --reply <postHash>
 ./scripts/emu post  kai@bob    <voucher> "Can vouch."                   --repost <postHash>
 ./scripts/emu post  yusuf@bob  <voucher> "Worth crossing banks for." --reply <hash> --at alice
+./scripts/emu follow mira@alice <authorPubkey>
+./scripts/emu unfollow mira@alice <authorPubkey>
+./scripts/emu follows mira@alice
 ./scripts/emu feed  priya@alice
 ./scripts/emu posts mira@alice <authorPubkey> all
 ```
 
 Or in the browser: **Posts** in the nav (it was previously an unlinked route).
-The feed filter switches between "everything from people I trust" and a single
-voucher's feed; Reply and Repost embed the parent post.
+The feed filter switches between "Everything from people I follow" and a single
+voucher's feed — the screen itself notes "You follow your bank by default, and
+it reposts what its users publish" — and Reply and Repost embed the parent post.
 
 ## Gaps and defects
 
@@ -417,11 +425,11 @@ Still bank policy and not implemented here: an acceptance hook beyond validity
 (spam filter, allowlist, paywall, per-key rate limits). §2 makes that
 deliberately bank-specific.
 
-### 2. CRITICAL: a two-sided swap inside one bank can never settle
+### 2. ~~CRITICAL: a two-sided swap inside one bank can never settle~~ — FIXED
 
-→ **[PR #24](https://github.com/ai-1st/barter.game/pull/24)** (fix + `e2e-sameswap.ts`)
+→ **[PR #24](https://github.com/ai-1st/barter.game/pull/24)** (fix + `e2e-sameswap.ts`), merged and deployed: the bank now mints one record pair **per transfer**, so a same-bank swap mints two pairs at the same bank and settles.
 
-`handleProposeDeal` minted one record pair **per participating bank**. A
+The bug: `handleProposeDeal` minted one record pair **per participating bank**. A
 two-sided swap moves two vouchers and needs two pairs; when both vouchers are
 issued by the same bank there is only one participating bank, so only one pair
 was created. The counterparty Order's legs were never mandated, and

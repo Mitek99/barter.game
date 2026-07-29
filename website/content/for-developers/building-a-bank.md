@@ -64,7 +64,7 @@ One rule that applies everywhere: there is no `open_account`. Accounts arrive as
 Then implement the trade path in order:
 
 ### `submit_docs`
-- One intake method for every holder-signed doc. Route by `type`: Vouchers must have `pubkey == bank`; Accounts must reference a known Voucher and be signed by the holder; Orders must reference known Accounts owned by the same holder and carry a valid, positive `rate`; Addresses update the address directory if newer by ULID; Posts per bank policy.
+- One intake method for every holder-signed doc. Route by `type`: Vouchers must have `pubkey == bank`; Accounts must reference a known Voucher and be signed by the holder; Orders must reference known Accounts owned by the same holder and carry a valid, positive `rate`; Addresses update the address directory if newer by ULID; Posts are validated against their embedded tree and media refs (see §9).
 - Optionally derive and publish a discovery **Offer** for any Order hash listed in `publish_offers` — the Offer copies the Order's terms while hiding the holder's identity and account hashes.
 - Return the hashes of stored docs and any derived Offers.
 - There is no `mint`. Issuers begin trading by submitting an Order that debits their own issuer account — the issuer is the one holder allowed to go negative.
@@ -82,10 +82,6 @@ Then implement the trade path in order:
 - Local records must have been created for `mandate.deal_id` with `details.coordinator == mandate.pubkey` and `Record.order == mandate.order`. Foreign bodies must hash to their listed values and be signed by their minting banks.
 - Verify local completeness (every record you minted for this deal+order is listed), then validate the Order's conditions — per-record bounds, cumulative and account limits, and the rate over the full local+foreign set.
 - Reject duplicate `(deal_id, order)` Mandates. Only after a valid Mandate may records leave `created`.
-
-### `subscribe`
-- Optional. Store the Subscription doc (subscriber pubkey = sender) plus one watch row per key (`record`, `holder`, or `voucher`).
-- On every matching signature the bank creates or receives, POST a bank-signed `notify_signatures` envelope to the subscriber's URL. Fire-and-forget: a lost push is unstuck by relay. Banks never rely on subscriptions to settle.
 
 ### `notify_signatures`
 - Verify each pushed signature (known pubkey, valid sig), store the valid ones, then run the advance engine for every deal they touch. Invalid entries are skipped, not fatal.
@@ -130,19 +126,30 @@ The reference server exposes one plain REST endpoint for reads:
 |---|---|---|
 | `GET` | `/<name>/address/<pubkey>` | Look up the newest stored Address doc |
 
-Address docs map a pubkey to a human-readable name and a callable URL; peer banks use them to call each other directly. Writes go through the standard `submit_docs` RPC — an Address is just another signed doc, updated when a newer ULID arrives. Only the read lives outside RPC, so anyone can resolve a pubkey with a bare GET.
+Address docs map a pubkey to a human-readable name and a callable URL; peer banks use them to call each other directly. Writes go through the standard `submit_docs` RPC — an Address is just another signed doc, updated when a newer ULID arrives. Address reads and media blobs (§9) are the only surfaces outside RPC, so anyone can resolve a pubkey or fetch a blob with a bare GET.
 
-## 9. Write a client and test end-to-end
+## 9. Serve the media vault and carry posts
+
+Voucher artwork and post media travel as content-addressed refs of the form `<hash>.<ext>`, stored in a per-bank media vault ([`protocol/bank-rpc.md`](https://github.com/ai-1st/barter.game/blob/main/protocol/bank-rpc.md), [`protocol/post-feed.md`](https://github.com/ai-1st/barter.game/blob/main/protocol/post-feed.md)). Two REST endpoints carry it:
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/<name>/media/<hash>.<ext>` | Serve a vault blob. Unauthenticated — whoever knows the ref may fetch. Verify the bytes hash to `<hash>` before serving; derive Content-Type from the extension; respond with immutable caching, `X-Content-Type-Options: nosniff`, and a sandboxing `Content-Security-Policy` so a served SVG renders as an image but can never run script on your origin. |
+| `POST` | `/<name>/media` | Authenticated upload. The upload must resolve to a known image extension (`svg`, `png`, `jpg`, `jpeg`, `webp`, `gif`) — a caller-chosen Content-Type never reaches storage. |
+
+On intake (`submit_docs`), a Post is a first-class doc: verify the signatures of embedded `reply_to`/`repost` docs, enforce that only a voucher's issuer may attach `voucher_meta` releases, and refuse any post whose embedded tree references a blob you don't store — cross-bank reposts must copy their blobs into your vault first. The protocol validators cap a post at 12 media refs and a voucher at 8 images. Serve the feed reads: `list_posts`, `get_post`, `get_post_signatures`, `get_voucher_meta`. The reference bank additionally rebroadcasts every accepted user post as a bank-signed repost — a policy choice, not a protocol requirement.
+
+## 10. Write a client and test end-to-end
 
 You need a client that can:
 1. Register a keypair and submit signed Voucher, Account, and Order docs via `submit_docs` (an issuer's first Order debits the issuer account negative — that's how vouchers come into existence; there is no mint call).
 2. Produce and consume `barter://` invite strings and discover counterparty Offers via `list_offers`.
 3. Act as coordinator: read the Order hashes from the Offers, call `create_records` on each participating bank, then send a signed `Mandate` per Order per bank via `submit_mandate`.
-4. Watch the banks self-advance (`list_account_records` / `get_record_signatures`) and relay missing signatures by hand — `get_record_signatures` on one bank, `notify_signatures` on the other — when a direct bank-to-bank push got lost.
+4. Watch the banks self-advance (`get_account_balance` / `get_record_signatures`) and relay missing signatures by hand — `get_record_signatures` on one bank, `notify_signatures` on the other — when a direct bank-to-bank push got lost.
 
 Test against the reference banks (the browser SPA each bank serves at `/:bank/ui` is the reference client): publish Orders → create records → mandate → watch the banks settle. If your client can trade with `bank-alice` and `bank-bob`, your implementation is interoperable.
 
-## 10. Production considerations
+## 11. Production considerations
 
 - **Backup your bank private key.** Lose it and every Voucher issued by that bank becomes unverifiable.
 - **Rate-limit your RPC endpoint.** Signed RPCs are cheap to verify but expensive to handle.

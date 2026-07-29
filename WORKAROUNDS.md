@@ -30,18 +30,19 @@ with no WASM build step. Argon2id is listed as a future upgrade in
 
 ---
 
-## 2. Not all UI screens are built yet (first-pass scope)
+## 2. ~~Not all UI screens are built yet~~ (resolved — kept for section numbering)
 
-`docs/ui/claude-ui.md §8` enumerates dozens of screens (Dashboard, Wallet,
-Activity, Vouchers, Orders, Invoices, Cheques, Discover, Network, Settings, Deal
-flow, etc.). Building every screen to full spec is beyond the first implementation
-pass.
+`docs/ui/claude-ui.md §8` enumerates dozens of screens; the first implementation
+pass shipped only the minimal end-to-end flow, and this section tracked the gap.
 
-**In effect:** the frontend implements the minimal end-to-end flow —
-**Register / Unlock → Create Voucher → Create Invoice/Cheque → Discover →
-Accept / Pay → Deal status**. Other screens exist as stub routes or are omitted.
-The custom `/ui/*` backend API is shaped so the missing screens can be added later
-without protocol changes.
+**Resolved:** the SPA now routes real, built screens for Vouchers, Orders,
+Invoices, Cheques, Discover, Registry, Posts, Deal, Activity, Network, Scan, and
+Settings — no stub routes remain — plus additions beyond the original spec
+inventory: a post feed with replies and reposts (`protocol/post-feed.md`), a
+follows-based Discover voucher gallery with "Trade for this"
+(`protocol/discovery.md`), follows management on Network, a mobile bottom bar,
+and PWA install. The `/ui/*` backend grew the matching surfaces (`/ui/follows`,
+the `/media` vault) — as anticipated, without protocol changes.
 
 ---
 
@@ -94,7 +95,6 @@ isolated bank processes can share one machine.
 
 ## Notes for future work
 
-- Restore/expand the full screen inventory (§2).
 - Upgrade keystore encryption to Argon2id + XChaCha20-Poly1305 when a WASM build
   pipeline is added (§1).
 - Repeat the (locally proven) cross-process federation test across two real Deno
