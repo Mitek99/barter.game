@@ -300,6 +300,41 @@ bank caches the newest one per voucher, so the currency can be rebranded while
 the ledger underneath it never moves. Only the issuer may release; the bank
 refuses anyone else.
 
+### The vault round — images by hash, and a repost that carries its art
+
+After the media vault landed (post-feed.md §5), the six re-released their
+artwork as **content-addressed refs** instead of inline SVG. Each release
+uploads the file to the bank's vault and the post carries `"<hash>.<ext>"`;
+`get_voucher_meta` now returns refs, and the images serve from
+`/:bank/media/<hash>.svg` with immutable caching — CDN-ready:
+
+```bash
+./scripts/emu post mira@alice <voucher> "One original logo concept…" \
+    --icon scripts/emulated-svg/logo.svg --square scripts/emulated-svg/square-logo.svg
+```
+
+mira and yusuf released icon + square card art; the other four refreshed
+their icons. All six live on production, verified serving `image/svg+xml`
+with `nosniff` and a sandboxing CSP from both banks.
+
+Then the cross-bank moment the design exists for: **lena (bob) reposted
+mira's release (alice)**. A bank refuses a post whose embedded tree
+references blobs it does not hold, so the CLI downloaded mira's icon and
+card from alice and uploaded them to bob before submitting — content
+addressing means the copied bytes land on the *same refs*, so the embedded
+signatures stayed valid:
+
+```bash
+./scripts/emu post lena@bob <lena-voucher> "Mira rebranded my shop last spring…" \
+    --repost <mira-release-hash> --from alice
+#   copied H6d6hKdxvEwqcEat… alice → bob
+#   copied G61YTkFVYBhaFmVe… alice → bob
+```
+
+Both refs now serve from **both** banks. Discover (which now reads the
+follows feed and renders vouchers as image cards) shows kai's piano keys
+served from bob next to priya's scales served from alice, in one gallery.
+
 ### Nothing here is free
 
 A first round of newcomer-facing posts offered *free* slots and cuts "on the
