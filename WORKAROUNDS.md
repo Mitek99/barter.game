@@ -65,7 +65,7 @@ This is a **permanent Deno Deploy platform constraint**, not a transient bug, so
 it stays documented even though the workaround is in place.
 
 The coordinator (`/ui/propose_deal`) and the advance engine reach participating
-banks over HTTP via [`apps/bank/peer.ts`](apps/bank/peer.ts) (`fetchDiscovery` /
+banks over HTTP via [`packages/bank-core/src/peer.ts`](packages/bank-core/src/peer.ts) (`fetchDiscovery` /
 `bankRpcCall`). On Deno Deploy, all four banks (`alice`, `bob`, `carol`, `dave`)
 run in **one deployment**, so those become self-requests, and Deno Deploy
 hard-blocks an isolate from fetching its own deployment URL:
@@ -77,7 +77,7 @@ hard-blocks an isolate from fetching its own deployment URL:
 (Confirmed empirically.) It works fine locally because localhost self-fetch is
 allowed, so it only surfaces on deployment.
 
-**In effect:** [`apps/bank/local.ts`](apps/bank/local.ts) registers the banks
+**In effect:** [`packages/bank-core/src/local.ts`](packages/bank-core/src/local.ts) registers the banks
 served by this process; when a target bank's pubkey is local, `bankRpcCall`
 invokes the registry handler directly and `fetchDiscovery` answers from memory
 instead of issuing an HTTP request. Any future change to bank fan-out must keep
@@ -90,6 +90,13 @@ in [`apps/bank/e2e-crossbank.ts`](apps/bank/e2e-crossbank.ts). A repeat across t
 real Deno Deploy apps still requires creating the second app in the dashboard.
 `BANK_KV_PATH` (in [`apps/bank/main.ts`](apps/bank/main.ts)) pins the KV file so
 isolated bank processes can share one machine.
+
+It is also verified **cross-runtime**: the same suite settles a swap between a
+Deno/Deno-KV bank and a Node/DynamoDB bank
+([`apps/bank-aws`](apps/bank-aws/README.md)), each in its own single-bank
+process so the in-process shortcut cannot mask a wire bug. Note that the AWS
+host does not need this workaround — a Lambda Function URL may call itself —
+but it keeps the shortcut anyway, for latency.
 
 ---
 

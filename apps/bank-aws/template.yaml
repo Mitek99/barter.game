@@ -1,0 +1,310 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  barter.game banks — AWS serverless host. One Node.js Lambda (Function URL)
+  runs every configured bank behind CloudFront; DynamoDB single-table storage;
+  S3 for media blobs and the static web client.
+
+Parameters:
+  BankKeysSsmPath:
+    Type: String
+    Default: /barter/banks
+    Description: >
+      SSM path holding one SecureString per bank: parameter "<path>/alice"
+      (base58 ed25519 private key) becomes bank "alice". Create parameters
+      with: aws ssm put-parameter --type SecureString --name /barter/banks/alice --value <key>
+  DomainName:
+    Type: String
+    Default: ''
+    Description: >
+      Optional custom domain for CloudFront (requires AcmCertificateArn).
+      Leave empty to use the d123.cloudfront.net domain.
+  AcmCertificateArn:
+    Type: String
+    Default: ''
+    Description: ACM certificate (us-east-1) for DomainName.
+  OriginSecret:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: >
+      Shared secret CloudFront sends to the Lambda origin; the function
+      refuses requests without it, which is what keeps the AuthType:NONE
+      Function URL from being usable directly. Leave empty to derive one
+      from the stack id (unique per stack, never sent to viewers); set an
+      explicit value to rotate it.
+
+Conditions:
+  HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
+  HasOriginSecret: !Not [!Equals [!Ref OriginSecret, '']]
+
+Resources:
+  # --- storage ---------------------------------------------------------------
+
+  BankTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: exp
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  # Media blobs (media/<bankPubkey>/<hash>) and the static web client
+  # (webapp/*). Private; CloudFront reads webapp/* through OAC, media is
+  # served by the Lambda (auth on upload, immutable caching on download).
+  AssetsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  AssetsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AssetsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: CloudFrontReadWebapp
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${AssetsBucket.Arn}/webapp/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+          # Without ListBucket, S3 answers a GET for a missing key with 403
+          # AccessDenied instead of 404 — a missing SPA asset would surface to
+          # the browser as a permissions error rather than "not found".
+          - Sid: CloudFrontListForAccurate404
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:ListBucket
+            Resource: !GetAtt AssetsBucket.Arn
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+
+  # --- the bank function -----------------------------------------------------
+
+  BankFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dist/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Architectures: [arm64]
+      MemorySize: 512
+      Timeout: 60
+      Environment:
+        Variables:
+          BANK_TABLE: !Ref BankTable
+          BANK_MEDIA_BUCKET: !Ref AssetsBucket
+          BANK_KEYS_SSM_PATH: !Ref BankKeysSsmPath
+          ORIGIN_SECRET: !If
+            - HasOriginSecret
+            - !Ref OriginSecret
+            - !Select [2, !Split ['/', !Ref 'AWS::StackId']]
+          # With a custom domain the public URL is known up front, so pin it:
+          # a pinned bank never re-derives (and re-signs) its Address from a
+          # request host. Without one, the CloudFront domain is only known
+          # after this stack exists, so the bank derives its URL from the
+          # viewer Host that CloudFront forwards — safe because the origin
+          # secret makes CloudFront the only way in.
+          BANK_BASE_URL: !If [HasCustomDomain, !Sub 'https://${DomainName}', '']
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BankTable
+        - S3CrudPolicy:
+            BucketName: !Ref AssetsBucket
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ssm:GetParametersByPath
+              Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${BankKeysSsmPath}/*'
+            - Effect: Allow
+              Action:
+                - ssm:GetParametersByPath
+              Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${BankKeysSsmPath}'
+      # AuthType NONE: the client protocol carries its own request signatures
+      # (signed envelopes / X-Barter-Auth) and CloudFront OAC-signed POSTs
+      # would force every client to send x-amz-content-sha256. The URL is
+      # still not meant to be used directly — CloudFront is the front door.
+      FunctionUrlConfig:
+        AuthType: NONE
+
+  # --- CloudFront ------------------------------------------------------------
+
+  # Copies the viewer's Host into x-forwarded-host so the bank derives its
+  # public URL (and verifies signed request paths) against the real domain,
+  # not the Function URL host.
+  ForwardHostFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub '${AWS::StackName}-forward-host'
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Copy viewer Host into x-forwarded-host for the Lambda origin
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          request.headers['x-forwarded-host'] = { value: request.headers.host.value };
+          return request;
+        }
+
+  # Rewrites /:bank/ui/app/<asset> to /webapp/<asset> for the S3 origin.
+  StaticRewriteFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub '${AWS::StackName}-static-rewrite'
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Map bank-scoped SPA asset paths onto the shared webapp/ prefix
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          var m = request.uri.match(/^\/[^\/]+\/ui\/app\/(.*)$/);
+          request.uri = '/webapp/' + (m && m[1] ? m[1] : 'index.html');
+          return request;
+        }
+
+  S3OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${AWS::StackName}-s3-oac'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: barter.game banks
+        HttpVersion: http2and3
+        PriceClass: PriceClass_100
+        # Never negatively cache. Media URLs are content-addressed and a 404
+        # means "not uploaded HERE yet" — the cross-bank repost flow probes a
+        # blob, uploads it, then renders the same URL, so a cached 404 shows
+        # the user a broken image. 403 is the S3 origin's answer for a missing
+        # SPA asset. Both must re-ask the origin every time.
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ErrorCachingMinTTL: 0
+        Aliases: !If [HasCustomDomain, [!Ref DomainName], !Ref 'AWS::NoValue']
+        ViewerCertificate: !If
+          - HasCustomDomain
+          - AcmCertificateArn: !Ref AcmCertificateArn
+            MinimumProtocolVersion: TLSv1.2_2021
+            SslSupportMethod: sni-only
+          - !Ref 'AWS::NoValue'
+        Origins:
+          - Id: bank-lambda
+            # The Function URL host, without scheme/trailing slash.
+            DomainName: !Select [2, !Split ['/', !GetAtt BankFunctionUrl.FunctionUrl]]
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+              # Must not undercut the function's own 60 s timeout: a
+              # propose_deal that fans out to several peer banks can outlive
+              # the 30 s default, and CloudFront would answer the client with
+              # its own 504 HTML page instead of the bank's JSON.
+              OriginReadTimeout: 60
+              OriginKeepaliveTimeout: 60
+            OriginCustomHeaders:
+              - HeaderName: x-origin-secret
+                HeaderValue: !If
+                  - HasOriginSecret
+                  - !Ref OriginSecret
+                  - !Select [2, !Split ['/', !Ref 'AWS::StackId']]
+          - Id: webapp-s3
+            DomainName: !GetAtt AssetsBucket.RegionalDomainName
+            OriginAccessControlId: !Ref S3OriginAccessControl
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        # Everything dynamic: RPC, signed UI API, barter links, manifest, media
+        # upload. Never cached; all headers/query/cookies pass through except
+        # Host (Lambda URLs need their own Host to route).
+        DefaultCacheBehavior:
+          TargetOriginId: bank-lambda
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+          CachedMethods: [GET, HEAD]
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # Managed-CachingDisabled
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac # Managed-AllViewerExceptHostHeader
+          # No Compress: Managed-CachingDisabled turns compression off, so
+          # setting it here would only imply a behavior that never happens.
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt ForwardHostFunction.FunctionMetadata.FunctionARN
+        CacheBehaviors:
+          # Immutable content-addressed media downloads — cache at the edge.
+          # Uploads are POST /:bank/media (no trailing segment) and fall
+          # through to the default behavior.
+          - PathPattern: '*/media/*'
+            TargetOriginId: bank-lambda
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD, OPTIONS]
+            CachedMethods: [GET, HEAD]
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            Compress: true
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN: !GetAtt ForwardHostFunction.FunctionMetadata.FunctionARN
+          # Static SPA assets from S3 (deploy.sh syncs apps/web -> s3://…/webapp/).
+          - PathPattern: '*/ui/app/*'
+            TargetOriginId: webapp-s3
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
+            Compress: true
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN: !GetAtt StaticRewriteFunction.FunctionMetadata.FunctionARN
+
+Outputs:
+  DistributionDomain:
+    Description: Public entry point — banks live at https://<domain>/<bank>/…
+    Value: !GetAtt Distribution.DomainName
+  DistributionId:
+    Value: !Ref Distribution
+  FunctionUrl:
+    Description: Direct Lambda URL (debugging; CloudFront is the front door)
+    Value: !GetAtt BankFunctionUrl.FunctionUrl
+  TableName:
+    Value: !Ref BankTable
+  AssetsBucketName:
+    Value: !Ref AssetsBucket

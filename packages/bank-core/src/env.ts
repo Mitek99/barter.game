@@ -1,5 +1,7 @@
 import { publicKeyOf, base58Decode, type Base58PubKey } from '@barter.game/protocol';
-import type { Bank } from './types.ts';
+import type { AssetReader, Bank } from './types.ts';
+import type { KvStore } from './kv.ts';
+import type { MediaStore } from './media.ts';
 
 export type LoadedBank = {
   name: string;
@@ -9,9 +11,11 @@ export type LoadedBank = {
 
 const BANK_ENV_RE = /^BANK_([A-Z0-9_]+)_PRIV_KEY$/;
 
-export function loadBankKeys(): LoadedBank[] {
+export function loadBankKeys(
+  env: Record<string, string | undefined>,
+): LoadedBank[] {
   const banks: LoadedBank[] = [];
-  for (const [key, value] of Object.entries(Deno.env.toObject())) {
+  for (const [key, value] of Object.entries(env)) {
     const m = key.match(BANK_ENV_RE);
     if (!m || !value) continue;
     const name = m[1]!.toLowerCase().replace(/_/g, '-');
@@ -30,10 +34,16 @@ export function loadBankKeys(): LoadedBank[] {
   return banks;
 }
 
+export type BankDeps = {
+  kv: KvStore;
+  media: MediaStore;
+  assets: AssetReader;
+};
+
 export function createBank(
   loaded: LoadedBank,
-  kv: Deno.Kv,
+  deps: BankDeps,
   url: string,
 ): Bank {
-  return { ...loaded, kv, url };
+  return { ...loaded, ...deps, url };
 }

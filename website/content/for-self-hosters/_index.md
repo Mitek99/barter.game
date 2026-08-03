@@ -72,7 +72,7 @@ Deno KV with atomic check-and-set is one way. Postgres with a partial unique ind
 
 ### 4. The protocol handlers
 
-Implement the methods in `protocol/bank-rpc.md`. The reference handlers in `apps/bank/handlers/` are a working example you can read and adapt.
+Implement the methods in `protocol/bank-rpc.md`. The reference handlers in `packages/bank-core/src/handlers/` are a working example you can read and adapt.
 
 ## Security checklist
 

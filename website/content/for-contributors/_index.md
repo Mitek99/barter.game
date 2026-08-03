@@ -45,7 +45,7 @@ The `TODOS.md` AI agents section is a brainstorm, not a roadmap. If you build on
 2. [the `protocol/` spec](https://github.com/ai-1st/barter.game/blob/main/protocol/README.md) — the invariant contract (45 minutes)
 3. [the reference implementation notes](https://github.com/ai-1st/barter.game/blob/main/apps/bank/README.md) — how we built it (30 minutes)
 4. `packages/protocol/src/` — the code (an afternoon)
-5. `apps/bank/handlers/` and `apps/bank/advance.ts` — the server-side state machine
+5. `packages/bank-core/src/handlers/` and `packages/bank-core/src/advance.ts` — the server-side state machine
 6. [`TODOS.md`](https://github.com/ai-1st/barter.game/blob/main/TODOS.md) — what's next
 
 ## Code of conduct

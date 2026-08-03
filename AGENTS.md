@@ -10,7 +10,9 @@ This repo contains:
 
 - The **protocol spec** (`protocol/`) — the invariant contract every implementation must follow: overview, base types, document schemas, bank RPC, discovery, and post feeds.
 - The **protocol library** (`packages/protocol/`) — canonical JSON, crypto, doc types, validators. Runs identically under Bun, Deno, and browser.
-- The **bank server** (`apps/bank/`) — Deno process serving one or more federated banks (RPC + custom UI API + the SPA).
+- The **bank engine** (`packages/bank-core/`) — the whole bank (routing, RPC, advance engine, storage layer), written against web-standard APIs only. Hosts inject storage.
+- The **Deno bank host** (`apps/bank/`) — Deno process serving one or more federated banks from Deno KV, plus the e2e suites.
+- The **AWS bank host** (`apps/bank-aws/`) — the same engine on Lambda + DynamoDB + S3 behind CloudFront, deployed with SAM.
 - The **web UI** (`apps/web/`) — build-less browser SPA the bank serves at `/:bank/ui`.
 - The **scenarios** (`scenarios/`) — step-by-step protocol interaction traces.
 - The **website** (`website/`) — Hugo/Hextra static site.
@@ -20,9 +22,9 @@ This repo contains:
 | Layer | Technology | Notes |
 |---|---|---|
 | Package manager | Bun | `bun.lock` is the lockfile. Use `bun install`, not `npm install`. |
-| Server runtime | Deno | Deno Deploy in production — **auto-deploys on push to `main`** via the GitHub integration; `deploy` block in `deno.json`. Stateless, uses Deno KV. |
+| Server runtime | Deno, or Node.js on AWS Lambda | Deno Deploy in production — **auto-deploys on push to `main`** via the GitHub integration; `deploy` block in `deno.json`. The AWS host is deployed on demand with SAM (`apps/bank-aws`). Both are stateless and run the same `packages/bank-core` engine. |
 | Protocol lib | TypeScript (ES modules) | Single source file `packages/protocol/src/index.ts`. Must run identically under Bun, Deno, and browser. |
-| Database | Deno KV | Single store, every key prefixed `[bank_pubkey, ...]`; atomic check-and-set operations. |
+| Database | Deno KV, or DynamoDB single-table | Behind the `KvStore` seam (`packages/bank-core/src/kv.ts`). Every key is prefixed `[bank_pubkey, schema, kind, ...]`; atomic check-and-set operations. Values are capped at 64 KiB on every implementation so both deployments accept the same writes. |
 | Crypto | `@noble/ed25519`, `@noble/hashes`, `@scure/base` | Pure-JS, auditable, runs in all targets. |
 | Website | Hugo + Hextra theme | Built with `hugo`; deployed via Netlify. |
 | Key storage (user) | Browser-encrypted keystore on the bank | PBKDF2-SHA256 (250k iterations) + AES-256-GCM, encrypted client-side; the bank stores ciphertext only. See `apps/web/README.md`. |
@@ -32,7 +34,7 @@ This repo contains:
 
 ```
 barter.game/
-├── package.json              # Root workspace manifest (workspaces: packages/*, apps/web)
+├── package.json              # Root workspace manifest (workspaces: packages/*, apps/web, apps/bank-aws)
 ├── tsconfig.json             # Shared TypeScript config (strict, ES2022, bundler resolution)
 ├── deno.json                 # Deno config: import map, test includes, Deno Deploy app
 ├── bun.lock                  # Bun lockfile
@@ -45,23 +47,34 @@ barter.game/
 │   ├── discovery.md          #   registries, offers, QR profile bundles, public holdings
 │   └── post-feed.md          #   Post doc, voucher-anchored feeds, moderation
 ├── packages/
-│   └── protocol/             # @barter.game/protocol — shared protocol library (see its README.md)
-│       ├── src/index.ts      #   canonical JSON (JCS), ed25519 signing, doc types, validators
-│       ├── test/             #   bun tests + golden canonical vectors
-│       └── test-deno/        #   cross-runtime parity tests
+│   ├── protocol/             # @barter.game/protocol — shared protocol library (see its README.md)
+│   │   ├── src/index.ts      #   canonical JSON (JCS), ed25519 signing, doc types, validators
+│   │   ├── test/             #   bun tests + golden canonical vectors
+│   │   └── test-deno/        #   cross-runtime parity tests
+│   └── bank-core/            # @barter.game/bank-core — the bank engine, host-agnostic (see its README.md)
+│       └── src/
+│           ├── router.ts     #   HTTP routing: RPC + UI API + SPA + Barter Links + media vault (/:bank/media)
+│           ├── rpc.ts        #   JSON-RPC envelope verification + replay
+│           ├── registry.ts   #   method → handler map
+│           ├── advance.ts    #   self-advance engine (ready → hold → settle)
+│           ├── kv.ts         #   KvStore interface (the storage seam) + MemoryKv
+│           ├── media.ts      #   MediaStore interface + KV-chunked implementation
+│           ├── db.ts env.ts peer.ts local.ts ui.ts types.ts error.ts
+│           └── handlers/     #   submit_docs, submit_mandate, create_records, notify_signatures,
+│                             #   get_record_signatures, and get.ts (get_voucher, list_vouchers, list_accounts,
+│                             #   list_offers, get_offer, get_invoice, get_cheque, get_address, get_account_balance,
+│                             #   list_posts, get_post, get_post_signatures, get_voucher_meta)
 ├── apps/
-│   ├── bank/                 # Deno bank server (see its README.md)
-│   │   ├── main.ts           #   HTTP router: RPC + UI API + SPA + Barter Links + media vault (/:bank/media)
-│   │   ├── rpc.ts            #   JSON-RPC envelope verification + replay
-│   │   ├── registry.ts       #   method → handler map
-│   │   ├── advance.ts        #   self-advance engine (ready → hold → settle)
-│   │   ├── db.ts env.ts peer.ts local.ts ui.ts genkey.ts
-│   │   ├── handlers/         #   submit_docs, submit_mandate, create_records, notify_signatures,
-│   │   │                     #   get_record_signatures, and get.ts (get_voucher, list_vouchers, list_accounts,
-│   │   │                     #   list_offers, get_offer, get_invoice, get_cheque, get_address, get_account_balance,
-│   │   │                     #   list_posts, get_post, get_post_signatures, get_voucher_meta)
+│   ├── bank/                 # Deno host: Deno KV + on-disk assets (see its README.md)
+│   │   ├── main.ts           #   wires storage into the engine, Deno.serve
+│   │   ├── genkey.ts         #   bank keypair generator
 │   │   └── e2e-*.ts          #   nine end-to-end checks (local, cheque-local, crossbank, sameswap, reject,
-│   │                         #   replay, forged-sigs, account-privacy, posts)
+│   │                         #   replay, forged-sigs, account-privacy, posts) — pure HTTP clients,
+│   │                         #   they run against EITHER host via E2E_BASE_URL
+│   ├── bank-aws/             # AWS host: Lambda + DynamoDB + S3 + CloudFront (see its README.md)
+│   │   ├── src/              #   kv-dynamo.ts, media-s3.ts, adapter.ts (Function URL), local-server.ts
+│   │   ├── template.yaml     #   SAM stack
+│   │   └── test/             #   KvStore contract suite (MemoryKv + DynamoDB Local)
 │   └── web/                  # Browser SPA served by the bank (see its README.md)
 │       ├── index.html app.js protocol.js qr.js styles.css vendor/
 │       └── sw.js icon.svg favicon.ico icon-*.png apple-touch-icon.png
@@ -94,9 +107,15 @@ bun run test:all
 | `bun run test` | Bun | Protocol library: canonical JSON golden vectors, crypto, all doc validators |
 | `bun run test:deno` | Deno | The SAME golden vectors under Deno (**cross-runtime parity**) |
 | `deno test` | Deno | Parity vectors + bank tests per `deno.json` `test.include` |
+| `cd apps/bank-aws && bun run test` | Node | `KvStore` contract suite — MemoryKv always, plus DynamoDB Local when `DDB_ENDPOINT` is set. This is what keeps a storage backend from quietly breaking hold exclusivity or the 64 KiB value cap. |
 | `deno run --allow-net --allow-env --allow-read --allow-write --unstable-kv apps/bank/e2e-<name>.ts` | Deno | Nine end-to-end suites: `local` (single-bank lifecycle), `cheque-local` (single-bank cheque settlement), `crossbank` (bilateral swap, lead/follow cascade), `sameswap` (same-bank two-voucher swap minting two record pairs), `reject` (uncoverable debit rejects the deal), `replay` (settle-replay resistance), `forged-sigs` (peer signature-authority checks), `account-privacy` (balance-read authorization), `posts` (posts/feeds/follows, bank auto-repost, media vault) |
 
 The **cross-runtime parity suite is load-bearing**. If Bun and Deno disagree on a canonical hash, every signature in the protocol becomes unverifiable across implementations. Run it before every release.
+
+The e2e suites are wire-protocol HTTP clients with no import from the bank, so
+point `E2E_BASE_URL` at whichever host you changed — the Deno server, or
+`apps/bank-aws`'s local Node server. A change to `packages/bank-core` should be
+run against both, since both deployments ship it.
 
 > `scripts/demo-local.sh` and `scripts/demo-deploy.sh` are currently **broken** — they invoke the removed CLI (`apps/cli/`). Rebuilding them is tracked in `TODOS.md`. Do not cite them as working. The working command-line client is `scripts/emu` (`scripts/emulate.ts`) — see `EMULATED.md`.
 
@@ -134,11 +153,13 @@ cd website && hugo mod get && hugo --gc --minify
 
 ### Adding a handler to the bank server
 
-1. Create `apps/bank/handlers/<method_name>.ts`.
-2. Export a handler function and register it in `apps/bank/registry.ts`.
+1. Create `packages/bank-core/src/handlers/<method_name>.ts`.
+2. Export a handler function and register it in `packages/bank-core/src/registry.ts`.
 3. The handler must:
    - Rely on `rpc.ts` for envelope signature verification and replay claim.
    - Scope every KV operation to this bank's pubkey.
+   - Use only web-standard APIs and the injected stores (`bank.kv`, `bank.media`,
+     `bank.assets`) — no `Deno.*`, no `node:*`. The engine has to run on both hosts.
    - Return typed JSON-RPC responses.
 4. Add a Deno test (`apps/bank/*.test.ts` / `*.deno-test.ts`) or extend an e2e script if the handler changes the state machine.
 
@@ -146,11 +167,11 @@ cd website && hugo mod get && hugo --gc --minify
 
 - **Private keys (user)**: generated in the browser; only the PBKDF2+AES-GCM ciphertext reaches the bank. There is no password recovery — lost password means lost account.
 - **Bank keys**: loaded from `BANK_<NAME>_PRIV_KEY` env vars. Never log them, never return them in RPC responses.
-- **Signing model**: Users sign Voucher, Account, Order, Address, and Post docs. The coordinator signs Mandates. Banks sign Offer and Balance docs plus every ledger `Signature` (`ready`/`hold`/`settle`/`reject`) — and banks also sign Post docs: on every accepted user post the bank mints a bank-signed auto-repost embedding the original into its own feed (`apps/bank/handlers/submit_docs.ts` `bankRepost`; carriage per `protocol/post-feed.md`). Records are bank-minted (bank-assigned ULIDs) and referenced by content hash; only the `pair`/`deal_id` grouping uses ULIDs.
+- **Signing model**: Users sign Voucher, Account, Order, Address, and Post docs. The coordinator signs Mandates. Banks sign Offer and Balance docs plus every ledger `Signature` (`ready`/`hold`/`settle`/`reject`) — and banks also sign Post docs: on every accepted user post the bank mints a bank-signed auto-repost embedding the original into its own feed (`packages/bank-core/src/handlers/submit_docs.ts` `bankRepost`; carriage per `protocol/post-feed.md`). Records are bank-minted (bank-assigned ULIDs) and referenced by content hash; only the `pair`/`deal_id` grouping uses ULIDs.
 - **Replay protection / idempotency**: Every RPC envelope carries a ULID `id` bound to `(sender_pubkey, recipient_pubkey)`. The bank stores seen triples in KV with a 24h TTL and rejects duplicates with `-32002`. `create_records` is idempotent on `(deal_id, giver, receiver)` and rejects the same key with different amounts.
 - **Signature verification**: Every inbound request is verified against its `pubkey` before any handler runs. The `to` field must match the recipient bank's pubkey.
-- **Account privacy**: Accounts are private; the reference bank discloses a balance only to the account holder and the voucher's issuer (`apps/bank/handlers/get.ts`, verified by `e2e-account-privacy.ts`). The spec's `public: true` opt-in (`protocol/bank-schema.md` §1.2) is specified but not yet implemented in the reference bank. Account names never leave the holder's control.
-- **Media vault**: content-addressed blobs served at `/:bank/media` by ref `<hash>.<ext>` (`apps/bank/ui.ts` `handleMedia`). Upload sits behind write auth and refuses anything outside the svg/png/jpg/jpeg/webp/gif extension allowlist (plus a size cap), so a caller-chosen Content-Type can never make the unauthenticated GET host arbitrary pages on the bank origin; GET re-verifies the content hash and serves immutable responses with `X-Content-Type-Options: nosniff` and a sandboxing CSP. `submit_docs` accepts a post only if every media ref in its whole embedded tree is already stored at this bank — cross-bank reposts copy the blobs first. Details in `protocol/post-feed.md`.
+- **Account privacy**: Accounts are private; the reference bank discloses a balance only to the account holder and the voucher's issuer (`packages/bank-core/src/handlers/get.ts`, verified by `e2e-account-privacy.ts`). The spec's `public: true` opt-in (`protocol/bank-schema.md` §1.2) is specified but not yet implemented in the reference bank. Account names never leave the holder's control.
+- **Media vault**: content-addressed blobs served at `/:bank/media` by ref `<hash>.<ext>` (`packages/bank-core/src/ui.ts` `handleMedia`). Upload sits behind write auth and refuses anything outside the svg/png/jpg/jpeg/webp/gif extension allowlist (plus a size cap), so a caller-chosen Content-Type can never make the unauthenticated GET host arbitrary pages on the bank origin; GET re-verifies the content hash and serves immutable responses with `X-Content-Type-Options: nosniff` and a sandboxing CSP. `submit_docs` accepts a post only if every media ref in its whole embedded tree is already stored at this bank — cross-bank reposts copy the blobs first. Details in `protocol/post-feed.md`.
 - **Double-spend gate**: an atomic KV check-and-set on the active-hold key enforces at most one active hold per account per external deal. Conflicts never error outward: the advance engine quietly issues no hold signatures that pass and re-attempts on later events (a stalled deal is eventually rejected by the bank's stall timeout).
 - **Sum invariant**: on every settle, balances across all accounts for a Voucher must sum to zero (or the agreed limit).
 - **Pubkey pinning**: clients pin `pubkey + url`; `<bank-url>/barter-bank.json` is compared against the pin and divergence fails closed.

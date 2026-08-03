@@ -12,8 +12,11 @@ import type {
   ULID,
   Voucher,
 } from '@barter.game/protocol';
-import { base58Encode, hashDoc } from '@barter.game/protocol';
+import { hashDoc } from '@barter.game/protocol';
 import type { Bank } from './types.ts';
+import type { KvKey, KvKeyPart, KvListSelector } from './kv.ts';
+import { sha256Base58Bytes, type MediaMeta } from './media.ts';
+export { MEDIA_MAX_BYTES, type MediaMeta } from './media.ts';
 
 const REPLAY_WINDOW_MS = 1000 * 60 * 60 * 24; // 24h
 
@@ -31,7 +34,7 @@ const REPLAY_WINDOW_MS = 1000 * 60 * 60 * 24; // 24h
 //     hash changed, so every key changed.
 const SCHEMA = 'v2';
 
-function k(bank: Bank, ...parts: Deno.KvKeyPart[]): Deno.KvKey {
+function k(bank: Bank, ...parts: KvKeyPart[]): KvKey {
   return [bank.pubkey, SCHEMA, ...parts];
 }
 
@@ -399,6 +402,27 @@ export async function getRecord(
   return r.value;
 }
 
+/**
+ * Hashes of records that touched an account, via the account_record index.
+ * `limit` is passed down to the store so a caller that only needs a page
+ * does not drag the whole index across the wire.
+ */
+export async function listRecordHashesByAccount(
+  bank: Bank,
+  accountHash: Base58SHA256,
+  limit?: number,
+): Promise<Base58SHA256[]> {
+  const iter = bank.kv.list<boolean>(
+    { prefix: k(bank, 'account_record', accountHash) },
+    limit === undefined ? undefined : { limit },
+  );
+  const out: Base58SHA256[] = [];
+  for await (const entry of iter) {
+    out.push(entry.key[entry.key.length - 1] as string);
+  }
+  return out;
+}
+
 export async function listRecordsByDeal(
   bank: Bank,
   dealId: ULID,
@@ -564,38 +588,15 @@ export async function storeSignature(
 }
 
 // --- media blobs ----------------------------------------------------------
-
-/**
- * Content-addressed media for posts (post-feed.md §5). Blobs are immutable and
- * fetched by hash over plain unauthenticated HTTP, so storage is a flat
- * namespace with no owner.
- *
- * Deno KV caps a single value at 64 KiB, so a blob is split across numbered
- * chunk keys with a small metadata row. Both caps below are BANK POLICY, not
- * protocol — §5 leaves size/type/quota entirely to the carrying bank.
- */
-const MEDIA_CHUNK_BYTES = 48 * 1024;
-export const MEDIA_MAX_BYTES = 1024 * 1024;
-
-export type MediaMeta = {
-  size: number;
-  content_type: string;
-  chunks: number;
-};
-
-async function sha256Base58Bytes(bytes: Uint8Array): Promise<Base58SHA256> {
-  const buf = new Uint8Array(bytes.length);
-  buf.set(bytes);
-  const digest = await crypto.subtle.digest('SHA-256', buf);
-  return base58Encode(new Uint8Array(digest));
-}
+// Blob storage lives behind the MediaStore interface (media.ts) — chunked KV
+// on Deno, S3 on AWS. These wrappers keep the bank-scoped call shape the
+// handlers use.
 
 export async function hasMedia(
   bank: Bank,
   hash: Base58SHA256,
 ): Promise<boolean> {
-  const r = await bank.kv.get<MediaMeta>(k(bank, 'media_meta', hash));
-  return r.value !== null;
+  return bank.media.has(bank.pubkey, hash);
 }
 
 /** Store a blob and return its sha256 (base58). Re-storing the same bytes is a no-op. */
@@ -605,17 +606,7 @@ export async function storeMedia(
   contentType: string,
 ): Promise<Base58SHA256> {
   const hash = await sha256Base58Bytes(bytes);
-  if (await hasMedia(bank, hash)) return hash;
-
-  const chunks = Math.max(1, Math.ceil(bytes.length / MEDIA_CHUNK_BYTES));
-  for (let i = 0; i < chunks; i++) {
-    const slice = bytes.slice(i * MEDIA_CHUNK_BYTES, (i + 1) * MEDIA_CHUNK_BYTES);
-    await bank.kv.set(k(bank, 'media_chunk', hash, i), slice);
-  }
-  // Metadata last: its presence is what marks the blob complete, so a partial
-  // write can never be served as if it were whole.
-  const meta: MediaMeta = { size: bytes.length, content_type: contentType, chunks };
-  await bank.kv.set(k(bank, 'media_meta', hash), meta);
+  await bank.media.put(bank.pubkey, hash, bytes, contentType);
   return hash;
 }
 
@@ -623,19 +614,7 @@ export async function getMedia(
   bank: Bank,
   hash: Base58SHA256,
 ): Promise<{ bytes: Uint8Array; meta: MediaMeta } | null> {
-  const metaRow = await bank.kv.get<MediaMeta>(k(bank, 'media_meta', hash));
-  const meta = metaRow.value;
-  if (!meta) return null;
-  const bytes = new Uint8Array(meta.size);
-  let offset = 0;
-  for (let i = 0; i < meta.chunks; i++) {
-    const c = await bank.kv.get<Uint8Array>(k(bank, 'media_chunk', hash, i));
-    if (!c.value) return null;
-    bytes.set(c.value, offset);
-    offset += c.value.length;
-  }
-  if (offset !== meta.size) return null;
-  return { bytes, meta };
+  return bank.media.get(bank.pubkey, hash);
 }
 
 // --- posts ----------------------------------------------------------------
@@ -704,8 +683,8 @@ export async function listPosts(
 
   // `start` is inclusive, so a cursored page can re-see the cursor key itself;
   // it is dropped explicitly below rather than by appending a sentinel char.
-  const selector: Deno.KvListSelector = before
-    ? { prefix, start: [...prefix, invertUlid(before)] as Deno.KvKey }
+  const selector: KvListSelector = before
+    ? { prefix, start: [...prefix, invertUlid(before)] }
     : { prefix };
   const cursorKey = before ? invertUlid(before) : null;
 

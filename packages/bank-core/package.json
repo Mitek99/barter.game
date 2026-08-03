@@ -1,0 +1,23 @@
+{
+  "name": "@barter.game/bank-core",
+  "version": "0.0.1",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Runtime-agnostic bank engine shared by the Deno and AWS deployments. Consumed as TypeScript source; no build step (same policy as @barter.game/protocol).",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "echo 'no build: consumed as TS source'",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@barter.game/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

@@ -161,12 +161,14 @@ Test against the reference banks (the browser SPA each bank serves at `/:bank/ui
 | Concern | Path in reference repo |
 |---|---|
 | Canonical JSON, crypto, doc types + validators | `packages/protocol/src/index.ts` (single file) |
-| Deno entrypoint | `apps/bank/main.ts` |
-| Env var key loader | `apps/bank/env.ts` |
-| RPC envelope handler | `apps/bank/rpc.ts` |
-| Bank method registry | `apps/bank/registry.ts` |
-| Per-method handlers | `apps/bank/handlers/*.ts` |
-| Deno KV database layer | `apps/bank/db.ts` |
-| Advance engine | `apps/bank/advance.ts` |
-| Web UI serving | `apps/bank/ui.ts` |
+| Deno host (wires storage into the shared engine) | `apps/bank/main.ts` |
+| AWS Lambda host (DynamoDB + S3) | `apps/bank-aws/src/index.ts` |
+| Storage seam (`KvStore` / `MediaStore`) | `packages/bank-core/src/kv.ts`, `media.ts` |
+| Env var key loader | `packages/bank-core/src/env.ts` |
+| RPC envelope handler | `packages/bank-core/src/rpc.ts` |
+| Bank method registry | `packages/bank-core/src/registry.ts` |
+| Per-method handlers | `packages/bank-core/src/handlers/*.ts` |
+| Storage layer (KV-shaped) | `packages/bank-core/src/db.ts` |
+| Advance engine | `packages/bank-core/src/advance.ts` |
+| Web UI serving | `packages/bank-core/src/ui.ts` |
 | Browser client | `apps/web/app.js` |

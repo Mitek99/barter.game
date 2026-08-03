@@ -32,6 +32,7 @@ import {
   getVoucher,
   listAccounts,
   listOrdersByHolder,
+  listRecordHashesByAccount,
   listRecordsByDeal,
   listVouchers,
   listVouchersByIssuer,
@@ -45,6 +46,7 @@ import {
 import { claimReplayId } from './db.ts';
 import { bankRpcCall, fetchDiscovery } from './peer.ts';
 import type { Bank } from './types.ts';
+import type { KvKey } from './kv.ts';
 import { RpcError } from './error.ts';
 
 class UiError extends RpcError {
@@ -97,7 +99,7 @@ export async function handleUiRequest(
       });
     }
     if (uiPath === '/' || uiPath.startsWith('/app/')) {
-      return serveSpa(request, uiPath, basePath);
+      return serveSpa(bank, basePath);
     }
 
     // Auth-required UI routes
@@ -332,20 +334,17 @@ export async function handlePublicUiRoute(
   // (a worker under /app/ could not control start_url). Installability requires
   // it; it caches nothing — see apps/web/sw.js.
   if (uiPath === '/sw.js' && request.method === 'GET') {
-    try {
-      const file = await Deno.readFile('./apps/web/sw.js');
-      return new Response(file, {
-        headers: {
-          'Content-Type': 'application/javascript; charset=utf-8',
-          // Never serve a stale worker: it is the one script that can outlive
-          // a deploy and keep controlling clients.
-          'Cache-Control': 'no-cache',
-          'Service-Worker-Allowed': `${basePath}/`,
-        },
-      });
-    } catch {
-      return notFound();
-    }
+    const read = await bank.assets.read('sw.js');
+    if (!read) return notFound();
+    return new Response(new Uint8Array(read), {
+      headers: {
+        'Content-Type': 'application/javascript; charset=utf-8',
+        // Never serve a stale worker: it is the one script that can outlive
+        // a deploy and keep controlling clients.
+        'Cache-Control': 'no-cache',
+        'Service-Worker-Allowed': `${basePath}/`,
+      },
+    });
   }
 
   // Public issuer resolution — everything this bank knows about a pubkey:
@@ -485,7 +484,7 @@ async function handleKeystoreGet(bank: Bank, handle: string): Promise<Response> 
     return json(400, { code: -32600, message: HANDLE_RULE });
   }
   // Simple rate limiter keyed by handle (5/min).
-  const key: Deno.KvKey = [bank.pubkey, 'rl_keystore', handle];
+  const key: KvKey = [bank.pubkey, 'rl_keystore', handle];
   const now = Date.now();
   const bucket = await bank.kv.get<{ count: number; window: number }>(key);
   const current = bucket.value ?? { count: 0, window: now };
@@ -588,13 +587,25 @@ async function handleHistory(
   url: URL,
 ): Promise<Response> {
   const rows = await listAccounts(bank, pubkey);
-  const events = [];
+  const events: {
+    deal_id: string;
+    record: string;
+    pair: string;
+    voucher: string;
+    amount: number;
+    direction: string;
+    state: string;
+    signatures: string[];
+  }[] = [];
   const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '100', 10), 200);
   for (const { account } of rows) {
     const accountHash = hashDoc(account);
-    const iter = bank.kv.list<boolean>({ prefix: [bank.pubkey, 'account_record', accountHash] });
-    for await (const entry of iter) {
-      const hash = entry.key[entry.key.length - 1] as string;
+    // Via db.ts so the key carries the storage-schema component — the raw
+    // prefix scan this replaced missed it and always came back empty. The
+    // limit keeps an account with a long history from being read in full
+    // just to fill one page.
+    const remaining = limit - events.length;
+    for (const hash of await listRecordHashesByAccount(bank, accountHash, remaining)) {
       const rec = await getRecord(bank, hash);
       if (!rec) continue;
       const sigs = await getSignaturesForRecord(bank, hash);
@@ -1315,27 +1326,23 @@ function webManifest(bank: Bank, basePath: string): Record<string, unknown> {
   };
 }
 
-async function serveSpa(
-  _request: Request,
-  _uiPath: string,
-  basePath: string,
-): Promise<Response> {
+async function serveSpa(bank: Bank, basePath: string): Promise<Response> {
   // Inject a <base> so the SPA's relative `app/…` asset refs resolve correctly
   // whether the URL has a trailing slash or not: both `/alice/ui` and
   // `/alice/ui/` must load `/alice/ui/app/app.js`. app.js itself uses
   // root-absolute API paths, so it is unaffected by <base>.
   const baseTag = `<base href="${basePath}/">`;
-  try {
-    const file = await Deno.readTextFile('./apps/web/index.html');
-    return new Response(file.replace('<head>', `<head>\n  ${baseTag}`), {
+  const file = await bank.assets.read('index.html');
+  if (file) {
+    const html = new TextDecoder().decode(file);
+    return new Response(html.replace('<head>', `<head>\n  ${baseTag}`), {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
-  } catch {
-    return new Response(
-      `<!doctype html><html><head><meta charset="utf-8">${baseTag}<title>barter</title></head><body><div id="app"></div></body></html>`,
-      { headers: { 'Content-Type': 'text/html; charset=utf-8' } },
-    );
   }
+  return new Response(
+    `<!doctype html><html><head><meta charset="utf-8">${baseTag}<title>barter</title></head><body><div id="app"></div></body></html>`,
+    { headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+  );
 }
 
 // --- utilities -------------------------------------------------------------

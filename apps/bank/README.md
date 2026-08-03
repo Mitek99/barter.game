@@ -6,6 +6,14 @@ Deno KV database**. It exposes the standard protocol surface (discovery,
 signed JSON-RPC, address directory), plus a custom `/ui/*` API and the SPA in
 [`../web/`](../web/) on top.
 
+The bank engine itself — routing, RPC handlers, the advance engine, the KV
+layer — lives in [`packages/bank-core`](../../packages/bank-core/), shared
+with the AWS serverless host in [`apps/bank-aws`](../bank-aws/README.md)
+(Lambda + DynamoDB + S3 + CloudFront). This directory is the **Deno host**:
+[`main.ts`](./main.ts) wires Deno KV, KV-chunked media, and on-disk web
+assets into the shared engine, plus the e2e suites, which are pure HTTP
+clients and run unchanged against either host.
+
 This is a **reference**, not the contract. The normative contract lives in
 [`../../protocol/`](../../protocol/README.md) —
 [`base.md`](../../protocol/base.md) (identity, canonical JSON, envelope,
@@ -18,7 +26,7 @@ the wire format and invariants in those documents hold.
 ## HTTP surface
 
 Routing is in [`main.ts`](./main.ts); `/ui/*` and Barter Links are in
-[`ui.ts`](./ui.ts). Only `/rpc`, `/barter-bank.json`, and `/address` are
+[`ui.ts`](../../packages/bank-core/src/ui.ts). Only `/rpc`, `/barter-bank.json`, and `/address` are
 protocol; everything under `/ui/` is a **custom layer** per
 [`base.md` §6](../../protocol/base.md) (standard vs custom API) — other banks
 may implement it differently or not at all.
@@ -56,23 +64,22 @@ signatures for clients that cannot reach a peer bank directly.
 
 ## RPC methods
 
-[`rpc.ts`](./rpc.ts) verifies the envelope signature (canonical JSON minus
+[`rpc.ts`](../../packages/bank-core/src/rpc.ts) verifies the envelope signature (canonical JSON minus
 `sig`), checks `to` against the bank's pubkey, and claims the envelope `id`
-in a 24h replay window before dispatching via [`registry.ts`](./registry.ts):
+in a 24h replay window before dispatching via [`registry.ts`](../../packages/bank-core/src/registry.ts):
 
 | Method | Handler | Does |
 |---|---|---|
-| `submit_docs` | [`handlers/submit_docs.ts`](./handlers/submit_docs.ts) | Validate and store signed docs (Voucher, Account, Order, Address, Signature, Post); optionally derive and publish discovery Offers |
-| `submit_mandate` | [`handlers/submit_mandate.ts`](./handlers/submit_mandate.ts) | Validate and execute one per-(deal, order) coordinator Mandate; store foreign record bodies; trigger advance |
-| `create_records` | [`handlers/create_records.ts`](./handlers/create_records.ts) | Coordinator creates the deal's paired credit/debit records at this bank |
-| `notify_signatures` | [`handlers/notify_signatures.ts`](./handlers/notify_signatures.ts) | Peers push `ready`/`hold`/`settle`/`reject` signatures; indexed by record hash; triggers re-advance of the owning deal |
-| `get_record_signatures` | [`handlers/get_record_signatures.ts`](./handlers/get_record_signatures.ts) | Return a record and every signature stored on it |
-| `subscribe` | [`handlers/subscribe.ts`](./handlers/subscribe.ts) | Store a Subscription doc for signature fan-out |
-| `get_voucher`, `get_account_balance`, `list_accounts`, `list_offers`, `get_invoice`, `get_cheque`, `get_offer`, `list_vouchers`, `get_address`, `list_posts`, `get_post`, `get_post_signatures`, `get_voucher_meta` | [`handlers/get.ts`](./handlers/get.ts) | Reads |
+| `submit_docs` | [`handlers/submit_docs.ts`](../../packages/bank-core/src/handlers/submit_docs.ts) | Validate and store signed docs (Voucher, Account, Order, Address, Signature, Post); optionally derive and publish discovery Offers |
+| `submit_mandate` | [`handlers/submit_mandate.ts`](../../packages/bank-core/src/handlers/submit_mandate.ts) | Validate and execute one per-(deal, order) coordinator Mandate; store foreign record bodies; trigger advance |
+| `create_records` | [`handlers/create_records.ts`](../../packages/bank-core/src/handlers/create_records.ts) | Coordinator creates the deal's paired credit/debit records at this bank |
+| `notify_signatures` | [`handlers/notify_signatures.ts`](../../packages/bank-core/src/handlers/notify_signatures.ts) | Peers push `ready`/`hold`/`settle`/`reject` signatures; indexed by record hash; triggers re-advance of the owning deal |
+| `get_record_signatures` | [`handlers/get_record_signatures.ts`](../../packages/bank-core/src/handlers/get_record_signatures.ts) | Return a record and every signature stored on it |
+| `get_voucher`, `get_account_balance`, `list_accounts`, `list_offers`, `get_invoice`, `get_cheque`, `get_offer`, `list_vouchers`, `get_address`, `list_posts`, `get_post`, `get_post_signatures`, `get_voucher_meta` | [`handlers/get.ts`](../../packages/bank-core/src/handlers/get.ts) | Reads |
 
 ## The advance engine
 
-[`advance.ts`](./advance.ts) is how a deal moves `created → approved → held →
+[`advance.ts`](../../packages/bank-core/src/advance.ts) is how a deal moves `created → approved → held →
 settled`. It is **bank-driven and event-triggered**: `advanceDeal()` runs
 after `submit_mandate` and after every `notify_signatures` push — there are
 no clocks, timers, or cron jobs. Each pass evaluates the three waves
@@ -91,7 +98,7 @@ signature from another deal cannot satisfy a gate).
 
 ## Storage
 
-[`db.ts`](./db.ts) uses a single Deno KV store; **every key is prefixed
+[`db.ts`](../../packages/bank-core/src/db.ts) uses a single Deno KV store; **every key is prefixed
 `[bank.pubkey, ...]`**, which is what lets many banks share one process and
 one database. Balances are stored as plain numbers. This table is
 implementation detail, not contract (it replaces the old root schema doc):
@@ -188,6 +195,7 @@ Four standalone e2e scripts run against a live server (start one first):
 | [`e2e-crossbank.ts`](./e2e-crossbank.ts) | Bilateral swap across two banks — co-located by default, or two separate deployments via `E2E_BANK_A_URL` / `E2E_BANK_B_URL` (`deno run --allow-net --allow-env ...`) |
 | [`e2e-reject.ts`](./e2e-reject.ts) | An uncoverable debit must reject the whole deal, not stall it |
 | [`e2e-replay.ts`](./e2e-replay.ts) | A replayed settle signature from another deal must be refused by the seen-chain |
+| [`e2e-federation.ts`](./e2e-federation.ts) | Two users on two SEPARATE deployments (e.g. Deno Deploy and AWS): registration on each, cross-boundary discovery and feeds, blob copy + repost, then a bilateral swap. Needs `E2E_BANK_A_URL` / `E2E_BANK_B_URL`; run it both ways round — either bank may coordinate |
 | [`e2e-posts.ts`](./e2e-posts.ts) | Voucher post feeds: write/read, `"all"` vs per-voucher, `before` pagination, reply/repost embedding, media upload + unauthenticated fetch, and the four rejections (unknown voucher, wrong sender, forged embedded ancestor, unstored media) |
 
 ## Known constraints
@@ -196,7 +204,7 @@ See [`../../WORKAROUNDS.md`](../../WORKAROUNDS.md) for everything currently
 in effect. The one that shapes this package's structure: **Deno Deploy blocks
 an isolate from fetching its own deployment URL** (508 Loop Detected), so
 when the coordinator or the advance engine targets a bank served by this same
-process, [`local.ts`](./local.ts) dispatches the call in-process instead of
+process, [`local.ts`](../../packages/bank-core/src/local.ts) dispatches the call in-process instead of
 over HTTP ([WORKAROUNDS.md §4](../../WORKAROUNDS.md)). Any change to bank
 fan-out must preserve that in-process path, or co-located banks will 508 in
 production.

@@ -1,10 +1,23 @@
 import type { Base58PubKey } from '@barter.game/protocol';
+import type { KvStore } from './kv.ts';
+import type { MediaStore } from './media.ts';
+
+/**
+ * Read-only access to the bundled web client (apps/web). Paths are relative
+ * ("index.html", "app.js", "icon.svg"); implementations must confine reads
+ * to the asset directory and return null for anything missing.
+ */
+export interface AssetReader {
+  read(path: string): Promise<Uint8Array | null>;
+}
 
 export type Bank = {
   name: string;
   pubkey: Base58PubKey;
   privateKey: Uint8Array;
-  kv: Deno.Kv;
+  kv: KvStore;
+  media: MediaStore;
+  assets: AssetReader;
   url: string;
   // True when url came from a BANK_<NAME>_URL env override and must not be
   // overwritten by request-host derivation.

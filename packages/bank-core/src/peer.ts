@@ -10,6 +10,15 @@ import type { Bank } from './types.ts';
 import { getLocalBank } from './local.ts';
 import { isRpcError } from './error.ts';
 
+/**
+ * Peer calls happen inside a request the client is waiting on, and a deal
+ * can fan out to several banks in sequence. An unresponsive peer must fail
+ * fast rather than hold the whole request open until the host's own deadline
+ * (a Lambda timeout, or CloudFront's 60s origin read) turns it into an
+ * opaque gateway error instead of the bank's own JSON.
+ */
+const PEER_TIMEOUT_MS = 15_000;
+
 export async function fetchDiscovery(
   url: string,
   expectedPubkey?: Base58PubKey,
@@ -29,7 +38,9 @@ export async function fetchDiscovery(
     }
   }
   try {
-    const res = await fetch(`${url.replace(/\/$/, '')}/barter-bank.json`);
+    const res = await fetch(`${url.replace(/\/$/, '')}/barter-bank.json`, {
+      signal: AbortSignal.timeout(PEER_TIMEOUT_MS),
+    });
     if (!res.ok) return null;
     const j = await res.json() as Record<string, unknown>;
     if (
@@ -88,6 +99,7 @@ export async function bankRpcCall(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(envelope),
+    signal: AbortSignal.timeout(PEER_TIMEOUT_MS),
   });
   const text = await res.text();
   try {

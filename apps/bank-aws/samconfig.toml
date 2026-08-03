@@ -1,0 +1,11 @@
+version = 0.1
+
+# Deploy target for the barter.game banks. Credentials come from the AWS
+# profile, not from here: AWS_PROFILE=app-deployer ./deploy.sh
+[default.deploy.parameters]
+stack_name = "barter-banks"
+region = "us-west-2"
+resolve_s3 = true
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = false
+fail_on_empty_changeset = false

@@ -6,7 +6,8 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "apps/web"
+    "apps/web",
+    "apps/bank-aws"
   ],
   "scripts": {
     "test": "bun --filter './packages/protocol' test",

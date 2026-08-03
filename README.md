@@ -110,6 +110,13 @@ Deploying to Deno Deploy is `deno deploy` with the `deploy` block already in
 key-space, configuration, and operational notes:
 [`apps/bank/README.md`](./apps/bank/README.md).
 
+Prefer AWS? The same bank engine
+([`packages/bank-core`](./packages/bank-core/README.md)) also ships as a
+serverless host — Node.js Lambda + DynamoDB + S3 behind CloudFront, deployed
+with SAM: [`apps/bank-aws/README.md`](./apps/bank-aws/README.md). Either
+host runs the same protocol and the same e2e suites; pick a runtime, not a
+fork.
+
 You now have a bank. Tell your friends about it, and you're a tiny central
 bank in a federation of exactly however many people you've invited.
 
