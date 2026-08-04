@@ -864,6 +864,24 @@ async function buildFeedContext(voucherFilter) {
   feed.posts.forEach(({ post }) => walk(post));
 
   const names = {};
+  // A bank has no registered handle, so /ui/resolve never names one. Every
+  // pinned bank reposts its own users, so an unnamed foreign bank is the most
+  // frequent author in a cross-bank feed — and would read as raw base58.
+  const feedBankList = await feedBanks().catch(() => []);
+  const bankNames = (await Promise.all(feedBankList.map(async b => {
+    if (!b.pubkey || b.pubkey === state.bankPubkey) return null;
+    try {
+      const info = await fetch(`${b.url}/barter-bank.json`).then(r => r.json());
+      if (!info || !info.name) return null;
+      return { pubkey: b.pubkey, name: info.name, host: new URL(b.url).host };
+    } catch { return null; } // unreachable bank: fall back to base58
+  }))).filter(Boolean);
+  bankNames.forEach(b => {
+    // The same bank name runs on more than one deployment, so say which host
+    // when the name alone would point at two different banks.
+    const twins = bankNames.filter(o => o.name === b.name).length > 1;
+    names[b.pubkey] = twins ? `${b.name} (bank at ${b.host})` : `${b.name} (bank)`;
+  });
   const bases = await issuerResolveBases().catch(() => []);
   await Promise.all([...mentionedAuthors].map(async pk => {
     if (state.user && pk === state.user.pubkey) return;
