@@ -81,10 +81,10 @@
 
   <!-- folded steaming towel -->
   <g transform="rotate(-3 540 490)">
-    <path d="M 300 470 C 258 520 226 596 210 676 L 336 716 C 346 646 364 592 386 546 Z" fill="#E4753A" stroke="#23201D" stroke-width="8" stroke-linejoin="round"/>
+    <path d="M 300 470 C 258 520 226 596 206 692 L 340 736 C 350 654 366 594 386 546 Z" fill="#E4753A" stroke="#23201D" stroke-width="8" stroke-linejoin="round"/>
     <path d="M 296 552 C 278 596 262 640 252 674" fill="none" stroke="#F0B429" stroke-width="15" opacity="0.85"/>
     <path d="M 226 662 L 330 700" fill="none" stroke="#FBF6EF" stroke-width="7" opacity="0.45"/>
-    <path d="M 780 470 C 822 520 854 596 870 676 L 744 716 C 734 646 716 592 694 546 Z" fill="#E4753A" stroke="#23201D" stroke-width="8" stroke-linejoin="round"/>
+    <path d="M 780 470 C 822 520 854 596 874 692 L 740 736 C 730 654 714 594 694 546 Z" fill="#E4753A" stroke="#23201D" stroke-width="8" stroke-linejoin="round"/>
     <path d="M 784 552 C 802 596 818 640 828 674" fill="none" stroke="#F0B429" stroke-width="15" opacity="0.85"/>
     <path d="M 854 662 L 750 700" fill="none" stroke="#FBF6EF" stroke-width="7" opacity="0.45"/>
 
@@ -159,7 +159,7 @@
   </g>
   <path d="M 1036 -14 L 868 -14 C 844 88 798 190 736 264 C 702 304 692 352 716 388 C 742 426 796 436 838 414 C 882 390 916 338 940 276 C 976 188 1012 88 1036 -14 Z" fill="#FBF6EF" stroke="#23201D" stroke-width="8" stroke-linejoin="round"/>
   <path d="M 1014 62 C 956 76 894 72 844 58 L 817 126 C 872 138 938 140 993 130 Z" fill="#3E5C76" stroke="#23201D" stroke-width="8" stroke-linejoin="round"/>
-  <path d="M 1002 98 C 950 110 894 106 830 94" fill="none" stroke="#FBF6EF" stroke-width="6" opacity="0.35"/>
+  <path d="M 1000 98 C 950 110 894 106 840 94" fill="none" stroke="#FBF6EF" stroke-width="6" opacity="0.35"/>
   <g fill="none" stroke="#23201D" stroke-width="5" stroke-linecap="round" opacity="0.38">
     <path d="M 752 338 C 736 352 726 368 724 384"/>
     <path d="M 780 374 C 764 386 754 400 752 414"/>
@@ -177,7 +177,7 @@
   <!-- tray with the tools -->
   <g transform="rotate(-1.4 540 940)">
     <rect x="176" y="852" width="784" height="192" rx="28" fill="#23201D"/>
-    <rect x="200" y="872" width="736" height="114" rx="12" fill="#3E5C76"/>
+    <rect x="200" y="872" width="736" height="132" rx="12" fill="#3E5C76"/>
     <rect x="200" y="872" width="736" height="16" rx="8" fill="#FBF6EF" opacity="0.14"/>
 
     <!-- rolled towel -->
@@ -217,6 +217,6 @@
       <rect x="744" y="888" width="182" height="12" rx="6" fill="#FBF6EF" opacity="0.35"/>
     </g>
 
-    <text x="568" y="1022" font-family="Helvetica, Arial, sans-serif" font-size="25" letter-spacing="9" text-anchor="middle" fill="#FBF6EF" opacity="0.78">HOT TOWEL FINISH</text>
+    <text x="568" y="1030" font-family="Helvetica, Arial, sans-serif" font-size="25" letter-spacing="9" text-anchor="middle" fill="#FBF6EF" opacity="0.78">HOT TOWEL FINISH</text>
   </g>
 </svg>
