@@ -37,16 +37,28 @@ import {
   type Post,
 } from '@barter.game/protocol';
 
-const BASE = Deno.env.get('BARTER_BASE') ?? 'https://barter-game-banks.ai-1st.deno.net';
+const DEFAULT_BASE = 'https://barter-game-banks.ai-1st.deno.net';
+/**
+ * An EXPLICIT BARTER_BASE always wins, including over a user's stored
+ * deployment — otherwise pointing the script at localhost would silently drive
+ * the public banks for every user registered against production.
+ */
+const BASE_OVERRIDE = Deno.env.get('BARTER_BASE');
+const BASE = BASE_OVERRIDE ?? DEFAULT_BASE;
 const STATE_PATH = new URL('../.emulated-state.json', import.meta.url).pathname;
 const DEFAULT_PASSWORD = Deno.env.get('BARTER_PASSWORD') ?? '12345678';
 
 /* ------------------------------------------------------------------ types */
 
 type BankRef = { name: string; url: string; pubkey: string };
-type User = { handle: string; bank: string; pubkey: string; privateKey: Uint8Array };
+/**
+ * `base` is the deployment this user lives on. The same bank names run on more
+ * than one cloud, so a handle alone does not say where the account is; without
+ * this, `post noor@alice` would sign for the wrong alice.
+ */
+type User = { handle: string; bank: string; base: string; pubkey: string; privateKey: Uint8Array };
 
-type StoredUser = { handle: string; bank: string; pubkey: string; priv: string };
+type StoredUser = { handle: string; bank: string; base?: string; pubkey: string; priv: string };
 type StoredVoucher = {
   hash: string;
   name: string;
@@ -158,14 +170,22 @@ async function decryptSeed(blob: Record<string, string | number>, password: stri
 /* --------------------------------------------------------------- transport */
 
 const bankCache = new Map<string, BankRef>();
-async function bank(name: string): Promise<BankRef> {
-  const hit = bankCache.get(name);
+/**
+ * Resolve a bank token to a live BankRef.
+ *
+ * A token is either a bare name (`alice`), resolved against `base` — the
+ * deployment the acting user lives on — or a full URL, which is how one names
+ * a bank on ANOTHER deployment. The federation runs the same banks on Deno
+ * Deploy and on AWS, so "alice" alone does not identify a bank.
+ */
+async function bank(token: string, base = BASE): Promise<BankRef> {
+  const url = /^https?:\/\//.test(token) ? token.replace(/\/+$/, '') : `${base}/${token}`;
+  const hit = bankCache.get(url);
   if (hit) return hit;
-  const url = `${BASE}/${name}`;
   const info = await fetch(`${url}/barter-bank.json`).then((r) => r.json());
-  if (!info?.pubkey) throw new Error(`bank ${name}: no pubkey at ${url}/barter-bank.json`);
+  if (!info?.pubkey) throw new Error(`bank ${token}: no pubkey at ${url}/barter-bank.json`);
   const ref: BankRef = { name: info.name, url, pubkey: info.pubkey };
-  bankCache.set(name, ref);
+  bankCache.set(url, ref);
   return ref;
 }
 
@@ -327,7 +347,10 @@ async function loadUser(ref: string, password = DEFAULT_PASSWORD): Promise<User>
   const st = loadState();
   const cached = st.users[ref];
   if (cached) {
-    return { handle, bank: bankName, pubkey: cached.pubkey, privateKey: base58Decode(cached.priv) };
+    // Explicit override first, then where this user actually lives; entries
+    // written before deployments were tracked are on the default.
+    const base = BASE_OVERRIDE ?? cached.base ?? DEFAULT_BASE;
+    return { handle, bank: bankName, base, pubkey: cached.pubkey, privateKey: base58Decode(cached.priv) };
   }
   const b = await bank(bankName);
   const res = await fetch(`${b.url}/ui/keystore/${handle}`);
@@ -336,15 +359,28 @@ async function loadUser(ref: string, password = DEFAULT_PASSWORD): Promise<User>
   const seed = await decryptSeed(data.keystore, password);
   const { pubkeyBase58 } = publicKeyOf(seed);
   if (pubkeyBase58 !== data.pubkey) throw new Error(`keystore ${ref}: decrypted key does not match registered pubkey`);
-  st.users[ref] = { handle, bank: bankName, pubkey: pubkeyBase58, priv: base58Encode(seed) };
+  st.users[ref] = { handle, bank: bankName, base: BASE, pubkey: pubkeyBase58, priv: base58Encode(seed) };
   saveState(st);
-  return { handle, bank: bankName, pubkey: pubkeyBase58, privateKey: seed };
+  return { handle, bank: bankName, base: BASE, pubkey: pubkeyBase58, privateKey: seed };
 }
 
 /* --------------------------------------------------------------- commands */
 
 async function cmdRegister(ref: string, password = DEFAULT_PASSWORD): Promise<void> {
   const { handle, bank: bankName } = parseRef(ref);
+  // `handle@bank` is the state key, but bank NAMES repeat across deployments —
+  // so registering the same handle on another cloud would overwrite the stored
+  // private key of the first one, losing that account for good.
+  if (/^https?:\/\//.test(bankName)) {
+    throw new Error(`register takes a bank NAME, not a URL — choose the deployment with BARTER_BASE`);
+  }
+  const existing = loadState().users[ref];
+  if (existing && (existing.base ?? DEFAULT_BASE) !== BASE) {
+    throw new Error(
+      `${ref} already exists on ${existing.base ?? DEFAULT_BASE}; registering it on ${BASE} ` +
+        `would overwrite that key. Use a different handle.`,
+    );
+  }
   const b = await bank(bankName);
   const { privateKey, pubkeyBase58 } = genKeyPair();
   const keystore = await encryptSeed(privateKey, password);
@@ -357,15 +393,26 @@ async function cmdRegister(ref: string, password = DEFAULT_PASSWORD): Promise<vo
   const data = await res.json();
   if (data.code) throw new Error(`register ${ref}: ${data.code} ${data.message}`);
   const st = loadState();
-  st.users[ref] = { handle, bank: bankName, pubkey: pubkeyBase58, priv: base58Encode(privateKey) };
+  st.users[ref] = { handle, bank: bankName, base: BASE, pubkey: pubkeyBase58, priv: base58Encode(privateKey) };
   saveState(st);
-  console.log(`registered ${ref} → ${pubkeyBase58}`);
+  console.log(`registered ${ref} → ${pubkeyBase58} @ ${b.url}`);
+}
+
+/**
+ * Cache key for a voucher. Vouchers are remembered by name, and both the name
+ * and the bank repeat across deployments — so a bare `"1 mug@alice"` would let
+ * the AWS alice overwrite the Deno one and hand out the wrong hash. The default
+ * deployment keeps the short key so existing state stays readable.
+ */
+function voucherKey(user: User, name: string): string {
+  const host = user.base === DEFAULT_BASE ? '' : `@${new URL(user.base).host}`;
+  return `${name}@${user.bank}${host}`;
 }
 
 /** Mint a voucher and open the issuer's own account on it, in one submit_docs. */
 async function cmdMint(ref: string, name: string, opts: Record<string, string>): Promise<void> {
   const user = await loadUser(ref);
-  const b = await bank(user.bank);
+  const b = await bank(user.bank, user.base);
   const voucher: Record<string, unknown> = {
     type: 'voucher',
     pubkey: user.pubkey,
@@ -393,7 +440,7 @@ async function cmdMint(ref: string, name: string, opts: Record<string, string>):
   await rpc(user, b, 'submit_docs', { docs: [voucher, account] });
 
   const st = loadState();
-  st.vouchers[`${name}@${user.bank}`] = {
+  st.vouchers[voucherKey(user, name)] = {
     hash: vHash,
     name,
     bank: user.bank,
@@ -408,7 +455,7 @@ async function cmdMint(ref: string, name: string, opts: Record<string, string>):
 /** Open an account on someone else's voucher, at the voucher's issuing bank. */
 async function cmdOpen(ref: string, voucherHash: string, bankName: string): Promise<string> {
   const user = await loadUser(ref);
-  const b = await bank(bankName);
+  const b = await bank(bankName, user.base);
   const account: Record<string, unknown> = {
     type: 'account',
     pubkey: user.pubkey,
@@ -436,7 +483,7 @@ async function cmdInvoice(
   max: number,
 ): Promise<string> {
   const user = await loadUser(ref);
-  const b = await bank(bankName);
+  const b = await bank(bankName, user.base);
   const order: Record<string, unknown> = {
     type: 'order',
     pubkey: user.pubkey,
@@ -461,7 +508,7 @@ async function cmdCheque(
   max: number,
 ): Promise<string> {
   const user = await loadUser(ref);
-  const b = await bank(bankName);
+  const b = await bank(bankName, user.base);
   const order: Record<string, unknown> = {
     type: 'order',
     pubkey: user.pubkey,
@@ -490,8 +537,8 @@ async function cmdSwap(
   lead: boolean,
 ): Promise<string> {
   const user = await loadUser(ref);
-  const gb = await bank(give.bankName);
-  const cb = await bank(get.bankName);
+  const gb = await bank(give.bankName, user.base);
+  const cb = await bank(get.bankName, user.base);
   const order: Record<string, unknown> = {
     type: 'order',
     pubkey: user.pubkey,
@@ -519,8 +566,8 @@ async function cmdPropose(
   bankNames: string[],
 ): Promise<string> {
   const user = await loadUser(ref);
-  const coordBank = await bank(user.bank);
-  const banks = await Promise.all(bankNames.map((n) => bank(n)));
+  const coordBank = await bank(user.bank, user.base);
+  const banks = await Promise.all(bankNames.map((n) => bank(n, user.base)));
   const body = {
     offer1: { hash: order1, debit_amount: amount, credit_amount: amount },
     offer2: { hash: order2, debit_amount: amount, credit_amount: amount },
@@ -533,7 +580,7 @@ async function cmdPropose(
 
 async function cmdDeal(ref: string, dealId: string, poll = 20): Promise<string> {
   const user = await loadUser(ref);
-  const b = await bank(user.bank);
+  const b = await bank(user.bank, user.base);
   let state = '';
   for (let i = 0; i < poll; i++) {
     const status = await uiAuth(user, b, 'GET', `/deal/${dealId}`, null);
@@ -550,29 +597,29 @@ async function cmdDeal(ref: string, dealId: string, poll = 20): Promise<string> 
 
 async function cmdTrust(ref: string, pubkey: string, note: string): Promise<void> {
   const user = await loadUser(ref);
-  const b = await bank(user.bank);
+  const b = await bank(user.bank, user.base);
   await uiAuth(user, b, 'POST', '/trusted', { pubkey, note });
   console.log(`${ref} trusts ${pubkey}${note ? ` — "${note}"` : ''}`);
 }
 
 async function cmdContact(ref: string, pubkey: string, handle: string, note: string): Promise<void> {
   const user = await loadUser(ref);
-  const b = await bank(user.bank);
+  const b = await bank(user.bank, user.base);
   await uiAuth(user, b, 'POST', '/contacts', { pubkey, handle, note });
   console.log(`${ref} added contact ${handle} (${pubkey.slice(0, 10)}…)`);
 }
 
 async function cmdAddBank(ref: string, bankName: string): Promise<void> {
   const user = await loadUser(ref);
-  const b = await bank(user.bank);
-  const target = await bank(bankName);
+  const b = await bank(user.bank, user.base);
+  const target = await bank(bankName, user.base);
   await uiAuth(user, b, 'POST', '/banks', { pubkey: target.pubkey, url: target.url });
   console.log(`${ref} pinned bank ${bankName} (${target.pubkey.slice(0, 10)}…)`);
 }
 
 async function cmdRegistry(ref: string): Promise<void> {
   const user = await loadUser(ref);
-  const b = await bank(user.bank);
+  const b = await bank(user.bank, user.base);
   const vouchers = await rpc(user, b, 'list_vouchers', {}) as Array<Record<string, unknown>>;
   const st = loadState();
   console.log(`registry @${user.bank} — ${vouchers.length} vouchers`);
@@ -581,13 +628,14 @@ async function cmdRegistry(ref: string): Promise<void> {
     const issuerHandle = Object.values(st.users).find((u) => u.pubkey === v.pubkey)?.handle ?? '?';
     console.log(`  ${h}  "${v.name}"  issuer=${issuerHandle} (${String(v.pubkey).slice(0, 10)}…)`);
     // Cache so later commands can refer to vouchers by "<name>@<bank>".
-    st.vouchers[`${v.name}@${user.bank}`] = {
+    const key = voucherKey(user, String(v.name));
+    st.vouchers[key] = {
       hash: h,
       name: String(v.name),
       bank: user.bank,
       issuer: String(v.pubkey),
       issuerHandle,
-      account: st.vouchers[`${v.name}@${user.bank}`]?.account,
+      account: st.vouchers[key]?.account,
     };
   }
   saveState(st);
@@ -596,7 +644,7 @@ async function cmdRegistry(ref: string): Promise<void> {
 /** List the caller's accounts at a bank, with content hashes (which list_accounts omits). */
 async function cmdAccounts(ref: string, bankName?: string): Promise<void> {
   const user = await loadUser(ref);
-  const b = await bank(bankName ?? user.bank);
+  const b = await bank(bankName ?? user.bank, user.base);
   const res = await rpc(user, b, 'list_accounts', {}) as {
     accounts: Array<Record<string, unknown>>;
     vouchers: Array<Record<string, unknown>>;
@@ -616,7 +664,7 @@ async function cmdAccounts(ref: string, bankName?: string): Promise<void> {
 
 async function cmdOffers(ref: string, voucherHash: string, intention: string): Promise<void> {
   const user = await loadUser(ref);
-  const b = await bank(user.bank);
+  const b = await bank(user.bank, user.base);
   const offers = await rpc(user, b, 'list_offers', { voucher_hash: voucherHash, intention }) as unknown[];
   console.log(`offers @${user.bank} voucher ${voucherHash.slice(0, 12)}… intention=${intention}: ${offers.length}`);
   console.log(JSON.stringify(offers, null, 2));
@@ -624,8 +672,8 @@ async function cmdOffers(ref: string, voucherHash: string, intention: string): P
 
 async function cmdDiscover(ref: string, voucherHashes: string[], bankNames: string[]): Promise<void> {
   const user = await loadUser(ref);
-  const b = await bank(user.bank);
-  const banks = await Promise.all(bankNames.map((n) => bank(n)));
+  const b = await bank(user.bank, user.base);
+  const banks = await Promise.all(bankNames.map((n) => bank(n, user.base)));
   const res = await uiAuth(user, b, 'POST', '/discover', {
     banks: banks.map((x) => ({ pubkey: x.pubkey, url: x.url })),
     vouchers: voucherHashes,
@@ -637,7 +685,7 @@ async function cmdDiscover(ref: string, voucherHashes: string[], bankNames: stri
 
 async function cmdPortfolio(ref: string): Promise<void> {
   const user = await loadUser(ref);
-  const b = await bank(user.bank);
+  const b = await bank(user.bank, user.base);
   const res = await uiAuth(user, b, 'GET', '/portfolio', null);
   console.log(`portfolio ${ref}:`);
   for (const h of res.holdings ?? []) {
@@ -648,14 +696,14 @@ async function cmdPortfolio(ref: string): Promise<void> {
 
 async function cmdBalance(ref: string, bankName: string, accountHash: string): Promise<void> {
   const user = await loadUser(ref);
-  const b = await bank(bankName);
+  const b = await bank(bankName, user.base);
   const bal = await rpc(user, b, 'get_account_balance', { account_hash: accountHash });
   console.log(`balance ${accountHash.slice(0, 12)}… @${bankName}: ${JSON.stringify(bal)}`);
 }
 
 async function cmdResolve(ref: string, pubkey: string): Promise<void> {
-  const { bank: bankName } = parseRef(ref);
-  const b = await bank(bankName);
+  const user = await loadUser(ref);
+  const b = await bank(user.bank, user.base);
   const res = await fetch(`${b.url}/ui/resolve/${pubkey}`).then((r) => r.json());
   console.log(JSON.stringify(res, null, 2));
 }
@@ -674,7 +722,7 @@ async function cmdPost(
   opts: Record<string, string> = {},
 ): Promise<string> {
   const user = await loadUser(ref);
-  const b = await bank(opts.at ?? user.bank);
+  const b = await bank(opts.at ?? user.bank, user.base);
   const post: Record<string, unknown> = {
     type: 'post',
     pubkey: user.pubkey,
@@ -702,7 +750,7 @@ async function cmdPost(
     // posted to). A cross-bank embed drags its media refs along, so the
     // blobs are copied to the target bank first — same rule the web app
     // follows (post-feed.md §5).
-    const src = opts.from ? await bank(opts.from) : b;
+    const src = opts.from ? await bank(opts.from, user.base) : b;
     const parent = await rpc(user, src, 'get_post', { post_hash: parentHash });
     if (src.url !== b.url) {
       await copyTreeMedia(user, parent as unknown as Post, src, b);
@@ -725,7 +773,7 @@ async function cmdPosts(
   bankName?: string,
 ): Promise<void> {
   const user = await loadUser(ref);
-  const b = await bank(bankName ?? user.bank);
+  const b = await bank(bankName ?? user.bank, user.base);
   const r = await rpc(user, b, 'list_posts', {
     pubkey: author,
     voucher_hash: voucherHash,
@@ -743,7 +791,7 @@ async function cmdPosts(
  */
 async function cmdFeed(ref: string, voucherHash = 'all'): Promise<void> {
   const user = await loadUser(ref);
-  const home = await bank(user.bank);
+  const home = await bank(user.bank, user.base);
 
   // Follows, not trusted issuers — reading someone and vouching for their
   // currency are separate decisions. The bank defaults a new user to following
@@ -894,25 +942,25 @@ try {
       break;
     case 'follow': {
       const u = await loadUser(rest[0]!);
-      await uiAuth(u, await bank(u.bank), 'POST', '/follows', { pubkey: rest[1]! });
+      await uiAuth(u, await bank(u.bank, u.base), 'POST', '/follows', { pubkey: rest[1]! });
       console.log(`${rest[0]} now follows ${rest[1]}`);
       break;
     }
     case 'unfollow': {
       const u = await loadUser(rest[0]!);
-      await uiAuth(u, await bank(u.bank), 'DELETE', `/follows/${rest[1]!}`, null);
+      await uiAuth(u, await bank(u.bank, u.base), 'DELETE', `/follows/${rest[1]!}`, null);
       console.log(`${rest[0]} unfollowed ${rest[1]}`);
       break;
     }
     case 'meta': {
       const u = await loadUser(rest[0]!);
-      const m = await rpc(u, await bank(u.bank), 'get_voucher_meta', { voucher_hash: rest[1]! });
+      const m = await rpc(u, await bank(u.bank, u.base), 'get_voucher_meta', { voucher_hash: rest[1]! });
       console.log(JSON.stringify(m, null, 2));
       break;
     }
     case 'follows': {
       const u = await loadUser(rest[0]!);
-      const f = await uiAuth(u, await bank(u.bank), 'GET', '/follows', null);
+      const f = await uiAuth(u, await bank(u.bank, u.base), 'GET', '/follows', null);
       console.log(JSON.stringify(f, null, 2));
       break;
     }
@@ -921,6 +969,11 @@ try {
       break;
     default:
       console.log(`emulate.ts — drive emulated barter.game users (BASE=${BASE})
+
+  Every <bankName> may be a bare name, resolved against the acting user's own
+  deployment, or a full URL — which is how you name a bank on another cloud
+  (the same bank names run on Deno Deploy and on AWS). A user's deployment is
+  recorded when they register, so BARTER_BASE is only needed to register.
 
   register <handle@bank> [password]
   mint     <handle@bank> "<voucher name>" [--desc "..."] [--limit N] [--expires ISO]

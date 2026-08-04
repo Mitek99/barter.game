@@ -1,0 +1,447 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080">
+  <title>One roll developed and scanned</title>
+
+  <defs>
+    <pattern id="riso" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="7" cy="7" r="2.7" fill="#23201D" opacity="0.09"/>
+      <circle cx="21" cy="21" r="1.6" fill="#E4753A" opacity="0.12"/>
+    </pattern>
+    <pattern id="sprk" width="32" height="14" patternUnits="userSpaceOnUse">
+      <rect x="9" y="2" width="14" height="10" rx="3" fill="#FBF6EF" opacity="0.92"/>
+    </pattern>
+    <clipPath id="fr" clipPathUnits="userSpaceOnUse">
+      <rect width="224" height="124"/>
+    </clipPath>
+  </defs>
+
+  <!-- paper wash -->
+  <rect width="1080" height="1080" fill="#F2E9DC"/>
+
+  <!-- table top, sun lit -->
+  <rect y="86" width="1080" height="906" fill="#F0B429" opacity="0.20"/>
+  <path d="M 0 86 H 1080" stroke="#23201D" stroke-width="5" opacity="0.28"/>
+  <g stroke="#23201D" stroke-width="3" opacity="0.10" fill="none">
+    <path d="M 0 150 C 300 138 760 164 1080 148"/>
+    <path d="M 0 268 C 320 258 740 280 1080 262"/>
+    <path d="M 0 402 C 300 392 780 414 1080 396"/>
+    <path d="M 0 556 C 340 546 720 568 1080 550"/>
+    <path d="M 0 700 C 300 690 780 712 1080 694"/>
+    <path d="M 0 850 C 320 840 740 862 1080 844"/>
+    <path d="M 0 946 C 300 936 780 958 1080 940"/>
+  </g>
+
+  <!-- window light falling across the table -->
+  <path d="M 0 176 L 236 86 L 470 86 L 0 266 Z" fill="#F0B429" opacity="0.16"/>
+  <path d="M 0 316 L 590 86 L 742 86 L 0 406 Z" fill="#F0B429" opacity="0.12"/>
+
+  <!-- wall behind, above the table -->
+  <rect width="1080" height="86" fill="#3E5C76" opacity="0.16"/>
+
+  <!-- riso speckle on the open table -->
+  <g>
+    <circle cx="58" cy="196" r="7" fill="#E4753A" opacity="0.30"/>
+    <circle cx="92" cy="250" r="4" fill="#E4753A" opacity="0.24"/>
+    <circle cx="1024" cy="212" r="6" fill="#6E8B6A" opacity="0.36"/>
+    <circle cx="1046" cy="286" r="4" fill="#6E8B6A" opacity="0.26"/>
+    <circle cx="46" cy="640" r="5" fill="#3E5C76" opacity="0.30"/>
+    <circle cx="1038" cy="608" r="7" fill="#3E5C76" opacity="0.26"/>
+    <circle cx="70" cy="846" r="4" fill="#23201D" opacity="0.18"/>
+    <circle cx="1012" cy="880" r="5" fill="#23201D" opacity="0.16"/>
+    <circle cx="1054" cy="452" r="4" fill="#E4753A" opacity="0.22"/>
+  </g>
+
+  <!-- ================= contact sheet ================= -->
+  <g transform="rotate(-1.6 540 515)">
+
+    <!-- cast shadow, drawn as a shape -->
+    <rect x="146" y="126" width="820" height="810" rx="6" fill="#23201D" opacity="0.18"/>
+    <!-- the sheet -->
+    <rect x="130" y="110" width="820" height="810" rx="4" fill="#FBF6EF"/>
+    <rect x="130" y="110" width="820" height="810" rx="4" fill="none" stroke="#23201D" stroke-width="3" opacity="0.30"/>
+    <!-- raking sheen over the print -->
+    <path d="M 700 110 L 950 110 L 950 268 L 588 466 Z" fill="#F0B429" opacity="0.10"/>
+
+    <!-- film strip bases -->
+    <g fill="#23201D">
+      <rect x="178" y="142" width="724" height="164" rx="3"/>
+      <rect x="178" y="327" width="724" height="164" rx="3"/>
+      <rect x="178" y="512" width="724" height="164" rx="3"/>
+      <rect x="178" y="697" width="724" height="164" rx="3"/>
+    </g>
+    <!-- sprocket holes -->
+    <g>
+      <rect x="182" y="146" width="716" height="14" fill="url(#sprk)"/>
+      <rect x="182" y="288" width="716" height="14" fill="url(#sprk)"/>
+      <rect x="182" y="331" width="716" height="14" fill="url(#sprk)"/>
+      <rect x="182" y="473" width="716" height="14" fill="url(#sprk)"/>
+      <rect x="182" y="516" width="716" height="14" fill="url(#sprk)"/>
+      <rect x="182" y="658" width="716" height="14" fill="url(#sprk)"/>
+      <rect x="182" y="701" width="716" height="14" fill="url(#sprk)"/>
+      <rect x="182" y="843" width="716" height="14" fill="url(#sprk)"/>
+    </g>
+    <!-- edge codes: small dashes on the film rebate -->
+    <g stroke="#F0B429" stroke-width="3" opacity="0.55" fill="none">
+      <path d="M 420 297 H 442"/><path d="M 452 297 H 462"/><path d="M 658 297 H 680"/>
+      <path d="M 420 482 H 442"/><path d="M 452 482 H 462"/><path d="M 658 482 H 680"/>
+      <path d="M 420 667 H 442"/><path d="M 452 667 H 462"/><path d="M 658 667 H 680"/>
+      <path d="M 420 852 H 442"/><path d="M 452 852 H 462"/><path d="M 658 852 H 680"/>
+    </g>
+
+    <!-- ================= FRAME 1 - harbour ================= -->
+    <g transform="translate(190,162)" clip-path="url(#fr)">
+      <rect width="224" height="124" fill="#FBF6EF"/>
+      <circle cx="152" cy="40" r="30" fill="#F0B429"/>
+      <rect y="74" width="224" height="50" fill="#3E5C76"/>
+      <path d="M 44 74 L 44 28 L 80 74 Z" fill="#23201D"/>
+      <path d="M 28 74 L 94 74 L 84 87 L 38 87 Z" fill="#23201D"/>
+      <path d="M 44 28 L 44 74" stroke="#FBF6EF" stroke-width="2" opacity="0.5"/>
+      <g stroke="#FBF6EF" stroke-width="3" opacity="0.45" fill="none">
+        <path d="M 126 96 H 180"/>
+        <path d="M 138 110 H 168"/>
+        <path d="M 18 102 H 58"/>
+      </g>
+      <circle cx="152" cy="90" r="6" fill="#F0B429" opacity="0.6"/>
+      <circle cx="152" cy="108" r="4" fill="#F0B429" opacity="0.4"/>
+      <circle cx="196" cy="22" r="5" fill="#E4753A" opacity="0.6"/>
+    </g>
+
+    <!-- ================= FRAME 2 - treeline ================= -->
+    <g transform="translate(428,162)" clip-path="url(#fr)">
+      <rect width="224" height="124" fill="#F0B429"/>
+      <path d="M 0 124 L 0 98 C 58 88 148 108 224 92 L 224 124 Z" fill="#23201D"/>
+      <path d="M 32 102 L 47 42 L 62 102 Z" fill="#23201D"/>
+      <path d="M 74 104 L 87 60 L 100 104 Z" fill="#23201D"/>
+      <path d="M 116 100 L 133 32 L 150 100 Z" fill="#23201D"/>
+      <path d="M 164 98 L 177 56 L 190 98 Z" fill="#23201D"/>
+      <path d="M 198 96 L 209 66 L 220 96 Z" fill="#23201D"/>
+      <rect y="88" width="224" height="12" fill="#FBF6EF" opacity="0.32"/>
+      <g stroke="#23201D" stroke-width="3" fill="none" opacity="0.8">
+        <path d="M 52 24 c 7 -8 14 -8 20 0"/>
+        <path d="M 86 16 c 6 -7 12 -7 17 0"/>
+      </g>
+    </g>
+
+    <!-- ================= FRAME 3 - stairwell ================= -->
+    <g transform="translate(666,162)" clip-path="url(#fr)">
+      <rect width="224" height="124" fill="#FBF6EF"/>
+      <rect width="224" height="30" fill="#F0B429" opacity="0.6"/>
+      <path d="M 0 124 L 0 100 L 38 100 L 38 86 L 76 86 L 76 72 L 114 72 L 114 58 L 152 58 L 152 44 L 190 44 L 190 30 L 224 30 L 224 124 Z" fill="#23201D"/>
+      <path d="M 0 78 L 224 8" stroke="#3E5C76" stroke-width="5" fill="none"/>
+      <g stroke="#3E5C76" stroke-width="4" fill="none">
+        <path d="M 38 86 L 38 66"/>
+        <path d="M 76 72 L 76 54"/>
+        <path d="M 114 58 L 114 42"/>
+        <path d="M 152 44 L 152 30"/>
+        <path d="M 190 30 L 190 19"/>
+      </g>
+      <circle cx="28" cy="20" r="10" fill="#E4753A"/>
+      <path d="M 28 20 L 28 0" stroke="#23201D" stroke-width="3"/>
+      <g fill="#23201D" opacity="0.14">
+        <path d="M 0 124 L 224 42 L 224 124 Z"/>
+      </g>
+    </g>
+
+    <!-- ================= FRAME 4 - rain, night ================= -->
+    <g transform="translate(190,347)" clip-path="url(#fr)">
+      <rect width="224" height="124" fill="#3E5C76"/>
+      <g stroke="#FBF6EF" stroke-width="3" opacity="0.40" fill="none">
+        <path d="M 20 0 L -18 124"/>
+        <path d="M 54 0 L 16 124"/>
+        <path d="M 88 0 L 50 124"/>
+        <path d="M 122 0 L 84 124"/>
+        <path d="M 156 0 L 118 124"/>
+        <path d="M 190 0 L 152 124"/>
+        <path d="M 224 0 L 186 124"/>
+        <path d="M 258 0 L 220 124"/>
+      </g>
+      <circle cx="58" cy="80" r="12" fill="#E4753A" opacity="0.9"/>
+      <circle cx="98" cy="60" r="7" fill="#F0B429" opacity="0.9"/>
+      <circle cx="150" cy="88" r="9" fill="#E4753A" opacity="0.7"/>
+      <circle cx="186" cy="54" r="6" fill="#F0B429" opacity="0.7"/>
+      <circle cx="120" cy="98" r="5" fill="#F0B429" opacity="0.5"/>
+      <rect y="106" width="224" height="18" fill="#23201D" opacity="0.6"/>
+      <g stroke="#F0B429" stroke-width="3" opacity="0.5" fill="none">
+        <path d="M 24 116 H 78"/>
+        <path d="M 132 116 H 190"/>
+      </g>
+    </g>
+
+    <!-- ================= FRAME 5 - portrait (favourite) ================= -->
+    <g transform="translate(428,347)" clip-path="url(#fr)">
+      <rect width="224" height="124" fill="#F0B429"/>
+      <circle cx="112" cy="56" r="54" fill="#FBF6EF" opacity="0.5"/>
+      <path d="M 38 124 C 44 96 74 82 112 82 C 150 82 180 96 186 124 Z" fill="#23201D"/>
+      <circle cx="112" cy="54" r="30" fill="#23201D"/>
+      <path d="M 81 52 C 82 20 142 20 143 52 C 132 40 92 40 81 52 Z" fill="#23201D"/>
+      <path d="M 84 96 L 112 120 L 140 96 C 130 90 94 90 84 96 Z" fill="#E4753A"/>
+      <path d="M 86 40 C 77 56 81 74 92 84" stroke="#FBF6EF" stroke-width="4" fill="none" opacity="0.55"/>
+      <circle cx="196" cy="30" r="14" fill="#FBF6EF" opacity="0.5"/>
+      <g stroke="#23201D" stroke-width="3" opacity="0.25" fill="none">
+        <path d="M 0 108 H 34"/>
+        <path d="M 190 112 H 224"/>
+      </g>
+    </g>
+
+    <!-- ================= FRAME 6 - bridge ================= -->
+    <g transform="translate(666,347)" clip-path="url(#fr)">
+      <rect width="224" height="124" fill="#FBF6EF"/>
+      <circle cx="192" cy="24" r="16" fill="#F0B429"/>
+      <g fill="#23201D">
+        <rect x="18" y="38" width="6" height="14"/>
+        <rect x="52" y="38" width="6" height="14"/>
+        <rect x="86" y="38" width="6" height="14"/>
+        <rect x="120" y="38" width="6" height="14"/>
+        <rect x="154" y="38" width="6" height="14"/>
+        <rect x="188" y="38" width="6" height="14"/>
+      </g>
+      <rect y="50" width="224" height="12" fill="#23201D"/>
+      <rect y="60" width="224" height="36" fill="#23201D"/>
+      <circle cx="42" cy="96" r="26" fill="#FBF6EF"/>
+      <circle cx="112" cy="96" r="26" fill="#FBF6EF"/>
+      <circle cx="182" cy="96" r="26" fill="#FBF6EF"/>
+      <rect y="96" width="224" height="28" fill="#6E8B6A"/>
+      <g stroke="#FBF6EF" stroke-width="3" opacity="0.5" fill="none">
+        <path d="M 16 106 H 66"/>
+        <path d="M 124 114 H 178"/>
+        <path d="M 42 118 H 98"/>
+      </g>
+    </g>
+
+    <!-- ================= FRAME 7 - furrows ================= -->
+    <g transform="translate(190,532)" clip-path="url(#fr)">
+      <rect width="224" height="124" fill="#6E8B6A"/>
+      <rect width="224" height="42" fill="#F0B429"/>
+      <circle cx="108" cy="22" r="13" fill="#FBF6EF" opacity="0.8"/>
+      <path d="M 0 42 H 224" stroke="#23201D" stroke-width="3" opacity="0.55"/>
+      <g stroke="#23201D" stroke-width="3" opacity="0.45" fill="none">
+        <path d="M 112 44 L -44 124"/>
+        <path d="M 112 44 L 4 124"/>
+        <path d="M 112 44 L 44 124"/>
+        <path d="M 112 44 L 82 124"/>
+        <path d="M 112 44 L 118 124"/>
+        <path d="M 112 44 L 156 124"/>
+        <path d="M 112 44 L 200 124"/>
+        <path d="M 112 44 L 252 124"/>
+      </g>
+      <path d="M 170 42 L 176 22 L 182 42 Z" fill="#23201D"/>
+      <path d="M 42 42 L 48 28 L 54 42 Z" fill="#23201D"/>
+      <path d="M 176 42 L 176 34" stroke="#23201D" stroke-width="3"/>
+      <g fill="#FBF6EF" opacity="0.30">
+        <rect x="20" y="72" width="34" height="4" rx="2"/>
+        <rect x="150" y="90" width="42" height="4" rx="2"/>
+        <rect x="70" y="108" width="30" height="4" rx="2"/>
+      </g>
+    </g>
+
+    <!-- ================= FRAME 8 - birds on a wire ================= -->
+    <g transform="translate(428,532)" clip-path="url(#fr)">
+      <rect width="224" height="124" fill="#FBF6EF"/>
+      <rect width="224" height="48" fill="#F0B429" opacity="0.30"/>
+      <rect y="96" width="224" height="28" fill="#6E8B6A" opacity="0.55"/>
+      <path d="M 0 40 C 70 58 154 58 224 40" stroke="#3E5C76" stroke-width="4" fill="none"/>
+      <path d="M 0 66 C 70 84 154 84 224 66" stroke="#3E5C76" stroke-width="4" fill="none"/>
+      <rect x="196" y="14" width="10" height="110" fill="#23201D"/>
+      <rect x="174" y="26" width="50" height="7" fill="#23201D"/>
+      <g fill="#23201D">
+        <path d="M 40 50 c 2 -10 13 -10 15 -2 l 10 3 -11 4 -14 0 z"/>
+        <path d="M 82 54 c 2 -10 13 -10 15 -2 l 10 3 -11 4 -14 0 z"/>
+        <path d="M 140 54 c 2 -10 13 -10 15 -2 l 10 3 -11 4 -14 0 z"/>
+        <path d="M 62 80 c 2 -10 13 -10 15 -2 l 10 3 -11 4 -14 0 z"/>
+        <path d="M 160 78 c 2 -10 13 -10 15 -2 l 10 3 -11 4 -14 0 z"/>
+      </g>
+      <circle cx="26" cy="20" r="9" fill="#E4753A" opacity="0.75"/>
+    </g>
+
+    <!-- ================= FRAME 9 - the shore (favourite) ================= -->
+    <g transform="translate(666,532)" clip-path="url(#fr)">
+      <rect width="224" height="124" fill="#F0B429"/>
+      <circle cx="170" cy="28" r="25" fill="#FBF6EF" opacity="0.85"/>
+      <rect y="62" width="224" height="26" fill="#3E5C76"/>
+      <path d="M 0 88 C 60 82 160 95 224 86 L 224 124 L 0 124 Z" fill="#FBF6EF"/>
+      <g stroke="#FBF6EF" stroke-width="3" opacity="0.6" fill="none">
+        <path d="M 14 70 H 52"/>
+        <path d="M 70 78 H 106"/>
+        <path d="M 132 70 H 174"/>
+        <path d="M 178 82 H 210"/>
+      </g>
+      <g fill="#23201D">
+        <circle cx="84" cy="60" r="7"/>
+        <path d="M 77 68 C 77 61 91 61 91 68 L 93 94 L 87 94 L 84 82 L 81 94 L 75 94 Z"/>
+        <circle cx="112" cy="63" r="6"/>
+        <path d="M 106 70 C 106 64 118 64 118 70 L 120 94 L 115 94 L 112 84 L 109 94 L 104 94 Z"/>
+      </g>
+      <g fill="#23201D" opacity="0.22">
+        <rect x="79" y="94" width="14" height="16" rx="4"/>
+        <rect x="106" y="94" width="13" height="13" rx="4"/>
+      </g>
+      <circle cx="196" cy="104" r="6" fill="#E4753A" opacity="0.8"/>
+    </g>
+
+    <!-- ================= FRAME 10 - still life ================= -->
+    <g transform="translate(190,717)" clip-path="url(#fr)">
+      <rect width="224" height="124" fill="#3E5C76"/>
+      <rect width="88" height="124" fill="#FBF6EF" opacity="0.16"/>
+      <rect y="94" width="224" height="30" fill="#23201D"/>
+      <rect y="90" width="224" height="5" fill="#23201D" opacity="0.45"/>
+      <path d="M 62 94 C 62 62 74 56 74 44 L 74 24 L 92 24 L 92 44 C 92 56 104 62 104 94 Z" fill="#FBF6EF"/>
+      <rect x="70" y="34" width="26" height="7" fill="#E4753A"/>
+      <rect x="76" y="16" width="14" height="10" rx="3" fill="#23201D"/>
+      <path d="M 124 66 C 126 96 184 96 186 66 Z" fill="#F0B429"/>
+      <path d="M 118 66 H 192" stroke="#F0B429" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="138" cy="58" r="10" fill="#E4753A"/>
+      <circle cx="164" cy="56" r="9" fill="#E4753A"/>
+      <circle cx="151" cy="46" r="8" fill="#6E8B6A"/>
+      <circle cx="196" cy="24" r="10" fill="#FBF6EF" opacity="0.35"/>
+    </g>
+
+    <!-- ================= FRAME 11 - waves ================= -->
+    <g transform="translate(428,717)" clip-path="url(#fr)">
+      <rect width="224" height="124" fill="#3E5C76"/>
+      <circle cx="112" cy="2" r="30" fill="#F0B429"/>
+      <g stroke="#FBF6EF" stroke-width="5" fill="none" opacity="0.75">
+        <path d="M -10 52 C 30 36 62 68 104 52 C 146 36 180 68 234 50"/>
+        <path d="M -10 78 C 30 62 62 94 104 78 C 146 62 180 94 234 76"/>
+        <path d="M -10 104 C 30 88 62 120 104 104 C 146 88 180 120 234 102"/>
+      </g>
+      <g stroke="#F0B429" stroke-width="3" fill="none" opacity="0.55">
+        <path d="M -10 40 C 30 24 62 56 104 40 C 146 24 180 56 234 38"/>
+      </g>
+      <g fill="#FBF6EF" opacity="0.5">
+        <circle cx="40" cy="62" r="4"/>
+        <circle cx="150" cy="70" r="3"/>
+        <circle cx="86" cy="92" r="4"/>
+        <circle cx="196" cy="60" r="3"/>
+        <circle cx="24" cy="112" r="3"/>
+      </g>
+    </g>
+
+    <!-- ================= FRAME 12 - rooftops ================= -->
+    <g transform="translate(666,717)" clip-path="url(#fr)">
+      <rect width="224" height="124" fill="#FBF6EF"/>
+      <rect width="224" height="42" fill="#F0B429" opacity="0.55"/>
+      <circle cx="44" cy="22" r="12" fill="#E4753A" opacity="0.85"/>
+      <path d="M 0 124 L 0 76 L 30 76 L 30 58 L 64 58 L 64 88 L 98 88 L 98 44 L 134 44 L 134 66 L 170 66 L 170 54 L 204 54 L 204 80 L 224 80 L 224 124 Z" fill="#23201D"/>
+      <g fill="#F0B429">
+        <rect x="8" y="88" width="9" height="12"/>
+        <rect x="8" y="108" width="9" height="12"/>
+        <rect x="38" y="68" width="9" height="12"/>
+        <rect x="38" y="96" width="9" height="12"/>
+        <rect x="72" y="98" width="9" height="12"/>
+        <rect x="106" y="56" width="9" height="12"/>
+        <rect x="106" y="80" width="9" height="12"/>
+        <rect x="106" y="104" width="9" height="12"/>
+        <rect x="142" y="78" width="9" height="12"/>
+        <rect x="142" y="102" width="9" height="12"/>
+        <rect x="178" y="66" width="9" height="12"/>
+        <rect x="178" y="92" width="9" height="12"/>
+        <rect x="210" y="94" width="9" height="12"/>
+      </g>
+      <g stroke="#23201D" stroke-width="3" fill="none">
+        <path d="M 116 44 L 116 24"/>
+        <path d="M 107 30 H 125"/>
+      </g>
+      <path d="M 0 76 H 30" stroke="#3E5C76" stroke-width="4" opacity="0.6"/>
+    </g>
+
+    <!-- hand set label in the sheet margin -->
+    <text x="190" y="898" font-family="Georgia, serif" font-size="30" letter-spacing="5" fill="#23201D" opacity="0.72">ROLL 12 &#183; HP5 400</text>
+    <path d="M 190 906 H 470" stroke="#23201D" stroke-width="3" opacity="0.25"/>
+
+    <!-- grease pencil marks -->
+    <g fill="none" stroke="#E4753A" stroke-linecap="round">
+      <!-- loop around frame 5 -->
+      <path d="M 436 328 C 356 342 344 424 418 464 C 494 506 608 502 656 460 C 708 414 690 348 614 328 C 544 308 466 314 420 346" stroke-width="11" opacity="0.92"/>
+      <path d="M 444 336 C 372 352 364 420 424 454 C 496 494 598 490 646 452 C 692 414 678 356 610 338 C 546 320 480 326 436 350" stroke-width="6" opacity="0.55"/>
+      <!-- loop around frame 9 -->
+      <path d="M 674 514 C 596 528 584 608 656 648 C 732 690 846 686 894 644 C 928 614 924 566 880 540" stroke-width="11" opacity="0.92"/>
+      <path d="M 880 540 C 838 516 748 500 682 522 C 662 528 652 538 648 548" stroke-width="11" opacity="0.92"/>
+      <path d="M 682 522 C 616 544 606 604 664 638 C 736 678 838 674 886 636" stroke-width="6" opacity="0.5"/>
+      <!-- ticks beside the keepers -->
+      <path d="M 396 300 L 410 316 L 438 282" stroke-width="9" opacity="0.85"/>
+      <path d="M 632 486 L 646 502 L 674 468" stroke-width="9" opacity="0.85"/>
+      <!-- a pass on a frame that did not make it -->
+      <path d="M 452 182 L 630 268" stroke-width="7" opacity="0.42"/>
+      <path d="M 630 182 L 452 268" stroke-width="7" opacity="0.42"/>
+    </g>
+    <text x="700" y="898" font-family="Georgia, serif" font-size="34" letter-spacing="4" fill="#E4753A" opacity="0.9">KEEP</text>
+    <path d="M 694 908 C 720 918 776 916 800 902" stroke="#E4753A" stroke-width="6" fill="none" opacity="0.7" stroke-linecap="round"/>
+
+    <!-- tape holding the sheet down -->
+    <g opacity="0.55">
+      <path d="M 104 148 L 190 94 L 210 124 L 124 178 Z" fill="#F0B429"/>
+      <path d="M 104 148 L 190 94 L 210 124 L 124 178 Z" fill="none" stroke="#23201D" stroke-width="3" opacity="0.4"/>
+      <path d="M 878 900 L 964 846 L 984 876 L 898 930 Z" fill="#F0B429"/>
+      <path d="M 878 900 L 964 846 L 984 876 L 898 930 Z" fill="none" stroke="#23201D" stroke-width="3" opacity="0.4"/>
+    </g>
+  </g>
+
+  <!-- ================= film canister on the table ================= -->
+  <g transform="rotate(-5 240 950)">
+    <rect x="176" y="920" width="20" height="26" rx="6" fill="#23201D"/>
+    <rect x="164" y="926" width="14" height="16" rx="4" fill="#6E8B6A"/>
+    <rect x="172" y="918" width="132" height="70" rx="13" fill="#23201D"/>
+    <rect x="200" y="918" width="78" height="70" fill="#F0B429"/>
+    <rect x="200" y="918" width="7" height="70" fill="#E4753A"/>
+    <rect x="271" y="918" width="7" height="70" fill="#E4753A"/>
+    <g fill="#23201D" opacity="0.75">
+      <rect x="214" y="936" width="50" height="7" rx="3"/>
+      <rect x="214" y="951" width="30" height="6" rx="3"/>
+      <rect x="250" y="951" width="14" height="6" rx="3"/>
+      <rect x="214" y="965" width="40" height="5" rx="2"/>
+    </g>
+    <path d="M 298 930 C 336 928 368 940 390 960 L 374 976 C 356 958 330 950 298 952 Z" fill="#23201D"/>
+    <g fill="#FBF6EF" opacity="0.85">
+      <rect x="316" y="940" width="9" height="7" rx="2"/>
+      <rect x="340" y="948" width="9" height="7" rx="2"/>
+      <rect x="362" y="960" width="9" height="7" rx="2"/>
+    </g>
+    <rect x="172" y="918" width="132" height="70" rx="13" fill="none" stroke="#FBF6EF" stroke-width="3" opacity="0.22"/>
+  </g>
+
+  <!-- ================= grease pencil ================= -->
+  <g transform="rotate(-14 838 956)">
+    <rect x="668" y="936" width="322" height="42" rx="8" fill="#23201D" opacity="0.20" transform="translate(6,10)"/>
+    <path d="M 636 957 L 678 934 L 678 980 Z" fill="#E4753A"/>
+    <path d="M 636 957 L 654 947 L 654 967 Z" fill="#23201D"/>
+    <rect x="676" y="935" width="314" height="44" rx="9" fill="#E4753A"/>
+    <rect x="676" y="935" width="314" height="12" rx="6" fill="#FBF6EF" opacity="0.30"/>
+    <rect x="676" y="966" width="314" height="10" fill="#23201D" opacity="0.18"/>
+    <g stroke="#FBF6EF" stroke-width="3" opacity="0.45" fill="none">
+      <path d="M 706 935 L 690 979"/>
+      <path d="M 746 935 L 730 979"/>
+      <path d="M 786 935 L 770 979"/>
+      <path d="M 826 935 L 810 979"/>
+      <path d="M 866 935 L 850 979"/>
+      <path d="M 906 935 L 890 979"/>
+      <path d="M 946 935 L 930 979"/>
+    </g>
+    <rect x="800" y="935" width="86" height="44" fill="#F0B429"/>
+    <rect x="800" y="935" width="86" height="44" fill="none" stroke="#23201D" stroke-width="3" opacity="0.35"/>
+    <g fill="#23201D" opacity="0.7">
+      <rect x="812" y="950" width="42" height="6" rx="3"/>
+      <rect x="812" y="962" width="26" height="5" rx="2"/>
+    </g>
+    <rect x="964" y="932" width="30" height="50" rx="8" fill="#23201D"/>
+    <path d="M 676 935 L 990 935" stroke="#23201D" stroke-width="3" opacity="0.25"/>
+    <path d="M 676 979 L 990 979" stroke="#23201D" stroke-width="3" opacity="0.30"/>
+  </g>
+
+  <!-- ================= table front edge and floor ================= -->
+  <rect y="990" width="1080" height="54" fill="#F0B429"/>
+  <rect y="990" width="1080" height="8" fill="#23201D" opacity="0.55"/>
+  <g stroke="#23201D" stroke-width="3" opacity="0.18" fill="none">
+    <path d="M 0 1016 H 1080"/>
+    <path d="M 120 1002 L 132 1040"/>
+    <path d="M 520 1002 L 534 1040"/>
+    <path d="M 900 1002 L 914 1040"/>
+  </g>
+  <rect y="1044" width="1080" height="36" fill="#3E5C76" opacity="0.35"/>
+  <g fill="#23201D" opacity="0.16">
+    <circle cx="180" cy="1062" r="5"/>
+    <circle cx="640" cy="1066" r="4"/>
+    <circle cx="920" cy="1058" r="5"/>
+  </g>
+
+  <!-- riso texture over everything -->
+  <rect width="1080" height="1080" fill="url(#riso)"/>
+</svg>

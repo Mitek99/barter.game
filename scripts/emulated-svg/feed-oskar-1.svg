@@ -1,0 +1,324 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080">
+  <defs>
+    <pattern id="grain" width="36" height="36" patternUnits="userSpaceOnUse">
+      <circle cx="7" cy="8" r="2.4" fill="#FBF6EF" opacity="0.08"/>
+      <circle cx="25" cy="23" r="1.8" fill="#FBF6EF" opacity="0.07"/>
+      <circle cx="32" cy="5" r="1.2" fill="#FBF6EF" opacity="0.05"/>
+    </pattern>
+    <pattern id="counterdots" width="40" height="40" patternUnits="userSpaceOnUse">
+      <circle cx="9" cy="11" r="2.2" fill="#23201D" opacity="0.06"/>
+      <circle cx="28" cy="30" r="1.6" fill="#23201D" opacity="0.05"/>
+    </pattern>
+  </defs>
+
+  <!-- paper -->
+  <rect x="0" y="0" width="1080" height="1080" fill="#F2E9DC"/>
+
+  <!-- darkroom wall -->
+  <rect x="0" y="0" width="1080" height="706" fill="#3E5C76"/>
+  <rect x="0" y="0" width="1080" height="706" fill="#23201D" opacity="0.38"/>
+  <rect x="0" y="0" width="1080" height="706" fill="url(#grain)"/>
+  <rect x="0" y="0" width="1080" height="54" fill="#23201D" opacity="0.30"/>
+  <path d="M0,54 L1080,54" stroke="#FBF6EF" stroke-width="3" opacity="0.10"/>
+  <rect x="0" y="648" width="1080" height="58" fill="#23201D" opacity="0.26"/>
+  <path d="M0,648 L1080,648" stroke="#FBF6EF" stroke-width="3" opacity="0.09"/>
+
+  <!-- safelight glow -->
+  <circle cx="905" cy="180" r="330" fill="#E4753A" opacity="0.07"/>
+  <circle cx="905" cy="180" r="238" fill="#E4753A" opacity="0.11"/>
+  <circle cx="905" cy="180" r="150" fill="#E4753A" opacity="0.16"/>
+  <circle cx="905" cy="180" r="80" fill="#E4753A" opacity="0.24"/>
+  <path d="M905,266 L905,318 M812,246 L780,290 M998,246 L1030,290 M760,192 L706,198 M1050,192 L1074,196" stroke="#E4753A" stroke-width="6" opacity="0.35" stroke-linecap="round"/>
+
+  <!-- safelight fixture -->
+  <path d="M905,0 L905,84" stroke="#23201D" stroke-width="7"/>
+  <circle cx="905" cy="86" r="10" fill="#23201D"/>
+  <path d="M857,92 L953,92 L988,152 L822,152 Z" fill="#23201D"/>
+  <path d="M822,152 L988,152 L988,164 L822,164 Z" fill="#23201D"/>
+  <path d="M866,104 L878,140" stroke="#FBF6EF" stroke-width="4" opacity="0.22"/>
+  <circle cx="905" cy="180" r="26" fill="#E4753A"/>
+  <circle cx="905" cy="176" r="12" fill="#F0B429" opacity="0.85"/>
+  <path d="M888,166 C892,158 900,155 906,156" stroke="#FBF6EF" stroke-width="4" opacity="0.5" fill="none"/>
+
+  <!-- darkroom timer -->
+  <rect x="156" y="62" width="24" height="18" fill="#23201D"/>
+  <circle cx="168" cy="154" r="80" fill="#23201D"/>
+  <circle cx="168" cy="154" r="64" fill="#F2E9DC"/>
+  <path d="M168,154 L168,92 A62,62 0 0 1 213,113 Z" fill="#F0B429" opacity="0.75"/>
+  <circle cx="168" cy="154" r="54" fill="none" stroke="#23201D" stroke-width="9" stroke-dasharray="3 25" opacity="0.85"/>
+  <path d="M168,154 L168,104" stroke="#23201D" stroke-width="7" stroke-linecap="round"/>
+  <path d="M168,154 L207,176" stroke="#E4753A" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="168" cy="154" r="8" fill="#23201D"/>
+  <circle cx="168" cy="154" r="3" fill="#F2E9DC"/>
+
+  <!-- drying line -->
+  <circle cx="48" cy="268" r="11" fill="#23201D"/>
+  <circle cx="1032" cy="268" r="11" fill="#23201D"/>
+  <path d="M48,268 Q540,330 1032,268" fill="none" stroke="#23201D" stroke-width="7"/>
+
+  <!-- strip A : four frames -->
+  <g transform="translate(178,296) rotate(-3)">
+    <rect x="-56" y="0" width="112" height="373" fill="#23201D"/>
+    <path d="M-48,8 L-48,365" stroke="#F2E9DC" stroke-width="9" stroke-dasharray="9 20"/>
+    <path d="M48,8 L48,365" stroke="#F2E9DC" stroke-width="9" stroke-dasharray="9 20"/>
+    <g transform="translate(-40,12)">
+      <rect width="80" height="82" fill="#3E5C76"/>
+      <path d="M6,82 C10,58 24,50 40,50 C56,50 70,58 74,82 Z" fill="#FBF6EF" opacity="0.42"/>
+      <ellipse cx="40" cy="32" rx="17" ry="20" fill="#FBF6EF" opacity="0.80"/>
+      <path d="M26,22 C28,8 52,8 55,22 C48,16 34,16 26,22 Z" fill="#FBF6EF" opacity="0.45"/>
+    </g>
+    <g transform="translate(-40,101)">
+      <rect width="80" height="82" fill="#3E5C76"/>
+      <rect x="6" y="38" width="14" height="44" fill="#FBF6EF" opacity="0.52"/>
+      <rect x="24" y="22" width="16" height="60" fill="#FBF6EF" opacity="0.72"/>
+      <rect x="44" y="46" width="12" height="36" fill="#FBF6EF" opacity="0.42"/>
+      <rect x="60" y="30" width="14" height="52" fill="#FBF6EF" opacity="0.60"/>
+    </g>
+    <g transform="translate(-40,190)">
+      <rect width="80" height="82" fill="#3E5C76"/>
+      <path d="M4,30 C18,18 30,42 44,30 C56,20 68,30 76,26" fill="none" stroke="#FBF6EF" stroke-width="5" opacity="0.65"/>
+      <path d="M4,50 C18,38 30,62 44,50 C56,40 68,50 76,46" fill="none" stroke="#FBF6EF" stroke-width="5" opacity="0.48"/>
+      <path d="M4,70 C18,58 30,82 44,70 C56,60 68,70 76,66" fill="none" stroke="#FBF6EF" stroke-width="5" opacity="0.34"/>
+    </g>
+    <g transform="translate(-40,279)">
+      <rect width="80" height="82" fill="#3E5C76"/>
+      <rect y="60" width="80" height="22" fill="#FBF6EF" opacity="0.36"/>
+      <path d="M12,62 L26,20 L40,62 Z" fill="#FBF6EF" opacity="0.74"/>
+      <path d="M36,62 L48,32 L60,62 Z" fill="#FBF6EF" opacity="0.56"/>
+      <path d="M56,62 L66,42 L76,62 Z" fill="#FBF6EF" opacity="0.44"/>
+    </g>
+    <path d="M-15,-32 L15,-32 L12,16 L-12,16 Z" fill="#23201D"/>
+    <path d="M-15,-14 L15,-14" stroke="#F2E9DC" stroke-width="4" opacity="0.55"/>
+    <circle cx="0" cy="-24" r="4.5" fill="#E4753A"/>
+  </g>
+
+  <!-- strip B : three frames -->
+  <g transform="translate(330,307) rotate(3)">
+    <rect x="-56" y="0" width="112" height="284" fill="#23201D"/>
+    <path d="M-48,8 L-48,276" stroke="#F2E9DC" stroke-width="9" stroke-dasharray="9 20"/>
+    <path d="M48,8 L48,276" stroke="#F2E9DC" stroke-width="9" stroke-dasharray="9 20"/>
+    <g transform="translate(-40,12)">
+      <rect width="80" height="82" fill="#3E5C76"/>
+      <circle cx="56" cy="24" r="13" fill="#FBF6EF" opacity="0.82"/>
+      <path d="M0,54 L18,40 L34,54 L52,42 L80,58 L80,82 L0,82 Z" fill="#FBF6EF" opacity="0.46"/>
+      <path d="M0,68 L80,68" stroke="#FBF6EF" stroke-width="3" opacity="0.30"/>
+    </g>
+    <g transform="translate(-40,101)">
+      <rect width="80" height="82" fill="#3E5C76"/>
+      <rect x="14" y="14" width="52" height="54" fill="#FBF6EF" opacity="0.20"/>
+      <rect x="14" y="14" width="52" height="54" fill="none" stroke="#FBF6EF" stroke-width="4" opacity="0.55"/>
+      <path d="M40,14 L40,68 M14,41 L66,41" stroke="#FBF6EF" stroke-width="5" opacity="0.70"/>
+    </g>
+    <g transform="translate(-40,190)">
+      <rect width="80" height="82" fill="#3E5C76"/>
+      <rect y="56" width="80" height="26" fill="#FBF6EF" opacity="0.28"/>
+      <path d="M38,54 L38,14 L64,54 Z" fill="#FBF6EF" opacity="0.76"/>
+      <path d="M16,56 L66,56 L56,70 L26,70 Z" fill="#FBF6EF" opacity="0.58"/>
+    </g>
+    <path d="M-15,-32 L15,-32 L12,16 L-12,16 Z" fill="#23201D"/>
+    <path d="M-15,-14 L15,-14" stroke="#F2E9DC" stroke-width="4" opacity="0.55"/>
+    <circle cx="0" cy="-24" r="4.5" fill="#F0B429"/>
+  </g>
+
+  <!-- strip C : four frames -->
+  <g transform="translate(486,313) rotate(-2)">
+    <rect x="-56" y="0" width="112" height="373" fill="#23201D"/>
+    <path d="M-48,8 L-48,365" stroke="#F2E9DC" stroke-width="9" stroke-dasharray="9 20"/>
+    <path d="M48,8 L48,365" stroke="#F2E9DC" stroke-width="9" stroke-dasharray="9 20"/>
+    <path d="M-38,6 L-14,6" stroke="#F0B429" stroke-width="4" opacity="0.85"/>
+    <path d="M-6,6 L8,6" stroke="#E4753A" stroke-width="4" opacity="0.85"/>
+    <g transform="translate(-40,12)">
+      <rect width="80" height="82" fill="#3E5C76"/>
+      <rect y="58" width="80" height="24" fill="#FBF6EF" opacity="0.34"/>
+      <path d="M8,60 L20,26 L32,60 Z" fill="#FBF6EF" opacity="0.70"/>
+      <path d="M30,60 L44,18 L58,60 Z" fill="#FBF6EF" opacity="0.55"/>
+      <path d="M56,60 L68,38 L78,60 Z" fill="#FBF6EF" opacity="0.42"/>
+    </g>
+    <g transform="translate(-40,101)">
+      <rect width="80" height="82" fill="#3E5C76"/>
+      <path d="M40,82 L40,44" stroke="#FBF6EF" stroke-width="4" opacity="0.45"/>
+      <circle cx="26" cy="30" r="10" fill="#FBF6EF" opacity="0.44"/>
+      <circle cx="54" cy="30" r="10" fill="#FBF6EF" opacity="0.44"/>
+      <circle cx="40" cy="14" r="10" fill="#FBF6EF" opacity="0.44"/>
+      <circle cx="40" cy="44" r="10" fill="#FBF6EF" opacity="0.44"/>
+      <circle cx="40" cy="29" r="10" fill="#FBF6EF" opacity="0.86"/>
+    </g>
+    <g transform="translate(-40,190)">
+      <rect width="80" height="82" fill="#3E5C76"/>
+      <path d="M8,74 L8,44 A32,32 0 0 1 72,44 L72,74 Z" fill="#FBF6EF" opacity="0.50"/>
+      <path d="M24,74 L24,54 A16,16 0 0 1 56,54 L56,74 Z" fill="#3E5C76"/>
+      <path d="M0,74 L80,74" stroke="#FBF6EF" stroke-width="7" opacity="0.72"/>
+    </g>
+    <g transform="translate(-40,279)">
+      <rect width="80" height="82" fill="#3E5C76"/>
+      <path d="M4,82 C8,56 24,48 40,48 C56,48 72,56 76,82 Z" fill="#FBF6EF" opacity="0.38"/>
+      <ellipse cx="40" cy="30" rx="16" ry="19" fill="#FBF6EF" opacity="0.78"/>
+      <path d="M22,62 L40,74 L58,62" fill="none" stroke="#3E5C76" stroke-width="4" opacity="0.7"/>
+    </g>
+    <path d="M-15,-32 L15,-32 L12,16 L-12,16 Z" fill="#23201D"/>
+    <path d="M-15,-14 L15,-14" stroke="#F2E9DC" stroke-width="4" opacity="0.55"/>
+    <circle cx="0" cy="-24" r="4.5" fill="#6E8B6A"/>
+  </g>
+
+  <!-- strip D : two frames -->
+  <g transform="translate(640,312) rotate(3)">
+    <rect x="-56" y="0" width="112" height="195" fill="#23201D"/>
+    <path d="M-48,8 L-48,187" stroke="#F2E9DC" stroke-width="9" stroke-dasharray="9 20"/>
+    <path d="M48,8 L48,187" stroke="#F2E9DC" stroke-width="9" stroke-dasharray="9 20"/>
+    <g transform="translate(-40,12)">
+      <rect width="80" height="82" fill="#3E5C76"/>
+      <path d="M6,82 L6,66 L26,66 L26,50 L46,50 L46,34 L66,34 L66,18 L76,18 L76,82 Z" fill="#FBF6EF" opacity="0.55"/>
+      <path d="M6,66 L26,66 M26,50 L46,50 M46,34 L66,34" stroke="#3E5C76" stroke-width="3" opacity="0.6"/>
+    </g>
+    <g transform="translate(-40,101)">
+      <rect width="80" height="82" fill="#3E5C76"/>
+      <circle cx="24" cy="26" r="14" fill="#FBF6EF" opacity="0.80"/>
+      <path d="M0,58 L22,46 L40,58 L60,44 L80,60 L80,82 L0,82 Z" fill="#FBF6EF" opacity="0.44"/>
+    </g>
+    <path d="M-15,-32 L15,-32 L12,16 L-12,16 Z" fill="#23201D"/>
+    <path d="M-15,-14 L15,-14" stroke="#F2E9DC" stroke-width="4" opacity="0.55"/>
+    <circle cx="0" cy="-24" r="4.5" fill="#E4753A"/>
+  </g>
+
+  <!-- strip E : three frames -->
+  <g transform="translate(790,305) rotate(-4)">
+    <rect x="-56" y="0" width="112" height="284" fill="#23201D"/>
+    <path d="M-48,8 L-48,276" stroke="#F2E9DC" stroke-width="9" stroke-dasharray="9 20"/>
+    <path d="M48,8 L48,276" stroke="#F2E9DC" stroke-width="9" stroke-dasharray="9 20"/>
+    <g transform="translate(-40,12)">
+      <rect width="80" height="82" fill="#3E5C76"/>
+      <path d="M10,36 C20,22 30,22 40,36 C50,22 60,22 70,36" fill="none" stroke="#FBF6EF" stroke-width="5" opacity="0.72"/>
+      <path d="M26,60 C32,52 38,52 44,60 C50,52 56,52 62,60" fill="none" stroke="#FBF6EF" stroke-width="4" opacity="0.45"/>
+      <circle cx="66" cy="14" r="7" fill="#FBF6EF" opacity="0.5"/>
+    </g>
+    <g transform="translate(-40,101)">
+      <rect width="80" height="82" fill="#3E5C76"/>
+      <rect x="4" y="44" width="16" height="38" fill="#FBF6EF" opacity="0.44"/>
+      <rect x="24" y="18" width="18" height="64" fill="#FBF6EF" opacity="0.68"/>
+      <rect x="46" y="34" width="12" height="48" fill="#FBF6EF" opacity="0.52"/>
+      <rect x="62" y="52" width="14" height="30" fill="#FBF6EF" opacity="0.38"/>
+    </g>
+    <g transform="translate(-40,190)">
+      <rect width="80" height="82" fill="#3E5C76"/>
+      <rect y="54" width="80" height="28" fill="#FBF6EF" opacity="0.26"/>
+      <path d="M42,52 L42,12 L18,52 Z" fill="#FBF6EF" opacity="0.74"/>
+      <path d="M14,54 L64,54 L54,68 L24,68 Z" fill="#FBF6EF" opacity="0.56"/>
+    </g>
+    <path d="M-15,-32 L15,-32 L12,16 L-12,16 Z" fill="#23201D"/>
+    <path d="M-15,-14 L15,-14" stroke="#F2E9DC" stroke-width="4" opacity="0.55"/>
+    <circle cx="0" cy="-24" r="4.5" fill="#F0B429"/>
+  </g>
+
+  <!-- hanging tag -->
+  <g transform="translate(945,296) rotate(-2)">
+    <rect x="-93" y="0" width="186" height="116" rx="9" fill="#FBF6EF" stroke="#23201D" stroke-width="5"/>
+    <circle cx="0" cy="20" r="7" fill="#23201D" opacity="0.85"/>
+    <path d="M-70,34 L70,34" stroke="#E4753A" stroke-width="3" opacity="0.6"/>
+    <text x="0" y="70" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="36" fill="#23201D">roll 07</text>
+    <text x="0" y="99" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#3E5C76">d-76 &#183; 9 min</text>
+    <path d="M-15,-32 L15,-32 L12,16 L-12,16 Z" fill="#23201D"/>
+    <path d="M-15,-14 L15,-14" stroke="#F2E9DC" stroke-width="4" opacity="0.55"/>
+    <circle cx="0" cy="-24" r="4.5" fill="#6E8B6A"/>
+  </g>
+
+  <!-- yesterday's print, pinned to the wall -->
+  <g transform="translate(952,540) rotate(-4)">
+    <rect x="-80" y="-78" width="160" height="156" fill="#FBF6EF"/>
+    <rect x="-68" y="-66" width="136" height="112" fill="#23201D"/>
+    <path d="M-68,20 L-38,-14 L-14,10 L14,-24 L68,26 L68,46 L-68,46 Z" fill="#FBF6EF" opacity="0.55"/>
+    <circle cx="34" cy="-38" r="15" fill="#F0B429" opacity="0.85"/>
+    <path d="M-68,46 L68,46" stroke="#FBF6EF" stroke-width="4" opacity="0.35"/>
+  </g>
+  <circle cx="963" cy="459" r="9" fill="#23201D"/>
+  <circle cx="963" cy="459" r="4" fill="#E4753A"/>
+
+  <!-- counter -->
+  <rect x="0" y="706" width="1080" height="374" fill="#FBF6EF"/>
+  <rect x="0" y="706" width="1080" height="374" fill="url(#counterdots)"/>
+  <rect x="0" y="706" width="1080" height="56" fill="#3E5C76" opacity="0.20"/>
+  <path d="M0,706 L1080,706" stroke="#23201D" stroke-width="10"/>
+  <path d="M40,772 L1040,772" stroke="#23201D" stroke-width="3" opacity="0.10" stroke-dasharray="26 34"/>
+  <path d="M40,944 L1040,944" stroke="#23201D" stroke-width="3" opacity="0.08" stroke-dasharray="18 40"/>
+  <ellipse cx="946" cy="852" rx="286" ry="132" fill="#E4753A" opacity="0.09"/>
+
+  <!-- tray one : developer -->
+  <path d="M92,784 L300,784 L318,902 L74,902 Z" fill="#23201D"/>
+  <path d="M108,798 L284,798 L298,888 L94,888 Z" fill="#6E8B6A"/>
+  <path d="M108,798 L284,798 L288,824 L104,824 Z" fill="#FBF6EF" opacity="0.16"/>
+  <path d="M120,860 C150,850 180,868 214,856 C240,847 262,858 284,852" fill="none" stroke="#FBF6EF" stroke-width="5" opacity="0.34"/>
+  <path d="M112,838 C140,830 168,844 196,836" fill="none" stroke="#FBF6EF" stroke-width="4" opacity="0.22"/>
+
+  <!-- tray two : stop, with a print floating -->
+  <path d="M336,784 L544,784 L562,902 L318,902 Z" fill="#23201D"/>
+  <path d="M352,798 L528,798 L542,888 L338,888 Z" fill="#3E5C76"/>
+  <path d="M352,798 L528,798 L532,824 L348,824 Z" fill="#FBF6EF" opacity="0.18"/>
+  <path d="M392,816 L500,816 L510,870 L384,870 Z" fill="#FBF6EF" opacity="0.94"/>
+  <path d="M404,846 L426,826 L446,846 L470,830 L494,850 L497,864 L390,864 Z" fill="#3E5C76" opacity="0.55"/>
+  <circle cx="472" cy="832" r="9" fill="#F0B429" opacity="0.8"/>
+  <path d="M346,876 C376,866 404,882 436,874" fill="none" stroke="#FBF6EF" stroke-width="5" opacity="0.30"/>
+
+  <!-- tray three : fix, with tongs -->
+  <path d="M580,784 L788,784 L806,902 L562,902 Z" fill="#23201D"/>
+  <path d="M596,798 L772,798 L786,888 L582,888 Z" fill="#3E5C76"/>
+  <path d="M596,798 L772,798 L776,822 L592,822 Z" fill="#FBF6EF" opacity="0.12"/>
+  <path d="M604,864 C636,854 664,870 696,860 C722,852 746,862 772,856" fill="none" stroke="#FBF6EF" stroke-width="5" opacity="0.28"/>
+  <path d="M640,876 L742,766" fill="none" stroke="#23201D" stroke-width="9" stroke-linecap="round"/>
+  <path d="M660,882 L754,776" fill="none" stroke="#23201D" stroke-width="9" stroke-linecap="round"/>
+  <path d="M742,766 C752,756 762,764 754,776" fill="none" stroke="#23201D" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="640" cy="876" r="8" fill="#E4753A"/>
+  <circle cx="660" cy="882" r="8" fill="#E4753A"/>
+
+  <!-- negative strip lying flat under the loupe -->
+  <ellipse cx="912" cy="922" rx="112" ry="38" fill="#F0B429" opacity="0.30"/>
+  <rect x="790" y="890" width="258" height="64" fill="#23201D"/>
+  <path d="M798,898 L1040,898" stroke="#F2E9DC" stroke-width="8" stroke-dasharray="8 19"/>
+  <path d="M798,946 L1040,946" stroke="#F2E9DC" stroke-width="8" stroke-dasharray="8 19"/>
+  <g transform="translate(800,908) scale(0.66)">
+    <rect width="80" height="52" fill="#3E5C76"/>
+    <circle cx="58" cy="16" r="11" fill="#FBF6EF" opacity="0.8"/>
+    <path d="M0,32 L18,20 L36,32 L56,22 L80,38 L80,52 L0,52 Z" fill="#FBF6EF" opacity="0.45"/>
+  </g>
+  <g transform="translate(962,908) scale(0.66)">
+    <rect width="80" height="52" fill="#3E5C76"/>
+    <path d="M10,52 L24,18 L38,52 Z" fill="#FBF6EF" opacity="0.7"/>
+    <path d="M40,52 L54,28 L68,52 Z" fill="#FBF6EF" opacity="0.5"/>
+  </g>
+
+  <!-- loupe -->
+  <path d="M842,918 C842,933 982,933 982,918 L950,772 L874,772 Z" fill="#23201D"/>
+  <path d="M874,772 L906,772 L900,930 C872,928 852,924 845,915 Z" fill="#3E5C76" opacity="0.42"/>
+  <path d="M858,912 L869,776" stroke="#FBF6EF" stroke-width="5" opacity="0.18"/>
+  <path d="M866,906 L868,876 M889,914 L890,880 M912,916 L912,878 M935,914 L934,880 M957,906 L955,876" stroke="#FBF6EF" stroke-width="5" opacity="0.22"/>
+  <ellipse cx="912" cy="772" rx="47" ry="15" fill="#3E5C76"/>
+  <ellipse cx="912" cy="771" rx="35" ry="9" fill="#FBF6EF"/>
+  <ellipse cx="900" cy="770" rx="11" ry="4.5" fill="#3E5C76" opacity="0.6"/>
+  <ellipse cx="925" cy="773" rx="7" ry="3" fill="#23201D" opacity="0.4"/>
+  <ellipse cx="912" cy="772" rx="47" ry="15" fill="none" stroke="#23201D" stroke-width="6"/>
+  <path d="M874,759 C886,753 900,751 912,752" fill="none" stroke="#FBF6EF" stroke-width="4" opacity="0.45"/>
+
+  <!-- stack of film cans -->
+  <path d="M104,952 L104,986 C104,998 200,998 200,986 L200,952 Z" fill="#23201D"/>
+  <ellipse cx="152" cy="952" rx="48" ry="14" fill="#23201D"/>
+  <path d="M110,984 C112,972 112,962 111,952" fill="none" stroke="#FBF6EF" stroke-width="4" opacity="0.18"/>
+  <path d="M104,916 L104,946 C104,958 200,958 200,946 L200,916 Z" fill="#23201D"/>
+  <ellipse cx="152" cy="916" rx="48" ry="14" fill="#3E5C76"/>
+  <ellipse cx="152" cy="916" rx="29" ry="8" fill="#F0B429" opacity="0.85"/>
+  <circle cx="152" cy="916" r="4" fill="#23201D"/>
+  <path d="M118,908 C128,903 142,901 152,902" fill="none" stroke="#FBF6EF" stroke-width="4" opacity="0.4"/>
+  <path d="M110,944 C112,936 112,928 111,920" fill="none" stroke="#FBF6EF" stroke-width="4" opacity="0.18"/>
+
+  <!-- film cartridge -->
+  <rect x="300" y="918" width="84" height="82" rx="10" fill="#23201D"/>
+  <rect x="330" y="900" width="24" height="20" rx="4" fill="#23201D"/>
+  <rect x="300" y="938" width="84" height="32" fill="#F0B429"/>
+  <path d="M312,938 L312,970 M368,938 L368,970" stroke="#23201D" stroke-width="4" opacity="0.6"/>
+  <path d="M384,952 C404,952 414,944 430,944 L430,968 C414,968 404,976 384,976 Z" fill="#3E5C76"/>
+  <path d="M392,956 L426,952 M392,968 L426,964" stroke="#FBF6EF" stroke-width="3" opacity="0.45"/>
+
+  <!-- counter front -->
+  <rect x="0" y="1006" width="1080" height="74" fill="#23201D"/>
+  <path d="M0,1006 L1080,1006" stroke="#FBF6EF" stroke-width="4" opacity="0.25"/>
+  <rect x="160" y="1034" width="150" height="11" rx="5.5" fill="#F2E9DC" opacity="0.55"/>
+  <rect x="600" y="1034" width="150" height="11" rx="5.5" fill="#F2E9DC" opacity="0.55"/>
+  <rect x="880" y="1034" width="60" height="11" rx="5.5" fill="#E4753A" opacity="0.7"/>
+</svg>

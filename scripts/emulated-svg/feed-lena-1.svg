@@ -1,0 +1,422 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080">
+<title>Lena's bench wall — pegboard, wheel, work light</title>
+<defs>
+<pattern id="pegHoles" width="44" height="44" patternUnits="userSpaceOnUse">
+<circle cx="22" cy="22" r="4.6" fill="#23201D" opacity="0.20"/>
+<circle cx="22" cy="19.4" r="1.8" fill="#FBF6EF" opacity="0.22"/>
+</pattern>
+<pattern id="riso" width="38" height="38" patternUnits="userSpaceOnUse">
+<circle cx="8" cy="9" r="2.2" fill="#FBF6EF" opacity="0.13"/>
+<circle cx="27" cy="26" r="1.6" fill="#23201D" opacity="0.10"/>
+</pattern>
+<pattern id="wallGrit" width="30" height="30" patternUnits="userSpaceOnUse">
+<circle cx="6" cy="7" r="1.7" fill="#23201D" opacity="0.07"/>
+<circle cx="21" cy="20" r="1.2" fill="#23201D" opacity="0.05"/>
+</pattern>
+<clipPath id="pegClip"><rect x="84" y="92" width="912" height="556"/></clipPath>
+</defs>
+
+<!-- ============ GROUND: paper wash ============ -->
+<rect width="1080" height="1080" fill="#F2E9DC"/>
+<rect x="0" y="0" width="1080" height="656" fill="#3E5C76" opacity="0.06"/>
+<rect x="0" y="0" width="1080" height="656" fill="url(#wallGrit)"/>
+
+<!-- ============ PEGBOARD ============ -->
+<rect x="84" y="92" width="912" height="556" fill="#6E8B6A"/>
+<rect x="84" y="92" width="912" height="556" fill="url(#riso)"/>
+<rect x="84" y="92" width="912" height="556" fill="url(#pegHoles)"/>
+<rect x="84" y="92" width="912" height="34" fill="#23201D" opacity="0.10"/>
+<rect x="84" y="614" width="912" height="34" fill="#23201D" opacity="0.10"/>
+<rect x="96" y="104" width="888" height="532" fill="none" stroke="#FBF6EF" stroke-width="3" opacity="0.22"/>
+<rect x="84" y="92" width="912" height="556" fill="none" stroke="#23201D" stroke-width="9"/>
+
+<!-- lamp cone spilling over the board -->
+<g clip-path="url(#pegClip)">
+<g transform="translate(824,186) rotate(26)">
+<path d="M -58 80 L 58 80 L 226 520 L -226 520 Z" fill="#F0B429" opacity="0.16"/>
+<path d="M -38 80 L 38 80 L 128 520 L -128 520 Z" fill="#F0B429" opacity="0.11"/>
+</g>
+</g>
+
+<!-- ============ PEG HOOKS ============ -->
+<g fill="none" stroke="#23201D" stroke-width="7" stroke-linecap="round">
+<path d="M 154 150 q 0 -17 14 -17 q 14 0 14 17"/>
+<path d="M 287 150 q 0 -17 14 -17 q 14 0 14 17"/>
+<path d="M 418 150 q 0 -17 14 -17 q 14 0 14 17"/>
+<path d="M 508 150 q 0 -17 14 -17 q 14 0 14 17"/>
+<path d="M 546 150 q 0 -17 14 -17 q 14 0 14 17"/>
+<path d="M 584 150 q 0 -17 14 -17 q 14 0 14 17"/>
+<path d="M 676 150 q 0 -17 14 -17 q 14 0 14 17"/>
+<path d="M 146 430 q 0 -17 14 -17 q 14 0 14 17"/>
+<path d="M 286 430 q 0 -17 14 -17 q 14 0 14 17"/>
+<path d="M 416 430 q 0 -17 14 -17 q 14 0 14 17"/>
+<path d="M 542 430 q 0 -17 14 -17 q 14 0 14 17"/>
+<path d="M 670 430 q 0 -17 14 -17 q 14 0 14 17"/>
+<path d="M 886 320 q 0 -17 14 -17 q 14 0 14 17"/>
+<path d="M 786 472 q 0 -15 14 -15 q 14 0 14 15"/>
+<path d="M 926 472 q 0 -15 14 -15 q 14 0 14 15"/>
+</g>
+
+<!-- ============ ROW A — TOOL 1: combination wrench ============ -->
+<g>
+<ellipse cx="168" cy="188" rx="29" ry="35" fill="#23201D"/>
+<ellipse cx="168" cy="186" rx="13" ry="16" fill="#6E8B6A"/>
+<path d="M 155 214 L 181 214 L 185 330 L 151 330 Z" fill="#23201D"/>
+<path d="M 145 322 h 46 v 60 h -14 v -28 h -18 v 28 h -14 z" fill="#23201D"/>
+<path d="M 157 224 L 154 322" stroke="#FBF6EF" stroke-width="3" opacity="0.28" fill="none"/>
+<path d="M 152 340 h 12" stroke="#FBF6EF" stroke-width="3" opacity="0.25" fill="none"/>
+</g>
+
+<!-- TOOL 2: adjustable wrench -->
+<g>
+<rect x="288" y="152" width="26" height="196" rx="12" fill="#23201D"/>
+<circle cx="301" cy="176" r="8" fill="#6E8B6A"/>
+<rect x="264" y="338" width="74" height="36" rx="7" fill="#23201D"/>
+<rect x="270" y="372" width="24" height="44" rx="5" fill="#23201D"/>
+<rect x="310" y="372" width="24" height="28" rx="5" fill="#23201D"/>
+<rect x="294" y="344" width="15" height="46" rx="6" fill="#F0B429" stroke="#23201D" stroke-width="3"/>
+<g stroke="#23201D" stroke-width="2.4" opacity="0.8">
+<path d="M 294 354 h 15"/><path d="M 294 364 h 15"/><path d="M 294 374 h 15"/>
+</g>
+<path d="M 293 210 L 293 336" stroke="#FBF6EF" stroke-width="3" opacity="0.26"/>
+</g>
+
+<!-- TOOL 3: pliers -->
+<g>
+<g stroke="#23201D" stroke-width="19" stroke-linecap="round" fill="none">
+<path d="M 416 162 L 430 286"/>
+<path d="M 448 162 L 434 286"/>
+</g>
+<g stroke="#E4753A" stroke-width="19" stroke-linecap="round" fill="none">
+<path d="M 416 166 L 423 228"/>
+<path d="M 448 166 L 441 228"/>
+</g>
+<path d="M 410 296 L 426 368 L 438 368 L 454 296 Z" fill="#23201D"/>
+<circle cx="432" cy="292" r="18" fill="#23201D"/>
+<circle cx="432" cy="292" r="6" fill="#F0B429"/>
+<path d="M 432 300 L 432 366" stroke="#6E8B6A" stroke-width="3" opacity="0.75"/>
+<g stroke="#6E8B6A" stroke-width="2.4" opacity="0.6">
+<path d="M 419 314 h 26"/><path d="M 421 326 h 22"/><path d="M 424 338 h 16"/>
+</g>
+</g>
+
+<!-- TOOL 4: three screwdrivers -->
+<g>
+<rect x="507" y="154" width="30" height="78" rx="14" fill="#E4753A" stroke="#23201D" stroke-width="4"/>
+<rect x="514" y="232" width="16" height="14" fill="#23201D"/>
+<rect x="517" y="244" width="10" height="96" fill="#23201D"/>
+<path d="M 513 340 h 18 l -3 18 h -12 z" fill="#23201D"/>
+<path d="M 514 170 v 46 M 522 170 v 46 M 530 170 v 46" stroke="#23201D" stroke-width="2.4" opacity="0.55"/>
+<rect x="545" y="154" width="30" height="78" rx="14" fill="#F0B429" stroke="#23201D" stroke-width="4"/>
+<rect x="552" y="232" width="16" height="14" fill="#23201D"/>
+<rect x="555" y="244" width="10" height="122" fill="#23201D"/>
+<path d="M 552 366 h 16 l -4 16 h -8 z" fill="#23201D"/>
+<path d="M 552 170 v 46 M 560 170 v 46 M 568 170 v 46" stroke="#23201D" stroke-width="2.4" opacity="0.55"/>
+<rect x="583" y="154" width="30" height="78" rx="14" fill="#3E5C76" stroke="#23201D" stroke-width="4"/>
+<rect x="590" y="232" width="16" height="14" fill="#23201D"/>
+<rect x="593" y="244" width="10" height="76" fill="#23201D"/>
+<path d="M 589 320 h 18 l -4 16 h -10 z" fill="#23201D"/>
+<path d="M 590 170 v 46 M 598 170 v 46 M 606 170 v 46" stroke="#FBF6EF" stroke-width="2.4" opacity="0.35"/>
+</g>
+
+<!-- TOOL 5: frame pump -->
+<g>
+<rect x="663" y="152" width="54" height="27" rx="12" fill="#23201D"/>
+<rect x="672" y="176" width="36" height="182" rx="8" fill="#F0B429" stroke="#23201D" stroke-width="5"/>
+<g stroke="#FBF6EF" stroke-width="3" opacity="0.45">
+<path d="M 680 200 v 130"/><path d="M 700 200 v 130"/>
+</g>
+<path d="M 676 260 h 28" stroke="#23201D" stroke-width="3" opacity="0.5"/>
+<rect x="665" y="354" width="50" height="30" rx="9" fill="#23201D"/>
+<path d="M 690 384 C 700 410, 676 422, 662 404" stroke="#23201D" stroke-width="9" fill="none" stroke-linecap="round"/>
+<circle cx="660" cy="400" r="9" fill="#23201D"/>
+<circle cx="660" cy="400" r="3.5" fill="#F2E9DC"/>
+</g>
+
+<!-- ============ ROW B — TOOL 6: mallet ============ -->
+<g>
+<rect x="104" y="452" width="112" height="48" rx="10" fill="#3E5C76" stroke="#23201D" stroke-width="5"/>
+<rect x="104" y="452" width="20" height="48" rx="6" fill="#23201D"/>
+<rect x="196" y="452" width="20" height="48" rx="6" fill="#23201D"/>
+<path d="M 130 466 h 60" stroke="#FBF6EF" stroke-width="3" opacity="0.3"/>
+<rect x="148" y="498" width="24" height="72" fill="#23201D"/>
+<rect x="147" y="566" width="26" height="62" rx="9" fill="#E4753A" stroke="#23201D" stroke-width="4"/>
+<g stroke="#23201D" stroke-width="2.4" opacity="0.7">
+<path d="M 147 582 h 26"/><path d="M 147 596 h 26"/><path d="M 147 610 h 26"/>
+</g>
+<path d="M 153 506 v 56" stroke="#FBF6EF" stroke-width="3" opacity="0.25"/>
+</g>
+
+<!-- TOOL 7: tire levers -->
+<g>
+<path d="M 256 452 q 12 -16 24 0 v 72 q 0 20 -14 28 q -10 -9 -10 -28 z" fill="#E4753A" stroke="#23201D" stroke-width="4.5"/>
+<path d="M 288 452 q 12 -16 24 0 v 86 q 0 20 -14 28 q -10 -9 -10 -28 z" fill="#FBF6EF" stroke="#23201D" stroke-width="4.5"/>
+<path d="M 320 452 q 12 -16 24 0 v 60 q 0 20 -14 28 q -10 -9 -10 -28 z" fill="#F0B429" stroke="#23201D" stroke-width="4.5"/>
+<path d="M 262 470 v 44" stroke="#23201D" stroke-width="2.6" opacity="0.4"/>
+<path d="M 294 470 v 56" stroke="#23201D" stroke-width="2.6" opacity="0.4"/>
+<path d="M 326 470 v 34" stroke="#23201D" stroke-width="2.6" opacity="0.4"/>
+</g>
+
+<!-- TOOL 8: hex key set -->
+<g fill="#23201D">
+<rect x="388" y="440" width="90" height="14" rx="7"/>
+<path d="M 392 452 h 12 v 92 h 22 v 13 h -34 z"/>
+<path d="M 410 452 h 11 v 78 h 20 v 12 h -31 z"/>
+<path d="M 427 452 h 10 v 66 h 18 v 11 h -28 z"/>
+<path d="M 443 452 h 9 v 54 h 16 v 10 h -25 z"/>
+</g>
+<path d="M 459 452 h 9 v 42 h 15 v 10 h -24 z" fill="#F0B429" stroke="#23201D" stroke-width="3.5"/>
+<path d="M 396 462 v 74" stroke="#FBF6EF" stroke-width="2.6" opacity="0.3"/>
+
+<!-- TOOL 9: bike chain draped on a hook -->
+<g>
+<path d="M 528 442 C 500 522, 510 588, 556 606 C 604 588, 614 522, 586 442" fill="none" stroke="#23201D" stroke-width="21" stroke-linecap="round"/>
+<path d="M 528 442 C 500 522, 510 588, 556 606 C 604 588, 614 522, 586 442" fill="none" stroke="#FBF6EF" stroke-width="6" stroke-linecap="butt" stroke-dasharray="3 15" opacity="0.55"/>
+<path d="M 528 442 C 500 522, 510 588, 556 606 C 604 588, 614 522, 586 442" fill="none" stroke="#6E8B6A" stroke-width="2" stroke-dasharray="11 7" opacity="0.5"/>
+</g>
+
+<!-- TOOL 10: spoke wrench + cog -->
+<g>
+<circle cx="684" cy="500" r="40" fill="#23201D"/>
+<circle cx="684" cy="500" r="13" fill="#6E8B6A"/>
+<g fill="#6E8B6A">
+<rect x="678" y="458" width="12" height="12"/>
+<rect x="712" y="478" width="12" height="12"/>
+<rect x="712" y="514" width="12" height="12"/>
+<rect x="678" y="532" width="12" height="12"/>
+<rect x="644" y="514" width="12" height="12"/>
+<rect x="644" y="478" width="12" height="12"/>
+</g>
+<circle cx="684" cy="500" r="40" fill="none" stroke="#FBF6EF" stroke-width="2.5" opacity="0.3"/>
+<path d="M 684 548 v 12" stroke="#23201D" stroke-width="6" opacity="0.4"/>
+<circle cx="684" cy="576" r="18" fill="#23201D" opacity="0.9"/>
+<circle cx="684" cy="576" r="7" fill="#6E8B6A"/>
+<g fill="#6E8B6A">
+<rect x="679" y="554" width="10" height="8"/>
+<rect x="679" y="590" width="10" height="8"/>
+<rect x="662" y="571" width="8" height="10"/>
+<rect x="698" y="571" width="8" height="10"/>
+</g>
+</g>
+
+<!-- ============ CHAINRING on the board ============ -->
+<g>
+<path fill="#23201D" d="M 951.8 379.5 L 963.9 381.1 L 963.9 386.9 L 951.8 388.5 Z M 951.0 394.2 L 962.2 399.2 L 960.5 404.8 L 948.4 402.9 Z M 946.0 408.2 L 955.4 416.1 L 952.2 421.0 L 941.1 415.8 Z M 937.3 420.2 L 944.1 430.4 L 939.7 434.2 L 930.5 426.1 Z M 925.6 429.2 L 929.2 441.0 L 923.9 443.4 L 917.4 433.0 Z M 911.9 434.6 L 912.0 446.9 L 906.2 447.7 L 902.9 435.9 Z M 897.1 435.9 L 893.8 447.7 L 888.0 446.9 L 888.1 434.6 Z M 882.6 433.0 L 876.1 443.4 L 870.8 441.0 L 874.4 429.2 Z M 869.5 426.1 L 860.3 434.2 L 855.9 430.4 L 862.7 420.2 Z M 858.9 415.8 L 847.8 421.0 L 844.6 416.1 L 854.0 408.2 Z M 851.6 402.9 L 839.5 404.8 L 837.8 399.2 L 849.0 394.2 Z M 848.2 388.5 L 836.1 386.9 L 836.1 381.1 L 848.2 379.5 Z M 849.0 373.8 L 837.8 368.8 L 839.5 363.2 L 851.6 365.1 Z M 854.0 359.8 L 844.6 351.9 L 847.8 347.0 L 858.9 352.2 Z M 862.7 347.8 L 855.9 337.6 L 860.3 333.8 L 869.5 341.9 Z M 874.4 338.8 L 870.8 327.0 L 876.1 324.6 L 882.6 335.0 Z M 888.1 333.4 L 888.0 321.1 L 893.8 320.3 L 897.1 332.1 Z M 902.9 332.1 L 906.2 320.3 L 912.0 321.1 L 911.9 333.4 Z M 917.4 335.0 L 923.9 324.6 L 929.2 327.0 L 925.6 338.8 Z M 930.5 341.9 L 939.7 333.8 L 944.1 337.6 L 937.3 347.8 Z M 941.1 352.2 L 952.2 347.0 L 955.4 351.9 L 946.0 359.8 Z M 948.4 365.1 L 960.5 363.2 L 962.2 368.8 L 951.0 373.8 Z"/>
+<circle cx="900" cy="384" r="53" fill="#23201D"/>
+<circle cx="900" cy="384" r="41" fill="#6E8B6A"/>
+<circle cx="900" cy="384" r="18" fill="#23201D"/>
+<circle cx="900" cy="384" r="7" fill="#6E8B6A"/>
+<g fill="#23201D">
+<circle cx="900.0" cy="354.0" r="7"/>
+<circle cx="928.5" cy="374.7" r="7"/>
+<circle cx="917.6" cy="408.3" r="7"/>
+<circle cx="882.4" cy="408.3" r="7"/>
+<circle cx="871.5" cy="374.7" r="7"/>
+</g>
+<path d="M 900 337 A 47 47 0 0 0 862 361" fill="none" stroke="#FBF6EF" stroke-width="3" opacity="0.35"/>
+</g>
+
+<!-- ============ SHOP SIGN ============ -->
+<g>
+<path d="M 800 478 L 764 492" stroke="#23201D" stroke-width="5"/>
+<path d="M 940 478 L 956 492" stroke="#23201D" stroke-width="5"/>
+<rect x="746" y="486" width="228" height="124" rx="9" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+<rect x="758" y="498" width="204" height="100" rx="5" fill="none" stroke="#E4753A" stroke-width="2.5" opacity="0.65"/>
+<text x="860" y="546" font-family="Georgia, serif" font-size="37" fill="#23201D" text-anchor="middle" letter-spacing="1">TUNE-UPS</text>
+<path d="M 790 562 h 140" stroke="#E4753A" stroke-width="3" opacity="0.8"/>
+<text x="860" y="588" font-family="Georgia, serif" font-size="15" fill="#6E8B6A" text-anchor="middle" letter-spacing="3">WHILE YOU WAIT</text>
+</g>
+
+<!-- ============ WORK LIGHT ============ -->
+<g>
+<rect x="940" y="238" width="38" height="52" rx="7" fill="#23201D"/>
+<circle cx="949" cy="250" r="3.5" fill="#F2E9DC"/>
+<circle cx="969" cy="250" r="3.5" fill="#F2E9DC"/>
+<circle cx="949" cy="278" r="3.5" fill="#F2E9DC"/>
+<circle cx="969" cy="278" r="3.5" fill="#F2E9DC"/>
+<g stroke="#23201D" stroke-width="15" stroke-linecap="round" fill="none">
+<path d="M 966 266 L 898 146"/>
+<path d="M 898 146 L 826 186"/>
+</g>
+<circle cx="898" cy="146" r="16" fill="#23201D"/>
+<circle cx="898" cy="146" r="5.5" fill="#F0B429"/>
+<circle cx="966" cy="266" r="17" fill="#23201D"/>
+<circle cx="966" cy="266" r="6" fill="#F0B429"/>
+<g transform="translate(824,186) rotate(26)">
+<rect x="-25" y="-24" width="50" height="16" rx="5" fill="#23201D"/>
+<path d="M -22 -10 L 22 -10 L 58 80 L -58 80 Z" fill="#23201D"/>
+<path d="M -50 58 L 50 58 L 58 80 L -58 80 Z" fill="#F0B429" opacity="0.55"/>
+<ellipse cx="0" cy="80" rx="58" ry="13" fill="#F0B429"/>
+<circle cx="0" cy="72" r="17" fill="#FBF6EF"/>
+<path d="M -34 12 L -20 62" stroke="#FBF6EF" stroke-width="4" opacity="0.28"/>
+</g>
+<path d="M 978 268 C 1010 288, 1004 330, 1030 352" stroke="#23201D" stroke-width="6" fill="none" opacity="0.8"/>
+</g>
+
+<!-- ============ BENCH ============ -->
+<rect x="20" y="652" width="1040" height="46" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+<g stroke="#23201D" opacity="0.13">
+<path d="M 40 666 h 380" stroke-width="3"/>
+<path d="M 470 674 h 300" stroke-width="3"/>
+<path d="M 820 664 h 200" stroke-width="3"/>
+<path d="M 120 684 h 260" stroke-width="2.4"/>
+<path d="M 640 686 h 340" stroke-width="2.4"/>
+</g>
+<ellipse cx="600" cy="676" rx="196" ry="21" fill="#F0B429" opacity="0.22"/>
+<rect x="20" y="698" width="1040" height="58" fill="#23201D" opacity="0.14"/>
+<rect x="20" y="698" width="1040" height="9" fill="#23201D" opacity="0.24"/>
+<rect x="700" y="712" width="300" height="34" rx="5" fill="none" stroke="#23201D" stroke-width="4" opacity="0.32"/>
+<rect x="820" y="724" width="60" height="10" rx="5" fill="#23201D" opacity="0.4"/>
+
+<!-- floor -->
+<rect x="0" y="756" width="1080" height="324" fill="#23201D" opacity="0.06"/>
+<path d="M 0 756 h 1080" stroke="#23201D" stroke-width="5" opacity="0.45"/>
+<g stroke="#23201D" opacity="0.08" stroke-width="3">
+<path d="M 0 838 h 1080"/>
+<path d="M 0 922 h 1080"/>
+<path d="M 0 1006 h 1080"/>
+</g>
+<g stroke="#6E8B6A" opacity="0.28" stroke-width="3">
+<path d="M 880 800 l 40 -40"/>
+<path d="M 916 812 l 52 -52"/>
+<path d="M 952 824 l 64 -64"/>
+<path d="M 988 836 l 68 -68"/>
+<path d="M 1024 848 l 46 -46"/>
+</g>
+
+<!-- bench legs, standing on the floor -->
+<g>
+<ellipse cx="70" cy="928" rx="50" ry="11" fill="#23201D" opacity="0.14"/>
+<ellipse cx="1006" cy="928" rx="50" ry="11" fill="#23201D" opacity="0.14"/>
+<rect x="52" y="748" width="36" height="168" fill="#23201D" opacity="0.34"/>
+<rect x="52" y="748" width="11" height="168" fill="#23201D" opacity="0.14"/>
+<rect x="44" y="906" width="52" height="16" rx="7" fill="#23201D" opacity="0.5"/>
+<rect x="988" y="748" width="36" height="168" fill="#23201D" opacity="0.34"/>
+<rect x="988" y="748" width="11" height="168" fill="#23201D" opacity="0.14"/>
+<rect x="980" y="906" width="52" height="16" rx="7" fill="#23201D" opacity="0.5"/>
+</g>
+
+<!-- ============ OIL BOTTLE on the bench ============ -->
+<g>
+<path d="M 600 616 L 604 584 L 614 584 L 618 616 Z" fill="#23201D"/>
+<rect x="602" y="574" width="14" height="12" rx="4" fill="#23201D"/>
+<rect x="584" y="612" width="50" height="80" rx="11" fill="#E4753A" stroke="#23201D" stroke-width="5"/>
+<rect x="588" y="636" width="42" height="30" fill="#FBF6EF"/>
+<g stroke="#23201D" stroke-width="3" opacity="0.7">
+<path d="M 594 646 h 30"/><path d="M 594 656 h 20"/>
+</g>
+<path d="M 592 620 v 62" stroke="#FBF6EF" stroke-width="3" opacity="0.35"/>
+</g>
+
+<!-- nuts and bolts -->
+<g fill="#23201D" opacity="0.85">
+<path d="M 468 668 l 11 -6 l 11 6 l 0 13 l -11 6 l -11 -6 z"/>
+<path d="M 502 678 l 9 -5 l 9 5 l 0 11 l -9 5 l -9 -5 z"/>
+<path d="M 940 670 l 10 -6 l 10 6 l 0 12 l -10 6 l -10 -6 z"/>
+<rect x="906" y="678" width="30" height="9" rx="4"/>
+</g>
+
+<!-- ============ OILY RAG draped over the bench edge ============ -->
+<g>
+<path d="M 740 668 C 734 636 756 614 786 622 C 806 628 822 606 850 616 C 878 626 896 646 890 668 C 894 700 890 722 884 748 Q 866 764 846 756 Q 824 748 810 766 L 794 802 C 786 782 774 770 758 758 C 746 744 738 700 740 668 Z" fill="#3E5C76" stroke="#23201D" stroke-width="6"/>
+<path d="M 740 668 C 734 636 756 614 786 622 C 806 628 822 606 850 616 C 878 626 896 646 890 668 C 848 656 788 660 740 668 Z" fill="#FBF6EF" opacity="0.16"/>
+<path d="M 762 644 C 756 686 764 716 756 744" fill="none" stroke="#23201D" stroke-width="4" opacity="0.38"/>
+<path d="M 800 630 C 808 674 796 714 800 764" fill="none" stroke="#FBF6EF" stroke-width="4" opacity="0.3"/>
+<path d="M 844 622 C 836 668 850 704 848 752" fill="none" stroke="#23201D" stroke-width="4" opacity="0.32"/>
+<path d="M 876 650 C 882 690 876 718 882 744" fill="none" stroke="#FBF6EF" stroke-width="4" opacity="0.22"/>
+<path d="M 803 770 L 796 794" fill="none" stroke="#23201D" stroke-width="3.5" opacity="0.35"/>
+<g stroke="#FBF6EF" stroke-width="2.4" opacity="0.22">
+<path d="M 754 686 l 16 -7"/><path d="M 812 730 l 16 -7"/><path d="M 822 650 l 16 -7"/>
+<path d="M 862 688 l 14 -6"/><path d="M 782 706 l 14 -6"/>
+</g>
+<path d="M 772 692 C 768 676 786 664 806 668 C 820 671 826 682 838 684 C 850 687 848 702 836 708 C 822 715 806 710 794 714 C 782 718 774 706 772 692 Z" fill="#E4753A" opacity="0.75"/>
+<path d="M 762 718 C 770 712 778 720 772 727 C 766 732 758 725 762 718 Z" fill="#E4753A" opacity="0.6"/>
+<path d="M 848 706 C 862 698 876 708 870 720 C 862 730 844 722 848 706 Z" fill="#23201D" opacity="0.4"/>
+<path d="M 776 734 C 786 728 794 736 788 746 C 780 754 770 744 776 734 Z" fill="#23201D" opacity="0.32"/>
+<circle cx="838" cy="734" r="5" fill="#F0B429" opacity="0.5"/>
+<circle cx="866" cy="662" r="4" fill="#F0B429" opacity="0.35"/>
+</g>
+
+<!-- ============ WHEEL leaning on the bench ============ -->
+<g transform="rotate(-8 306 856)">
+<circle cx="306" cy="856" r="169" fill="#FBF6EF" opacity="0.4"/>
+<circle cx="306" cy="856" r="182" fill="none" stroke="#23201D" stroke-width="31"/>
+<circle cx="306" cy="856" r="182" fill="none" stroke="#FBF6EF" stroke-width="31" stroke-dasharray="5 25" opacity="0.16"/>
+<circle cx="306" cy="856" r="197" fill="none" stroke="#23201D" stroke-width="3" opacity="0.25"/>
+<circle cx="306" cy="856" r="158" fill="none" stroke="#23201D" stroke-width="3" opacity="0.3"/>
+<circle cx="306" cy="856" r="150" fill="none" stroke="#3E5C76" stroke-width="19"/>
+<circle cx="306" cy="856" r="141" fill="none" stroke="#FBF6EF" stroke-width="3" opacity="0.45"/>
+<circle cx="306" cy="856" r="159" fill="none" stroke="#FBF6EF" stroke-width="2.5" opacity="0.3"/>
+<g stroke="#23201D" stroke-width="3.2" opacity="0.6" fill="none" stroke-linecap="round">
+<path d="M 339.1 863.6 L 452.0 856.0"/>
+<path d="M 336.0 872.0 L 447.0 893.8"/>
+<path d="M 330.9 879.2 L 432.4 929.0"/>
+<path d="M 324.0 884.8 L 409.2 959.2"/>
+<path d="M 315.9 888.5 L 379.0 982.4"/>
+<path d="M 307.2 890.0 L 343.8 997.0"/>
+<path d="M 298.4 889.1 L 306.0 1002.0"/>
+<path d="M 290.0 886.0 L 268.2 997.0"/>
+<path d="M 282.8 880.9 L 233.0 982.4"/>
+<path d="M 277.2 874.0 L 202.8 959.2"/>
+<path d="M 273.5 865.9 L 179.6 929.0"/>
+<path d="M 272.0 857.2 L 165.0 893.8"/>
+<path d="M 272.9 848.4 L 160.0 856.0"/>
+<path d="M 276.0 840.0 L 165.0 818.2"/>
+<path d="M 281.1 832.8 L 179.6 783.0"/>
+<path d="M 288.0 827.2 L 202.8 752.8"/>
+<path d="M 296.1 823.5 L 233.0 729.6"/>
+<path d="M 304.8 822.0 L 268.2 715.0"/>
+<path d="M 313.6 822.9 L 306.0 710.0"/>
+<path d="M 322.0 826.0 L 343.8 715.0"/>
+<path d="M 329.2 831.1 L 379.0 729.6"/>
+<path d="M 334.8 838.0 L 409.2 752.8"/>
+<path d="M 338.5 846.1 L 432.4 783.0"/>
+<path d="M 340.0 854.8 L 447.0 818.2"/>
+</g>
+<circle cx="306" cy="856" r="34" fill="#23201D"/>
+<circle cx="306" cy="856" r="17" fill="#F0B429"/>
+<circle cx="306" cy="856" r="6" fill="#23201D"/>
+<rect x="240" y="849" width="34" height="14" rx="7" fill="#23201D"/>
+<rect x="338" y="849" width="34" height="14" rx="7" fill="#23201D"/>
+<rect x="300" y="694" width="13" height="26" rx="4" fill="#E4753A" stroke="#23201D" stroke-width="4"/>
+<path d="M 190 760 A 182 182 0 0 1 300 690" fill="none" stroke="#FBF6EF" stroke-width="6" opacity="0.3"/>
+</g>
+
+<!-- wheel contact shadow -->
+<ellipse cx="330" cy="1032" rx="120" ry="16" fill="#23201D" opacity="0.12"/>
+
+<!-- ============ WRENCH ON THE FLOOR ============ -->
+<g transform="translate(832 946) rotate(-15)">
+<ellipse cx="0" cy="18" rx="96" ry="12" fill="#23201D" opacity="0.1"/>
+<ellipse cx="-88" cy="0" rx="27" ry="21" fill="#23201D"/>
+<ellipse cx="-88" cy="0" rx="12" ry="9" fill="#F2E9DC"/>
+<path d="M -70 -10 L 58 -9 L 58 9 L -70 10 Z" fill="#23201D"/>
+<path d="M 54 -23 h 46 v 17 h -22 v 12 h 22 v 17 h -46 z" fill="#23201D"/>
+<path d="M -64 -5 L 50 -4" stroke="#FBF6EF" stroke-width="3" opacity="0.25"/>
+</g>
+<g fill="#23201D" opacity="0.75">
+<path d="M 706 966 l 9 -5 l 9 5 l 0 11 l -9 5 l -9 -5 z"/>
+<path d="M 950 1010 l 8 -5 l 8 5 l 0 10 l -8 5 l -8 -5 z"/>
+</g>
+
+<!-- ============ FOREGROUND GRIT ============ -->
+<g fill="#23201D" opacity="0.13">
+<circle cx="560" cy="820" r="5"/>
+<circle cx="612" cy="864" r="3.5"/>
+<circle cx="524" cy="906" r="4"/>
+<circle cx="676" cy="930" r="5"/>
+<circle cx="744" cy="866" r="3.5"/>
+<circle cx="820" cy="946" r="4.5"/>
+<circle cx="884" cy="884" r="3"/>
+<circle cx="962" cy="978" r="4"/>
+<circle cx="150" cy="1012" r="4.5"/>
+<circle cx="86" cy="946" r="3.5"/>
+<circle cx="616" cy="1006" r="4"/>
+<circle cx="470" cy="972" r="3"/>
+</g>
+<g stroke="#3E5C76" opacity="0.2" stroke-width="4" stroke-linecap="round">
+<path d="M 596 892 l 30 8"/>
+<path d="M 700 992 l 36 -6"/>
+<path d="M 866 1024 l 28 10"/>
+</g>
+</svg>

@@ -1,0 +1,303 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080">
+<defs>
+  <pattern id="hatch" width="26" height="26" patternUnits="userSpaceOnUse" patternTransform="rotate(38)">
+    <path d="M0 0V26" stroke="#23201D" stroke-opacity="0.055" stroke-width="2"/>
+  </pattern>
+  <pattern id="grit" width="46" height="46" patternUnits="userSpaceOnUse">
+    <circle cx="9" cy="11" r="2.4" fill="#23201D" fill-opacity="0.10"/>
+    <circle cx="31" cy="30" r="1.7" fill="#23201D" fill-opacity="0.08"/>
+    <circle cx="40" cy="7" r="1.2" fill="#23201D" fill-opacity="0.07"/>
+  </pattern>
+</defs>
+
+<!-- ============ wall / paper ============ -->
+<rect x="0" y="0" width="1080" height="1080" fill="#F2E9DC"/>
+<rect x="0" y="0" width="1080" height="948" fill="url(#hatch)"/>
+<g fill="none" stroke="#23201D" stroke-opacity="0.07" stroke-width="4">
+  <path d="M0 96C260 84 640 110 1080 92"/>
+  <path d="M0 432C300 446 690 420 1080 436"/>
+  <path d="M0 642C280 630 660 656 1080 638"/>
+  <path d="M0 862C300 874 700 850 1080 866"/>
+</g>
+<g fill="#23201D" fill-opacity="0.09">
+  <circle cx="96" cy="512" r="4"/><circle cx="238" cy="596" r="3"/><circle cx="404" cy="470" r="3.4"/>
+  <circle cx="596" cy="520" r="2.6"/><circle cx="742" cy="466" r="3.8"/><circle cx="906" cy="546" r="3"/>
+  <circle cx="1016" cy="452" r="2.6"/><circle cx="168" cy="702" r="3"/><circle cx="1012" cy="700" r="3.4"/>
+  <circle cx="520" cy="336" r="3"/><circle cx="676" cy="392" r="2.4"/><circle cx="300" cy="404" r="2.8"/>
+</g>
+
+<!-- ============ hanging wire of glaze test tiles ============ -->
+<path d="M60 164C220 206 380 212 540 208C700 204 860 186 1020 156" fill="none" stroke="#23201D" stroke-width="5"/>
+<circle cx="60" cy="164" r="9" fill="#23201D"/>
+<circle cx="1020" cy="156" r="9" fill="#23201D"/>
+<circle cx="60" cy="164" r="3" fill="#F2E9DC"/>
+<circle cx="1020" cy="156" r="3" fill="#F2E9DC"/>
+<g stroke="#23201D" stroke-width="5" fill="none" stroke-linecap="round">
+  <path d="M128 181V196"/><path d="M238 193V208"/><path d="M348 201V216"/><path d="M458 206V220"/>
+  <path d="M568 206V220"/><path d="M678 201V215"/><path d="M788 193V206"/><path d="M898 178V192"/>
+</g>
+
+<!-- tile 1 : warm -->
+<g transform="translate(128 196) rotate(-5) translate(-42 -16)">
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="#FBF6EF"/>
+  <path d="M0 54C15 45 27 60 42 51C57 42 69 57 84 49V116H0Z" fill="#E4753A"/>
+  <path d="M0 96C16 89 27 101 42 95C57 89 69 101 84 95V116H0Z" fill="#23201D" fill-opacity="0.30"/>
+  <path d="M32 115C32 132 36 139 42 139C48 139 52 132 52 115Z" fill="#E4753A"/>
+  <g stroke="#23201D" stroke-opacity="0.5" stroke-width="4" stroke-linecap="round">
+    <path d="M18 30H32"/><path d="M18 40H40"/>
+  </g>
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="none" stroke="#23201D" stroke-width="6"/>
+  <circle cx="42" cy="16" r="7" fill="#F2E9DC" stroke="#23201D" stroke-width="4"/>
+</g>
+<!-- tile 2 : sun -->
+<g transform="translate(238 208) rotate(3) translate(-42 -16)">
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="#FBF6EF"/>
+  <path d="M0 60C14 69 25 51 42 60C59 69 70 51 84 58V116H0Z" fill="#F0B429"/>
+  <path d="M0 92C16 85 27 97 42 91C57 85 69 97 84 91V116H0Z" fill="#E4753A" fill-opacity="0.75"/>
+  <g stroke="#23201D" stroke-opacity="0.5" stroke-width="4" stroke-linecap="round">
+    <path d="M18 32H36"/>
+  </g>
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="none" stroke="#23201D" stroke-width="6"/>
+  <circle cx="42" cy="16" r="7" fill="#F2E9DC" stroke="#23201D" stroke-width="4"/>
+</g>
+<!-- tile 3 : warm -->
+<g transform="translate(348 216) rotate(-2) translate(-42 -16)">
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="#FBF6EF"/>
+  <path d="M0 66C16 57 25 74 42 66C59 58 70 72 84 64V116H0Z" fill="#E4753A"/>
+  <path d="M28 115C28 130 32 137 38 137C44 137 47 130 47 115Z" fill="#E4753A"/>
+  <g stroke="#23201D" stroke-opacity="0.5" stroke-width="4" stroke-linecap="round">
+    <path d="M18 30H34"/><path d="M18 40H44"/><path d="M18 50H28"/>
+  </g>
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="none" stroke="#23201D" stroke-width="6"/>
+  <circle cx="42" cy="16" r="7" fill="#F2E9DC" stroke="#23201D" stroke-width="4"/>
+</g>
+<!-- tile 4 : sage -->
+<g transform="translate(458 220) rotate(4) translate(-42 -16)">
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="#FBF6EF"/>
+  <path d="M0 50C15 42 27 57 42 48C57 39 69 54 84 46V116H0Z" fill="#6E8B6A"/>
+  <path d="M0 88C16 81 27 93 42 87C57 81 69 93 84 87V116H0Z" fill="#23201D" fill-opacity="0.28"/>
+  <g stroke="#23201D" stroke-opacity="0.5" stroke-width="4" stroke-linecap="round">
+    <path d="M18 28H38"/><path d="M18 38H30"/>
+  </g>
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="none" stroke="#23201D" stroke-width="6"/>
+  <circle cx="42" cy="16" r="7" fill="#F2E9DC" stroke="#23201D" stroke-width="4"/>
+</g>
+<!-- tile 5 : warm -->
+<g transform="translate(568 220) rotate(-3) translate(-42 -16)">
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="#FBF6EF"/>
+  <path d="M0 58C14 67 25 49 42 58C59 67 70 49 84 56V116H0Z" fill="#E4753A"/>
+  <path d="M0 94C16 87 27 99 42 93C57 87 69 99 84 93V116H0Z" fill="#F0B429" fill-opacity="0.85"/>
+  <path d="M34 115C34 133 38 140 44 140C50 140 53 133 53 115Z" fill="#E4753A"/>
+  <g stroke="#23201D" stroke-opacity="0.5" stroke-width="4" stroke-linecap="round">
+    <path d="M18 32H40"/><path d="M18 42H26"/>
+  </g>
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="none" stroke="#23201D" stroke-width="6"/>
+  <circle cx="42" cy="16" r="7" fill="#F2E9DC" stroke="#23201D" stroke-width="4"/>
+</g>
+<!-- tile 6 : dusk -->
+<g transform="translate(678 215) rotate(2) translate(-42 -16)">
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="#FBF6EF"/>
+  <path d="M0 64C16 55 25 72 42 64C59 56 70 70 84 62V116H0Z" fill="#3E5C76"/>
+  <g stroke="#23201D" stroke-opacity="0.5" stroke-width="4" stroke-linecap="round">
+    <path d="M18 30H42"/><path d="M18 40H32"/><path d="M18 50H36"/>
+  </g>
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="none" stroke="#23201D" stroke-width="6"/>
+  <circle cx="42" cy="16" r="7" fill="#F2E9DC" stroke="#23201D" stroke-width="4"/>
+</g>
+<!-- tile 7 : warm -->
+<g transform="translate(788 206) rotate(-4) translate(-42 -16)">
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="#FBF6EF"/>
+  <path d="M0 52C15 44 27 59 42 50C57 41 69 56 84 48V116H0Z" fill="#E4753A"/>
+  <path d="M0 90C16 83 27 95 42 89C57 83 69 95 84 89V116H0Z" fill="#6E8B6A" fill-opacity="0.8"/>
+  <path d="M30 115C30 131 34 138 40 138C46 138 49 131 49 115Z" fill="#E4753A"/>
+  <g stroke="#23201D" stroke-opacity="0.5" stroke-width="4" stroke-linecap="round">
+    <path d="M18 30H36"/><path d="M18 40H24"/>
+  </g>
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="none" stroke="#23201D" stroke-width="6"/>
+  <circle cx="42" cy="16" r="7" fill="#F2E9DC" stroke="#23201D" stroke-width="4"/>
+</g>
+<!-- tile 8 : warm -->
+<g transform="translate(898 192) rotate(5) translate(-42 -16)">
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="#FBF6EF"/>
+  <path d="M0 62C14 71 25 53 42 62C59 71 70 53 84 60V116H0Z" fill="#E4753A" fill-opacity="0.85"/>
+  <path d="M0 96C16 89 27 101 42 95C57 89 69 101 84 95V116H0Z" fill="#23201D" fill-opacity="0.32"/>
+  <g stroke="#23201D" stroke-opacity="0.5" stroke-width="4" stroke-linecap="round">
+    <path d="M18 34H30"/><path d="M18 44H42"/>
+  </g>
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="none" stroke="#23201D" stroke-width="6"/>
+  <circle cx="42" cy="16" r="7" fill="#F2E9DC" stroke="#23201D" stroke-width="4"/>
+</g>
+
+<!-- two strays pinned straight to the wall -->
+<g transform="translate(146 352) rotate(-9) translate(-42 -16)">
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="#FBF6EF"/>
+  <path d="M0 56C15 47 27 62 42 53C57 44 69 59 84 51V116H0Z" fill="#E4753A"/>
+  <path d="M0 92C16 85 27 97 42 91C57 85 69 97 84 91V116H0Z" fill="#6E8B6A" fill-opacity="0.85"/>
+  <g stroke="#23201D" stroke-opacity="0.5" stroke-width="4" stroke-linecap="round">
+    <path d="M18 32H38"/><path d="M18 42H28"/>
+  </g>
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="none" stroke="#23201D" stroke-width="6"/>
+  <circle cx="42" cy="18" r="9" fill="#F0B429" stroke="#23201D" stroke-width="5"/>
+</g>
+<g transform="translate(946 372) rotate(8) translate(-42 -16)">
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="#FBF6EF"/>
+  <path d="M0 62C14 71 25 53 42 62C59 71 70 53 84 60V116H0Z" fill="#F0B429"/>
+  <path d="M0 94C16 87 27 99 42 93C57 87 69 99 84 93V116H0Z" fill="#E4753A" fill-opacity="0.8"/>
+  <path d="M30 115C30 130 34 137 40 137C46 137 49 130 49 115Z" fill="#F0B429"/>
+  <g stroke="#23201D" stroke-opacity="0.5" stroke-width="4" stroke-linecap="round">
+    <path d="M18 34H34"/>
+  </g>
+  <rect x="0" y="0" width="84" height="116" rx="5" fill="none" stroke="#23201D" stroke-width="6"/>
+  <circle cx="42" cy="18" r="9" fill="#3E5C76" stroke="#23201D" stroke-width="5"/>
+</g>
+
+<!-- ============ the shelf ============ -->
+<rect x="60" y="794" width="960" height="20" fill="#23201D" fill-opacity="0.13"/>
+<path d="M196 794V880C220 866 248 836 264 794Z" fill="#23201D" fill-opacity="0.88"/>
+<path d="M892 794V880C868 866 840 836 824 794Z" fill="#23201D" fill-opacity="0.88"/>
+<rect x="60" y="762" width="960" height="32" fill="#23201D"/>
+<rect x="60" y="768" width="960" height="4" fill="#FBF6EF" fill-opacity="0.30"/>
+<rect x="60" y="788" width="960" height="6" fill="#E4753A" fill-opacity="0.85"/>
+<path d="M60 762H1020" stroke="#23201D" stroke-width="6"/>
+
+<!-- mug shadows on the plank -->
+<g fill="#23201D" fill-opacity="0.30">
+  <ellipse cx="164" cy="766" rx="52" ry="8"/>
+  <ellipse cx="312" cy="766" rx="50" ry="8"/>
+  <ellipse cx="456" cy="766" rx="60" ry="8"/>
+  <ellipse cx="604" cy="766" rx="54" ry="8"/>
+  <ellipse cx="756" cy="766" rx="34" ry="7"/>
+  <ellipse cx="902" cy="766" rx="52" ry="8"/>
+</g>
+
+<!-- ============ mug A : straight flare, warm ============ -->
+<g stroke-linejoin="round">
+  <path d="M217 618C264 614 266 714 210 710L210 692C240 694 238 638 216 636Z" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+  <path d="M110 602C112 660 116 716 119 762L209 762C212 716 216 660 218 602Z" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+  <path d="M114 686C136 676 152 692 168 684C186 675 200 692 216 682C217 716 212 740 209 762L119 762C116 736 113 710 114 686Z" fill="#E4753A"/>
+  <path d="M150 671C154 655 160 655 164 671C160 678 153 678 150 671Z" fill="#E4753A"/>
+  <path d="M186 674C189 661 194 661 197 674C194 680 189 680 186 674Z" fill="#E4753A"/>
+  <path d="M110 602C112 660 116 716 119 762L209 762C212 716 216 660 218 602Z" fill="none" stroke="#23201D" stroke-width="7"/>
+  <g fill="none" stroke="#23201D" stroke-opacity="0.22" stroke-width="3">
+    <path d="M120 630C150 638 180 638 212 630"/>
+    <path d="M121 652C151 660 181 660 213 652"/>
+  </g>
+  <path d="M121 744C150 750 180 750 208 744" fill="none" stroke="#23201D" stroke-opacity="0.35" stroke-width="3"/>
+  <ellipse cx="164" cy="602" rx="54" ry="13" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+  <ellipse cx="164" cy="602" rx="40" ry="7.5" fill="#23201D" fill-opacity="0.16"/>
+</g>
+
+<!-- ============ mug B : bellied barrel, sage ============ -->
+<g stroke-linejoin="round">
+  <path d="M365 650C420 644 422 738 358 732L358 714C394 716 392 668 364 668Z" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+  <path d="M267 628C254 668 254 720 269 762L355 762C370 720 370 668 357 628Z" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+  <path d="M255 702C276 692 292 708 312 700C332 692 348 708 369 698C366 722 359 744 355 762L269 762C265 744 258 722 255 702Z" fill="#6E8B6A"/>
+  <path d="M292 690C296 676 301 676 305 690C301 696 295 696 292 690Z" fill="#6E8B6A"/>
+  <path d="M267 628C254 668 254 720 269 762L355 762C370 720 370 668 357 628Z" fill="none" stroke="#23201D" stroke-width="7"/>
+  <g fill="none" stroke="#23201D" stroke-opacity="0.22" stroke-width="3">
+    <path d="M262 652C288 660 336 660 362 652"/>
+    <path d="M258 672C286 680 338 680 366 672"/>
+  </g>
+  <path d="M270 746C296 752 328 752 354 746" fill="none" stroke="#23201D" stroke-opacity="0.35" stroke-width="3"/>
+  <ellipse cx="312" cy="628" rx="45" ry="11" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+  <ellipse cx="312" cy="628" rx="32" ry="6.5" fill="#23201D" fill-opacity="0.16"/>
+</g>
+
+<!-- ============ mug C : tall tapered with ear handle, warm ============ -->
+<g stroke-linejoin="round">
+  <path d="M499 580C540 576 542 642 494 638L494 622C518 622 518 596 498 596Z" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+  <path d="M412 560C408 636 404 700 402 762L510 762C508 700 504 636 500 560Z" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+  <path d="M411 568C440 573 472 573 501 568C501 578 500 585 500 592C472 597 440 597 411 592C411 584 411 576 411 568Z" fill="#E4753A" fill-opacity="0.9"/>
+  <path d="M406 672C424 662 440 678 456 670C474 661 490 678 506 668C507 700 508 732 510 762L402 762C403 730 405 700 406 672Z" fill="#E4753A"/>
+  <path d="M430 660C434 645 440 645 444 660C440 667 433 667 430 660Z" fill="#E4753A"/>
+  <path d="M478 664C481 652 486 652 489 664C486 670 481 670 478 664Z" fill="#E4753A"/>
+  <path d="M412 560C408 636 404 700 402 762L510 762C508 700 504 636 500 560Z" fill="none" stroke="#23201D" stroke-width="7"/>
+  <g fill="none" stroke="#23201D" stroke-opacity="0.22" stroke-width="3">
+    <path d="M409 612C436 619 474 619 502 612"/>
+    <path d="M408 634C435 641 475 641 503 634"/>
+  </g>
+  <path d="M403 744C432 750 480 750 509 744" fill="none" stroke="#23201D" stroke-opacity="0.35" stroke-width="3"/>
+  <ellipse cx="456" cy="560" rx="44" ry="11" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+  <ellipse cx="456" cy="560" rx="31" ry="6.5" fill="#23201D" fill-opacity="0.16"/>
+</g>
+
+<!-- ============ mug D : squat and wide, sun ============ -->
+<g stroke-linejoin="round">
+  <path d="M666 672C716 670 712 742 652 736L653 720C690 722 692 690 664 690Z" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+  <path d="M538 658C540 700 546 736 558 762L650 762C662 736 668 700 670 658Z" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+  <path d="M547 708C566 698 584 714 604 706C624 698 642 714 661 704C658 726 654 746 650 762L558 762C554 746 550 728 547 708Z" fill="#F0B429"/>
+  <path d="M578 696C582 683 588 683 592 696C588 703 581 703 578 696Z" fill="#F0B429"/>
+  <path d="M626 700C629 688 634 688 637 700C634 706 629 706 626 700Z" fill="#F0B429"/>
+  <path d="M538 658C540 700 546 736 558 762L650 762C662 736 668 700 670 658Z" fill="none" stroke="#23201D" stroke-width="7"/>
+  <g fill="none" stroke="#23201D" stroke-opacity="0.22" stroke-width="3">
+    <path d="M540 680C570 688 638 688 668 680"/>
+  </g>
+  <path d="M556 746C580 752 628 752 652 746" fill="none" stroke="#23201D" stroke-opacity="0.35" stroke-width="3"/>
+  <ellipse cx="604" cy="658" rx="66" ry="15" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+  <ellipse cx="604" cy="658" rx="49" ry="9" fill="#23201D" fill-opacity="0.16"/>
+</g>
+
+<!-- ============ mug E : tall with a wiped pedestal foot, warm ============ -->
+<g stroke-linejoin="round">
+  <path d="M805 602C858 596 860 702 798 698L798 680C834 682 836 622 804 620Z" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+  <path d="M708 582C706 636 708 686 712 712C714 728 728 734 730 744L730 762L782 762L782 744C784 734 798 728 800 712C804 686 806 636 804 582Z" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+  <path d="M709 662C726 652 740 668 756 660C772 652 786 668 803 658C803 682 800 702 797 716C794 730 782 736 782 748L730 748C730 736 718 730 715 716C712 702 710 682 709 662Z" fill="#E4753A"/>
+  <path d="M732 652C736 638 742 638 746 652C742 659 735 659 732 652Z" fill="#E4753A"/>
+  <path d="M708 582C706 636 708 686 712 712C714 728 728 734 730 744L730 762L782 762L782 744C784 734 798 728 800 712C804 686 806 636 804 582Z" fill="none" stroke="#23201D" stroke-width="7"/>
+  <g fill="none" stroke="#23201D" stroke-opacity="0.22" stroke-width="3">
+    <path d="M707 614C732 621 780 621 805 614"/>
+    <path d="M708 636C733 643 779 643 804 636"/>
+  </g>
+  <path d="M730 748H782" stroke="#23201D" stroke-opacity="0.35" stroke-width="3"/>
+  <ellipse cx="756" cy="582" rx="48" ry="12" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+  <ellipse cx="756" cy="582" rx="34" ry="7" fill="#23201D" fill-opacity="0.16"/>
+</g>
+
+<!-- ============ mug F : waisted with a flared rim, dusk ============ -->
+<g stroke-linejoin="round">
+  <path d="M946 644C996 638 998 726 940 720L940 704C974 706 974 662 945 662Z" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+  <path d="M850 618C862 656 862 700 856 762L948 762C942 700 942 656 954 618Z" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+  <path d="M861 698C878 688 894 704 902 696C912 688 928 704 943 694C946 720 947 742 948 762L856 762C857 742 858 720 861 698Z" fill="#3E5C76"/>
+  <path d="M884 688C888 675 894 675 898 688C894 695 887 695 884 688Z" fill="#3E5C76"/>
+  <path d="M850 618C862 656 862 700 856 762L948 762C942 700 942 656 954 618Z" fill="none" stroke="#23201D" stroke-width="7"/>
+  <g fill="none" stroke="#23201D" stroke-opacity="0.22" stroke-width="3">
+    <path d="M855 648C880 655 924 655 949 648"/>
+    <path d="M859 670C883 677 921 677 945 670"/>
+  </g>
+  <path d="M857 746C882 752 922 752 947 746" fill="none" stroke="#23201D" stroke-opacity="0.35" stroke-width="3"/>
+  <ellipse cx="902" cy="618" rx="52" ry="12" fill="#FBF6EF" stroke="#23201D" stroke-width="7"/>
+  <ellipse cx="902" cy="618" rx="37" ry="7" fill="#23201D" fill-opacity="0.16"/>
+</g>
+
+<!-- ============ hanging tag ============ -->
+<circle cx="520" cy="780" r="5" fill="#FBF6EF"/>
+<circle cx="752" cy="780" r="5" fill="#FBF6EF"/>
+<path d="M520 780L494 816" stroke="#23201D" stroke-width="4" fill="none"/>
+<path d="M752 780L778 816" stroke="#23201D" stroke-width="4" fill="none"/>
+<g transform="rotate(-1.5 636 856)">
+  <rect x="472" y="812" width="330" height="88" rx="6" fill="#FBF6EF" stroke="#23201D" stroke-width="6"/>
+  <rect x="484" y="824" width="306" height="64" rx="3" fill="none" stroke="#E4753A" stroke-opacity="0.55" stroke-width="2.5"/>
+  <text x="637" y="866" font-family="Georgia, serif" font-size="34" letter-spacing="2" fill="#23201D" fill-opacity="0.86" text-anchor="middle">ready for the kiln</text>
+  <path d="M556 880H718" stroke="#E4753A" stroke-width="5"/>
+</g>
+
+<!-- ============ floor and studio clutter ============ -->
+<circle cx="196" cy="874" r="66" fill="#23201D" fill-opacity="0.13"/>
+<circle cx="196" cy="874" r="66" fill="none" stroke="#23201D" stroke-opacity="0.24" stroke-width="4"/>
+<g fill="#23201D" fill-opacity="0.20" stroke="#23201D" stroke-opacity="0.34" stroke-width="4">
+  <rect x="100" y="876" width="196" height="22" rx="4"/>
+  <rect x="94" y="900" width="208" height="22" rx="4"/>
+  <rect x="104" y="924" width="188" height="22" rx="4"/>
+</g>
+<path d="M910 856H1030L1016 946H924Z" fill="#23201D" fill-opacity="0.18" stroke="#23201D" stroke-opacity="0.34" stroke-width="4" stroke-linejoin="round"/>
+<path d="M926 860C944 838 996 838 1014 860" fill="none" stroke="#23201D" stroke-opacity="0.34" stroke-width="4"/>
+<path d="M938 848C944 834 962 828 974 834C986 840 984 850 974 854C962 859 944 858 938 848Z" fill="#E4753A" fill-opacity="0.75" stroke="#23201D" stroke-opacity="0.35" stroke-width="3"/>
+<path d="M866 946C858 928 874 912 892 916C906 919 912 934 906 946Z" fill="#6E8B6A" fill-opacity="0.5" stroke="#23201D" stroke-opacity="0.32" stroke-width="3" stroke-linejoin="round"/>
+<path d="M0 946H1080" stroke="#23201D" stroke-opacity="0.4" stroke-width="6"/>
+<rect x="0" y="946" width="1080" height="134" fill="#3E5C76" fill-opacity="0.16"/>
+<rect x="0" y="946" width="1080" height="134" fill="url(#grit)"/>
+<g fill="none" stroke="#23201D" stroke-opacity="0.14" stroke-width="3">
+  <path d="M40 986C260 976 620 998 1046 984"/>
+  <path d="M70 1034C300 1046 700 1022 1030 1038"/>
+</g>
+</svg>

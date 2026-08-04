@@ -9,6 +9,7 @@ import {
   publicKeyOf,
   sha256Base58,
   signDoc,
+  validatePost,
   verifyDoc,
   verifyPostTree,
 } from './protocol.js';
@@ -432,6 +433,11 @@ async function loadFeed(voucherFilter, limit = 30) {
     try { hash = hashDoc(p); } catch { return; }
     if (byHash.has(hash)) return;
     // Fail closed: an unverifiable post is dropped, not rendered with a warning.
+    // Shape is checked as well as signature — a signature only proves the
+    // author meant those bytes, not that `voucher` is a hash rather than an
+    // array of markup. This is the same validator the bank applies on intake,
+    // so an honest bank cannot be storing anything this rejects.
+    try { validatePost(p); } catch { return; }
     try { if (!verifyPostTree(p)) return; } catch { return; }
     byHash.set(hash, { post: p, bankUrl: src });
   });
@@ -450,6 +456,11 @@ function postBody(md) {
   return escapeHtml(String(md || '')).replace(/\n/g, '<br>');
 }
 
+/** postAuthorLabel returns "you" for the reader, which does not take an -'s. */
+function possessive(label) {
+  return label === 'you' ? 'your' : `${label}'s`;
+}
+
 function postAuthorLabel(pubkey, names) {
   if (state.user && pubkey === state.user.pubkey) return 'you';
   // A bank has no registered handle, so /ui/resolve never names it — but the
@@ -459,15 +470,34 @@ function postAuthorLabel(pubkey, names) {
   return names[pubkey] || pubkey.slice(0, 10) + '…';
 }
 
-function renderEmbedded(p, names, kind, vMap = {}) {
+/**
+ * A quoted ancestor, shown as a compact strip under the card it belongs to.
+ * It carries a thumbnail (its own first attachment, else its voucher's art) so
+ * a conversation still reads as pictures — but small, because the card's own
+ * hero is the subject and a quote must never compete with it.
+ */
+function renderEmbedded(p, names, kind, vMap = {}, ctx = null, bankUrl = null) {
   if (!p) return '';
   const v = vMap[p.voucher] ? ` · ${escapeHtml(vMap[p.voucher])}` : '';
-  return `<div class="card" style="margin:.5rem 0 0;padding:.6rem .8rem;opacity:.85">
-    <div class="small">${escapeHtml(kind)} <b>${escapeHtml(postAuthorLabel(p.pubkey, names))}</b>${v}</div>
-    <div class="small">${postBody(p.body_md)}</div>
-    ${renderEmbedded(p.reply_to, names, 'in reply to', vMap)}
-    ${renderEmbedded(p.repost, names, 'reposted', vMap)}
-  </div>`;
+  const thumb = ctx ? quoteThumb(p, bankUrl, ctx) : '';
+  return `<div class="quote">
+    ${thumb}
+    <div style="min-width:0">
+      <div class="small">${escapeHtml(kind)} <b>${escapeHtml(postAuthorLabel(p.pubkey, names))}</b>${v}</div>
+      <div class="small">${postBody(p.body_md)}</div>
+    </div>
+  </div>
+  ${renderEmbedded(p.reply_to, names, 'in reply to', vMap, ctx, bankUrl)}
+  ${renderEmbedded(p.repost, names, 'reposted', vMap, ctx, bankUrl)}`;
+}
+
+function quoteThumb(p, bankUrl, ctx) {
+  const first = (Array.isArray(p.media) ? p.media : []).find(r => typeof r === 'string' && r);
+  const src = first
+    ? mediaSrc(bankUrl, first)
+    : metaSrc(ctx.vMeta[p.voucher], ctx.vInfo[p.voucher], 'square');
+  if (!src) return '';
+  return `<img class="quote-thumb" src="${escapeHtml(src)}" alt="" loading="lazy" decoding="async">`;
 }
 
 /**
@@ -479,7 +509,7 @@ function renderEmbedded(p, names, kind, vMap = {}) {
  * data: URI inside <img> renders the picture with scripting disabled, which
  * is the whole point of doing it this way.
  */
-function svgImg(svg, size, alt) {
+function svgDataUri(svg) {
   if (typeof svg !== 'string' || !svg.trim()) return '';
   // As a standalone document (which a data: URI is) an SVG only renders when
   // its root declares the SVG namespace — hand-typed icons routinely omit it.
@@ -487,7 +517,12 @@ function svgImg(svg, size, alt) {
   if (!/<svg[^>]*\sxmlns=/i.test(s)) {
     s = s.replace(/<svg/i, '<svg xmlns="http://www.w3.org/2000/svg"');
   }
-  const url = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(s)))}`;
+  return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(s)))}`;
+}
+
+function svgImg(svg, size, alt) {
+  const url = svgDataUri(svg);
+  if (!url) return '';
   return `<img src="${url}" alt="${escapeHtml(alt)}" width="${size}" height="${size}"
     style="width:${size}px;height:${size}px;border-radius:6px;object-fit:contain;flex:0 0 auto">`;
 }
@@ -586,38 +621,180 @@ async function copyTreeMedia(post, sourceBankUrl) {
  * immutable vault URL at the voucher's bank), fall back to the legacy inline
  * SVG (rendered via data: URI — never inlined into the DOM).
  */
-function metaImg(meta, info, size, which) {
+function metaSrc(meta, info, which) {
   if (!meta) return '';
   const ref = which === 'square' ? (meta.square || meta.icon) : (meta.icon || meta.square);
-  if (ref) {
-    return `<img src="${escapeHtml(mediaSrc(info && info.bank_url, ref))}" alt=""
-      width="${size}" height="${size}" loading="lazy"
-      style="width:${size}px;height:${size}px;border-radius:6px;object-fit:cover;flex:0 0 auto">`;
-  }
+  if (ref) return mediaSrc(info && info.bank_url, ref);
   const svg = which === 'square' ? (meta.square_svg || meta.icon_svg) : (meta.icon_svg || meta.square_svg);
-  return svgImg(svg, size, '');
+  return svgDataUri(svg);
 }
 
-function renderMedia(post, bankUrl) {
-  const list = Array.isArray(post.media) ? post.media : [];
-  if (!list.length) return '';
-  return `<div class="flex" style="gap:.5rem;flex-wrap:wrap;margin-top:.5rem">` +
-    list.map(h => `<img src="${escapeHtml(mediaSrc(bankUrl, h))}"
-      alt="attachment" loading="lazy" style="max-width:100%;max-height:280px;border-radius:8px">`).join('') +
-    `</div>`;
+function metaImg(meta, info, size, which, round = false) {
+  const src = metaSrc(meta, info, which);
+  if (!src) return '';
+  return `<img src="${escapeHtml(src)}" alt="" width="${size}" height="${size}" loading="lazy"
+    style="width:${size}px;height:${size}px;border-radius:${round ? '50%' : '6px'};object-fit:cover;flex:0 0 auto">`;
 }
 
 /**
- * A bank reposting its users is how a newcomer meets them — so the actionable
- * button on a repost is "follow the ORIGINAL author", not the reposter you
- * already follow.
+ * The hero of a feed card: attachments full-bleed at 1:1, several of them a
+ * swipeable strip. A post with no attachment falls back to its voucher's
+ * square card image — which is what that image is FOR, and it means every
+ * post has something to look at, since a post is always anchored to a voucher.
+ *
+ * Each slide links to the raw vault URL rather than opening a lightbox: the
+ * blob is immutable and public, so a new tab is the whole feature.
  */
-function followTarget(post, followSet) {
-  const origin = post.repost || post.reply_to;
-  const pk = origin && origin.pubkey ? origin.pubkey : post.pubkey;
-  if (!pk || followSet.has(pk)) return '';
-  if (state.user && pk === state.user.pubkey) return '';
-  return `<button class="btn secondary" onclick="followAuthor('${jsStr(pk)}')">Follow author</button>`;
+function postHero(post, bankUrl, meta, info, alt) {
+  const list = (Array.isArray(post.media) ? post.media : []).filter(r => typeof r === 'string' && r);
+  const attached = list.length > 0;
+  // NOTE: `post` here is the post the picture comes from, which on a commented
+  // repost is deeper than the card's subject — see postCard.
+  const srcs = attached
+    ? list.map(r => mediaSrc(bankUrl, r))
+    : [metaSrc(meta, info, 'square')].filter(Boolean);
+  if (!srcs.length) return '';
+  // The picture IS the post here, so it needs a real text alternative — and it
+  // must say whether it is the author's photo or the voucher's stand-in card.
+  const label = attached ? alt.photo : alt.card;
+  const slides = srcs.map((s, i) => {
+    const a = escapeHtml(srcs.length > 1 ? `${label} (${i + 1} of ${srcs.length})` : label);
+    const img = `<img src="${escapeHtml(s)}" alt="${a}" loading="lazy" decoding="async">`;
+    // Legacy inline artwork is a data: URI, and browsers refuse a top-level
+    // navigation to one — a link there is a link that does nothing.
+    return s.startsWith('data:')
+      ? img
+      : `<a href="${escapeHtml(s)}" target="_blank" rel="noopener noreferrer">${img}</a>`;
+  }).join('');
+  const dots = srcs.length > 1
+    ? `<div class="post-dots">${srcs.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>`
+    : '';
+  return `<div class="post-media"><div class="post-strip">${slides}</div>${dots}</div>`;
+}
+
+// Scroll does not bubble, so the strip indicator is driven from one capturing
+// listener instead of a handler per card (a feed renders dozens).
+document.addEventListener('scroll', (e) => {
+  const strip = e.target;
+  if (!strip || !strip.classList || !strip.classList.contains('post-strip')) return;
+  const dots = strip.parentElement && strip.parentElement.querySelector('.post-dots');
+  if (!dots) return;
+  const i = Math.round(strip.scrollLeft / Math.max(1, strip.clientWidth));
+  Array.from(dots.children).forEach((d, j) => d.classList.toggle('on', j === i));
+}, true);
+
+/**
+ * One card in the feed, shaped like a photo feed: attribution, the picture at
+ * full width, then caption and actions beneath it.
+ *
+ * A repost's SUBJECT is the post being reposted — the reposter is demoted to a
+ * ribbon. Banks auto-repost everything their users publish, so without this
+ * hoist a new account (which follows only its bank) would see a wall of grey
+ * quote boxes with every picture buried one level down.
+ */
+function postCard(entry, ctx) {
+  const { hash, post, bankUrl } = entry;
+  const { names, vMap, vMeta, vInfo, followSet } = ctx;
+  // Hoist ONLY through pure amplification. A repost that adds words or pictures
+  // of its own is somebody speaking, and their post is the card; a repost that
+  // adds nothing is a delivery mechanism, and the original is the card.
+  let subject = post;
+  while (!postAdds(subject) && subject.repost) subject = subject.repost;
+  // Act on what the card SHOWS. The subject arrived embedded and fully signed,
+  // so remember it by hash: replying to it needs no round-trip, and it works
+  // even at a bank that stores it only inside its parent.
+  let actOn = hash;
+  if (subject !== post) {
+    try {
+      actOn = hashDoc(subject);
+      embeddedPosts.set(actOn, { post: subject, bankUrl });
+    } catch { actOn = hash; }
+  }
+  // The picture is whatever the card is POINTING AT. Someone who reposts with
+  // "look at this" and no photo of their own is pointing at the original's
+  // photos; showing the voucher's generic card art there would be a downgrade.
+  let art = subject;
+  while (!hasMedia(art) && art.repost) art = art.repost;
+  const meta = vMeta[subject.voucher];
+  const info = vInfo[subject.voucher];
+  const vName = vMap[subject.voucher] || String(subject.voucher || '').slice(0, 10) + '…';
+  return `<div class="card post">
+    ${subject === post ? '' : `<div class="post-ribbon small">↻ ${escapeHtml(postAuthorLabel(post.pubkey, names))} reposted</div>`}
+    <div class="post-head">
+      ${metaImg(meta, info, 38, 'icon', true)}
+      <div style="min-width:0">
+        <div><b>${escapeHtml(postAuthorLabel(subject.pubkey, names))}</b></div>
+        <div class="small"><a href="#/posts/${escapeHtml(subject.voucher)}">${escapeHtml(vName)}</a>${subject.voucher_meta ? ' · new look' : ''}</div>
+      </div>
+    </div>
+    ${postHero(art, bankUrl, meta, info, {
+      photo: `Photo from ${possessive(postAuthorLabel(art.pubkey, names))} post about ${vName}`,
+      card: `Card image for ${vName}`,
+    })}
+    <div class="post-body">
+      ${subject.body_md ? `<div>${postBody(subject.body_md)}</div>` : ''}
+      ${renderEmbedded(subject.reply_to, names, 'in reply to', vMap, ctx, bankUrl)}
+      ${renderEmbedded(subject.repost, names, 'reposted', vMap, ctx, bankUrl)}
+      <div class="flex" style="gap:.5rem;margin-top:.6rem;flex-wrap:wrap">
+        <button class="btn secondary" onclick="startReply('${jsStr(actOn)}')">Reply</button>
+        <button class="btn secondary" onclick="repostPost('${jsStr(actOn)}')">Repost</button>
+        ${followTarget(subject, followSet)}
+        ${wantTarget(subject, vMap)}
+      </div>
+    </div>
+  </div>`;
+}
+
+/** hash → the full signed post + the bank it was served from. Rebuilt per feed render. */
+const embeddedPosts = new Map();
+
+function hasMedia(post) {
+  return Array.isArray(post.media) && post.media.some(r => typeof r === 'string' && r);
+}
+
+/** Did this post contribute anything of its own, or is it pure amplification? */
+function postAdds(post) {
+  return !!(String(post.body_md || '').trim() || hasMedia(post));
+}
+
+/**
+ * Drop a PURE repost — one that adds neither words nor pictures of its own,
+ * like the bank's automatic one — when its original is already in the feed.
+ * Following your bank and the people on it is the normal case, and it would
+ * otherwise show the same picture twice in a row. A repost that says or shows
+ * something stays, even with the original right above it.
+ */
+function dedupeReposts(posts) {
+  const present = new Set(posts.map(e => e.hash));
+  return posts.filter(({ post }) => {
+    if (postAdds(post)) return true;
+    for (let inner = post.repost; inner; inner = inner.repost) {
+      let h;
+      try { h = hashDoc(inner); } catch { return true; }
+      if (present.has(h)) return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * "Follow author" points at the person whose post you are LOOKING AT — which,
+ * on a bank's repost, is the original author and not the bank you already
+ * follow. If you already follow them, offer whoever they were answering
+ * instead: a thread is how you meet the next person.
+ */
+function followTarget(subject, followSet) {
+  const candidates = [
+    subject.pubkey,
+    subject.reply_to && subject.reply_to.pubkey,
+    subject.repost && subject.repost.pubkey,
+  ];
+  for (const pk of candidates) {
+    if (!pk || followSet.has(pk)) continue;
+    if (state.user && pk === state.user.pubkey) continue;
+    return `<button class="btn secondary" onclick="followAuthor('${jsStr(pk)}')">Follow author</button>`;
+  }
+  return '';
 }
 
 /**
@@ -776,25 +953,11 @@ async function renderPosts(app, voucherFilter) {
         <a class="btn secondary" href="#/vouchers/new">Mint a voucher</a>`);
 
   const followSet = new Set(feed.authors);
-  const list = feed.posts.length
-    ? feed.posts.map(({ hash, post, bankUrl }) => `<div class="card">
-        <div class="flex small" style="align-items:center;gap:.4rem">
-          ${metaImg(vMeta[post.voucher], vInfo[post.voucher], 20, 'icon')}
-          <span><b>${escapeHtml(postAuthorLabel(post.pubkey, names))}</b>
-          · ${escapeHtml(vMap[post.voucher] || post.voucher.slice(0, 10) + '…')}</span>
-          ${post.voucher_meta ? '<span class="small">· updated this voucher</span>' : ''}
-        </div>
-        <div>${postBody(post.body_md)}</div>
-        ${renderMedia(post, bankUrl)}
-        ${renderEmbedded(post.reply_to, names, 'in reply to', vMap)}
-        ${renderEmbedded(post.repost, names, 'reposted', vMap)}
-        <div class="flex" style="gap:.5rem;margin-top:.5rem">
-          <button class="btn secondary" onclick="startReply('${jsStr(hash)}')">Reply</button>
-          <button class="btn secondary" onclick="repostPost('${jsStr(hash)}')">Repost</button>
-          ${followTarget(post, followSet)}
-          ${wantTarget(post, vMap)}
-        </div>
-      </div>`).join('')
+  const ctx = { names, vMap, vMeta, vInfo, followSet };
+  embeddedPosts.clear();
+  const shown = dedupeReposts(feed.posts);
+  const list = shown.length
+    ? shown.map(entry => postCard(entry, ctx)).join('')
     : `<div class="card"><p class="small">No posts yet from you or the issuers you trust${selected ? ' about this voucher' : ''}.</p></div>`;
 
   const warn = feed.unreachable.length
@@ -802,7 +965,7 @@ async function renderPosts(app, voucherFilter) {
     : '';
 
   app.innerHTML = header('Posts') + `<div class="container">
-    ${failed ? loadError('the feed') : `${filterBar}${composer}${warn}${list}`}
+    <div class="feed">${failed ? loadError('the feed') : `${filterBar}${composer}${warn}${list}`}</div>
   </div>`;
 }
 
@@ -822,6 +985,11 @@ window.onFeedFilterChange = function() {
 let pendingParent = null;
 
 async function fetchPostByHash(hash) {
+  // Posts the feed already holds in full because they arrived embedded in a
+  // repost. A bank may store such a post ONLY inside its parent, so this is
+  // not merely a cache — without it, replying to a reposted post can fail.
+  const held = embeddedPosts.get(hash);
+  if (held) return held;
   const banks = await feedBanks();
   for (const b of banks) {
     try {
@@ -1081,9 +1249,13 @@ function loadError(what) {
   return `<div class="small error">Couldn't load ${escapeHtml(what)} — the bank may be unreachable. <button class="btn secondary" onclick="route()">Retry</button></div>`;
 }
 
+// Escapes AFTER stringifying, never before: a value that is not a string is
+// exactly the case worth escaping — an array of attacker-chosen strings
+// stringifies to raw quotes and would break straight out of an attribute.
 function escapeHtml(s) {
-  if (typeof s !== 'string') return String(s ?? '');
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // Escape a value for embedding as a single-quoted JS string literal INSIDE a
@@ -1133,7 +1305,7 @@ async function renderWelcome(app) {
   const cfg = await fetchConfig().catch(() => null);
   app.innerHTML = `<div class="container welcome">
     <div class="logo-mark large"><span></span></div>
-    <h1>Be your own<br>bank.</h1>
+    <h1>Mint your own<br>currency.</h1>
     <p class="lede">Mint a currency only you can issue — <b>1 logo</b>, <b>1 hour of consulting</b>, <b>1 home-cooked dinner</b> — and settle it with people who already trust you.</p>
     ${cfg ? `<div class="bank-pill">
       <div class="ic">◈</div>
@@ -1851,29 +2023,31 @@ async function renderDiscover(app) {
     const issuerLabel = postAuthorLabel(info.issuer, names);
     const desc = meta && meta.description_md
       ? `<p class="small">${escapeHtml(meta.description_md.slice(0, 160))}${meta.description_md.length > 160 ? '…' : ''}</p>` : '';
-    return `<div class="card">
-      <div class="flex" style="gap:.75rem;align-items:flex-start">
-        ${metaImg(meta, info, 56, 'square')}
-        <div style="min-width:0;flex:1">
-          <div><strong>${escapeHtml(info.name)}</strong></div>
-          <div class="small">issued by <b>${escapeHtml(issuerLabel)}</b></div>
-          ${desc}
+    // The square card image is the tile — a gallery of what is on offer reads
+    // faster than a list of names, and it is the same art the feed shows.
+    const art = metaSrc(meta, info, 'square');
+    return `<div class="card tile">
+      ${art ? `<div class="tile-art"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async"></div>` : ''}
+      <div class="tile-body">
+        <div><strong>${escapeHtml(info.name)}</strong></div>
+        <div class="small">issued by <b>${escapeHtml(issuerLabel)}</b></div>
+        ${desc}
+        <div class="flex" style="gap:.5rem;margin-top:.6rem;flex-wrap:wrap">
+          ${mine ? '<span class="small">This is your voucher.</span>'
+            : `<button class="btn" onclick="wantVoucher('${jsStr(h)}')">Trade for this</button>`}
+          <a class="btn secondary" href="#/posts/${escapeHtml(h)}">Read its feed</a>
+          ${!mine && !followSet.has(info.issuer)
+            ? `<button class="btn secondary" onclick="followAuthor('${jsStr(info.issuer)}')">Follow issuer</button>` : ''}
         </div>
-      </div>
-      <div class="flex" style="gap:.5rem;margin-top:.6rem;flex-wrap:wrap">
-        ${mine ? '<span class="small">This is your voucher.</span>'
-          : `<button class="btn" onclick="wantVoucher('${jsStr(h)}')">Trade for this</button>`}
-        <a class="btn secondary" href="#/posts/${escapeHtml(h)}">Read its feed</a>
-        ${!mine && !followSet.has(info.issuer)
-          ? `<button class="btn secondary" onclick="followAuthor('${jsStr(info.issuer)}')">Follow issuer</button>` : ''}
       </div>
     </div>`;
   }).filter(Boolean).join('');
+  const gallery = cards ? `<div class="tile-grid">${cards}</div>` : '';
 
   body += `<p class="small">Vouchers surface here through <a href="#/posts">posts</a> from the people you <a href="#/network">follow</a> — your bank reposts what its users publish, so following your bank is enough to start. There is no global search: your follows are the index.</p>`;
   body += failed
     ? loadError('the feed')
-    : (cards || `<div class="card"><p class="small">Nothing discovered yet. Follow more people under <a href="#/network">Network</a>, browse <a href="#/registry">the registry</a>, or check back once the people you follow have posted.</p></div>`);
+    : (gallery || `<div class="card"><p class="small">Nothing discovered yet. Follow more people under <a href="#/network">Network</a>, browse <a href="#/registry">the registry</a>, or check back once the people you follow have posted.</p></div>`);
 
   // --- open offers on vouchers you already know (second channel) -----------
   if (!known.length) {
