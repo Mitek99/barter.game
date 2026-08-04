@@ -35,7 +35,8 @@
   <path d="M 0 316 L 590 86 L 742 86 L 0 406 Z" fill="#F0B429" opacity="0.12"/>
 
   <!-- wall behind, above the table -->
-  <rect width="1080" height="86" fill="#3E5C76" opacity="0.16"/>
+  <rect width="1080" height="86" fill="#3E5C76" opacity="0.42"/>
+  <rect y="78" width="1080" height="8" fill="#23201D" opacity="0.22"/>
 
   <!-- riso speckle on the open table -->
   <g>
@@ -350,15 +351,14 @@
     <!-- grease pencil marks -->
     <g fill="none" stroke="#E4753A" stroke-linecap="round">
       <!-- loop around frame 5 -->
-      <path d="M 436 328 C 356 342 344 424 418 464 C 494 506 608 502 656 460 C 708 414 690 348 614 328 C 544 308 466 314 420 346" stroke-width="11" opacity="0.92"/>
-      <path d="M 444 336 C 372 352 364 420 424 454 C 496 494 598 490 646 452 C 692 414 678 356 610 338 C 546 320 480 326 436 350" stroke-width="6" opacity="0.55"/>
+      <path d="M 410 402 C 406 344 470 312 546 314 C 624 316 674 354 672 408 C 670 460 620 500 544 502 C 464 506 412 468 410 412 C 409 380 428 350 466 332" stroke-width="11" opacity="0.92"/>
+      <path d="M 420 404 C 418 352 476 324 546 326 C 618 328 662 360 660 408 C 658 456 612 490 544 492 C 470 496 422 462 420 412" stroke-width="6" opacity="0.55"/>
       <!-- loop around frame 9 -->
-      <path d="M 674 514 C 596 528 584 608 656 648 C 732 690 846 686 894 644 C 928 614 924 566 880 540" stroke-width="11" opacity="0.92"/>
-      <path d="M 880 540 C 838 516 748 500 682 522 C 662 528 652 538 648 548" stroke-width="11" opacity="0.92"/>
-      <path d="M 682 522 C 616 544 606 604 664 638 C 736 678 838 674 886 636" stroke-width="6" opacity="0.5"/>
-      <!-- ticks beside the keepers -->
-      <path d="M 396 300 L 410 316 L 438 282" stroke-width="9" opacity="0.85"/>
-      <path d="M 632 486 L 646 502 L 674 468" stroke-width="9" opacity="0.85"/>
+      <path d="M 648 588 C 644 530 710 498 786 500 C 864 502 912 540 910 594 C 908 646 856 686 780 688 C 700 692 648 654 646 598 C 645 566 664 536 702 518" stroke-width="11" opacity="0.92"/>
+      <path d="M 658 590 C 656 538 714 510 786 512 C 858 514 900 546 898 594 C 896 642 850 674 782 676 C 708 680 660 648 658 598" stroke-width="6" opacity="0.5"/>
+      <!-- ticks in the sheet margin, beside the two keeper rows -->
+      <path d="M 140 400 L 151 415 L 171 384" stroke-width="8" opacity="0.85"/>
+      <path d="M 140 585 L 151 600 L 171 569" stroke-width="8" opacity="0.85"/>
       <!-- a pass on a frame that did not make it -->
       <path d="M 452 182 L 630 268" stroke-width="7" opacity="0.42"/>
       <path d="M 630 182 L 452 268" stroke-width="7" opacity="0.42"/>
@@ -399,7 +399,7 @@
   </g>
 
   <!-- ================= grease pencil ================= -->
-  <g transform="rotate(-14 838 956)">
+  <g transform="translate(0,-22) rotate(-6 838 956)">
     <rect x="668" y="936" width="322" height="42" rx="8" fill="#23201D" opacity="0.20" transform="translate(6,10)"/>
     <path d="M 636 957 L 678 934 L 678 980 Z" fill="#E4753A"/>
     <path d="M 636 957 L 654 947 L 654 967 Z" fill="#23201D"/>
@@ -435,7 +435,7 @@
     <path d="M 520 1002 L 534 1040"/>
     <path d="M 900 1002 L 914 1040"/>
   </g>
-  <rect y="1044" width="1080" height="36" fill="#3E5C76" opacity="0.35"/>
+  <rect y="1044" width="1080" height="36" fill="#3E5C76" opacity="0.52"/>
   <g fill="#23201D" opacity="0.16">
     <circle cx="180" cy="1062" r="5"/>
     <circle cx="640" cy="1066" r="4"/>

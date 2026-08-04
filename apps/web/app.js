@@ -1997,11 +1997,19 @@ window.doCreateOrder = async function(btn) {
 async function renderDiscover(app) {
   app.innerHTML = header('Discover') + `<div class="container"><p class="small">Loading…</p></div>`;
 
-  const { feed, failed, names, vInfo, vMeta } = await buildFeedContext('');
+  const { feed, failed, names, vMap, vInfo, vMeta } = await buildFeedContext('');
   const known = await knownVouchers().catch(() => []);
   const nameByHash = {};
   known.forEach(v => { nameByHash[v.hash] = v.name; });
   let body = header('Discover') + `<div class="container">`;
+
+  // Discovery IS the feed: you meet a voucher by seeing someone's picture of
+  // it. The gallery and the open offers stay underneath as the index and the
+  // shortcut, but the pictures come first.
+  const followSet = new Set(feed.authors);
+  const ctx = { names, vMap, vMeta, vInfo, followSet };
+  embeddedPosts.clear();
+  const stream = dedupeReposts(feed.posts).map(entry => postCard(entry, ctx)).join('');
 
   // --- vouchers seen in the feed, newest sighting first --------------------
   const seenVouchers = [];
@@ -2014,7 +2022,6 @@ async function renderDiscover(app) {
   };
   feed.posts.forEach(({ post }) => noteVoucher(post));
 
-  const followSet = new Set(feed.authors);
   const cards = seenVouchers.map(h => {
     const info = vInfo[h];
     if (!info) return '';
@@ -2044,10 +2051,18 @@ async function renderDiscover(app) {
   }).filter(Boolean).join('');
   const gallery = cards ? `<div class="tile-grid">${cards}</div>` : '';
 
-  body += `<p class="small">Vouchers surface here through <a href="#/posts">posts</a> from the people you <a href="#/network">follow</a> — your bank reposts what its users publish, so following your bank is enough to start. There is no global search: your follows are the index.</p>`;
-  body += failed
-    ? loadError('the feed')
-    : (gallery || `<div class="card"><p class="small">Nothing discovered yet. Follow more people under <a href="#/network">Network</a>, browse <a href="#/registry">the registry</a>, or check back once the people you follow have posted.</p></div>`);
+  body += `<p class="small">What the people you <a href="#/network">follow</a> are posting — your bank reposts what its users publish, so following your bank is enough to start. There is no global search: your follows are the index. <a href="#/posts">Post something</a> yourself.</p>`;
+  if (failed) {
+    body += loadError('the feed');
+  } else if (!stream) {
+    body += `<div class="card"><p class="small">Nothing discovered yet. Follow more people under <a href="#/network">Network</a>, browse <a href="#/registry">the registry</a>, or check back once the people you follow have posted.</p></div>`;
+  } else {
+    body += `<div class="feed">${stream}</div>`;
+    if (gallery) {
+      body += `<h3 style="margin-top:2rem">Vouchers in your feed</h3>
+        <p class="small">Everything above, as a shelf.</p>${gallery}`;
+    }
+  }
 
   // --- open offers on vouchers you already know (second channel) -----------
   if (!known.length) {

@@ -192,7 +192,7 @@
 <!-- wheel head -->
 <circle cx="508" cy="602" r="210" fill="#23201D" fill-opacity=".18"/>
 <circle cx="500" cy="592" r="210" fill="#FBF6EF"/>
-<circle cx="500" cy="592" r="210" fill="#3E5C76" fill-opacity=".2"/>
+<circle cx="500" cy="592" r="210" fill="#3E5C76" fill-opacity=".3"/>
 <circle cx="500" cy="592" r="210" fill="#23201D" fill-opacity=".05"/>
 <circle cx="500" cy="592" r="210" fill="none" stroke="#23201D" stroke-width="8"/>
 <path d="M352 462A210 210 0 0 1 470 384" fill="none" stroke="#FBF6EF" stroke-opacity=".5" stroke-width="9" stroke-linecap="round"/>
@@ -255,15 +255,15 @@
 
 <!-- the clay, rising -->
 <path d="M348 596C346 530 356 470 374 424A126 60 0 0 1 626 424C644 470 654 530 652 596A152 73 0 0 1 348 596Z" fill="#FBF6EF"/>
-<path d="M348 596C346 530 356 470 374 424A126 60 0 0 1 626 424C644 470 654 530 652 596A152 73 0 0 1 348 596Z" fill="#F0B429" fill-opacity=".16"/>
-<path d="M348 596C346 530 356 470 374 424A126 60 0 0 1 626 424C644 470 654 530 652 596A152 73 0 0 1 348 596Z" fill="#23201D" fill-opacity=".07"/>
-<path d="M626 424C644 470 654 530 652 596A152 73 0 0 1 526 668C574 624 596 520 594 466 593 448 606 432 626 424Z" fill="#23201D" fill-opacity=".09"/>
-<g fill="none" stroke="#23201D" stroke-opacity=".17" stroke-width="5" stroke-linecap="round">
+<path d="M348 596C346 530 356 470 374 424A126 60 0 0 1 626 424C644 470 654 530 652 596A152 73 0 0 1 348 596Z" fill="#F0B429" fill-opacity=".44"/>
+<path d="M348 596C346 530 356 470 374 424A126 60 0 0 1 626 424C644 470 654 530 652 596A152 73 0 0 1 348 596Z" fill="#23201D" fill-opacity=".09"/>
+<path d="M626 424C644 470 654 530 652 596A152 73 0 0 1 526 668C574 624 596 520 594 466 593 448 606 432 626 424Z" fill="#23201D" fill-opacity=".13"/>
+<g fill="none" stroke="#23201D" stroke-opacity=".2" stroke-width="5" stroke-linecap="round">
 <path d="M370 448Q500 572 630 448"/>
 <path d="M362 506Q500 638 638 506"/>
 <path d="M352 570Q500 712 648 570"/>
 </g>
-<g fill="none" stroke="#23201D" stroke-opacity=".26" stroke-width="6" stroke-linecap="round">
+<g fill="none" stroke="#23201D" stroke-opacity=".32" stroke-width="6" stroke-linecap="round">
 <path d="M366 476Q500 604 634 476"/>
 <path d="M357 538Q500 676 643 538"/>
 </g>

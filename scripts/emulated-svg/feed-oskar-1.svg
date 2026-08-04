@@ -9,6 +9,9 @@
       <circle cx="9" cy="11" r="2.2" fill="#23201D" opacity="0.06"/>
       <circle cx="28" cy="30" r="1.6" fill="#23201D" opacity="0.05"/>
     </pattern>
+    <clipPath id="lens">
+      <ellipse cx="912" cy="805" rx="32" ry="9"/>
+    </clipPath>
   </defs>
 
   <!-- paper -->
@@ -16,7 +19,7 @@
 
   <!-- darkroom wall -->
   <rect x="0" y="0" width="1080" height="706" fill="#3E5C76"/>
-  <rect x="0" y="0" width="1080" height="706" fill="#23201D" opacity="0.38"/>
+  <rect x="0" y="0" width="1080" height="706" fill="#23201D" opacity="0.30"/>
   <rect x="0" y="0" width="1080" height="706" fill="url(#grain)"/>
   <rect x="0" y="0" width="1080" height="54" fill="#23201D" opacity="0.30"/>
   <path d="M0,54 L1080,54" stroke="#FBF6EF" stroke-width="3" opacity="0.10"/>
@@ -24,11 +27,12 @@
   <path d="M0,648 L1080,648" stroke="#FBF6EF" stroke-width="3" opacity="0.09"/>
 
   <!-- safelight glow -->
-  <circle cx="905" cy="180" r="330" fill="#E4753A" opacity="0.07"/>
-  <circle cx="905" cy="180" r="238" fill="#E4753A" opacity="0.11"/>
-  <circle cx="905" cy="180" r="150" fill="#E4753A" opacity="0.16"/>
-  <circle cx="905" cy="180" r="80" fill="#E4753A" opacity="0.24"/>
-  <path d="M905,266 L905,318 M812,246 L780,290 M998,246 L1030,290 M760,192 L706,198 M1050,192 L1074,196" stroke="#E4753A" stroke-width="6" opacity="0.35" stroke-linecap="round"/>
+  <circle cx="905" cy="180" r="410" fill="#E4753A" opacity="0.07"/>
+  <circle cx="905" cy="180" r="330" fill="#E4753A" opacity="0.11"/>
+  <circle cx="905" cy="180" r="238" fill="#E4753A" opacity="0.15"/>
+  <circle cx="905" cy="180" r="150" fill="#E4753A" opacity="0.21"/>
+  <circle cx="905" cy="180" r="80" fill="#E4753A" opacity="0.30"/>
+  <path d="M905,266 L905,318 M812,246 L780,290 M998,246 L1030,290 M760,192 L706,198 M1050,192 L1074,196" stroke="#E4753A" stroke-width="6" opacity="0.45" stroke-linecap="round"/>
 
   <!-- safelight fixture -->
   <path d="M905,0 L905,84" stroke="#23201D" stroke-width="7"/>
@@ -269,7 +273,7 @@
   <circle cx="660" cy="882" r="8" fill="#E4753A"/>
 
   <!-- negative strip lying flat under the loupe -->
-  <ellipse cx="912" cy="922" rx="112" ry="38" fill="#F0B429" opacity="0.30"/>
+  <ellipse cx="912" cy="938" rx="150" ry="30" fill="#F0B429" opacity="0.28"/>
   <rect x="790" y="890" width="258" height="64" fill="#23201D"/>
   <path d="M798,898 L1040,898" stroke="#F2E9DC" stroke-width="8" stroke-dasharray="8 19"/>
   <path d="M798,946 L1040,946" stroke="#F2E9DC" stroke-width="8" stroke-dasharray="8 19"/>
@@ -284,17 +288,22 @@
     <path d="M40,52 L54,28 L68,52 Z" fill="#FBF6EF" opacity="0.5"/>
   </g>
 
-  <!-- loupe -->
-  <path d="M842,918 C842,933 982,933 982,918 L950,772 L874,772 Z" fill="#23201D"/>
-  <path d="M874,772 L906,772 L900,930 C872,928 852,924 845,915 Z" fill="#3E5C76" opacity="0.42"/>
-  <path d="M858,912 L869,776" stroke="#FBF6EF" stroke-width="5" opacity="0.18"/>
-  <path d="M866,906 L868,876 M889,914 L890,880 M912,916 L912,878 M935,914 L934,880 M957,906 L955,876" stroke="#FBF6EF" stroke-width="5" opacity="0.22"/>
-  <ellipse cx="912" cy="772" rx="47" ry="15" fill="#3E5C76"/>
-  <ellipse cx="912" cy="771" rx="35" ry="9" fill="#FBF6EF"/>
-  <ellipse cx="900" cy="770" rx="11" ry="4.5" fill="#3E5C76" opacity="0.6"/>
-  <ellipse cx="925" cy="773" rx="7" ry="3" fill="#23201D" opacity="0.4"/>
-  <ellipse cx="912" cy="772" rx="47" ry="15" fill="none" stroke="#23201D" stroke-width="6"/>
-  <path d="M874,759 C886,753 900,751 912,752" fill="none" stroke="#FBF6EF" stroke-width="4" opacity="0.45"/>
+  <!-- loupe : glass skirt over the strip, barrel, lens showing a magnified frame -->
+  <path d="M850,938 C850,950 974,950 974,938 L938,828 L886,828 Z" fill="#3E5C76" opacity="0.34"/>
+  <path d="M850,938 C850,950 974,950 974,938 L938,828 L886,828 Z" fill="none" stroke="#23201D" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M872,934 L890,834" stroke="#FBF6EF" stroke-width="6" opacity="0.30"/>
+  <path d="M952,934 L934,834" stroke="#FBF6EF" stroke-width="4" opacity="0.16"/>
+  <rect x="884" y="806" width="56" height="26" fill="#23201D"/>
+  <path d="M896,810 L896,830 M912,810 L912,830 M928,810 L928,830" stroke="#FBF6EF" stroke-width="4" opacity="0.20"/>
+  <ellipse cx="912" cy="806" rx="44" ry="14" fill="#23201D"/>
+  <ellipse cx="912" cy="805" rx="32" ry="9" fill="#3E5C76"/>
+  <g clip-path="url(#lens)">
+    <path d="M884,816 L896,799 L907,816 Z" fill="#FBF6EF" opacity="0.85"/>
+    <path d="M902,816 L915,797 L928,816 Z" fill="#FBF6EF" opacity="0.62"/>
+    <circle cx="932" cy="800" r="5" fill="#F0B429" opacity="0.9"/>
+  </g>
+  <ellipse cx="912" cy="805" rx="32" ry="9" fill="none" stroke="#23201D" stroke-width="5"/>
+  <path d="M888,798 C898,792 910,790 920,792" fill="none" stroke="#FBF6EF" stroke-width="4" opacity="0.5"/>
 
   <!-- stack of film cans -->
   <path d="M104,952 L104,986 C104,998 200,998 200,986 L200,952 Z" fill="#23201D"/>
