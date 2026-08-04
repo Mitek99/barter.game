@@ -873,7 +873,7 @@ async function buildFeedContext(voucherFilter) {
     try {
       const info = await fetch(`${b.url}/barter-bank.json`).then(r => r.json());
       if (!info || !info.name) return null;
-      return { pubkey: b.pubkey, name: info.name, host: new URL(b.url).host };
+      return { pubkey: b.pubkey, name: info.name, host: new URL(b.url).host.split('.')[0] };
     } catch { return null; } // unreachable bank: fall back to base58
   }))).filter(Boolean);
   bankNames.forEach(b => {
