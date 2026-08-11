@@ -73,7 +73,9 @@ barter.game/
 │   │                         #   they run against EITHER host via E2E_BASE_URL
 │   ├── bank-aws/             # AWS host: Lambda + DynamoDB + S3 + CloudFront (see its README.md)
 │   │   ├── src/              #   kv-dynamo.ts, media-s3.ts, adapter.ts (Function URL), local-server.ts
-│   │   ├── template.yaml     #   SAM stack
+│   │   ├── template.yaml     #   SAM stack (deploys as the app-deployer IAM user)
+│   │   ├── deployer-template.yaml # the app-deployer user's IAM: least-privilege deploy
+│   │   │                      #   policy + permissions boundary it must set on every role it creates
 │   │   └── test/             #   KvStore contract suite (MemoryKv + DynamoDB Local)
 │   └── web/                  # Browser SPA served by the bank (see its README.md)
 │       ├── index.html app.js protocol.js qr.js styles.css vendor/

@@ -1,0 +1,397 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  app-deployer — the IAM identity that deploys the barter.game bank stack
+  (template.yaml in this directory). Two managed policies: a permissions
+  boundary that caps any role the deployer creates to what the bank's Lambda
+  execution role actually needs, and a least-privilege deploy policy that
+  REQUIRES that boundary on every created role (iam:PermissionsBoundary
+  condition), so the deployer can never mint a role more powerful than the
+  boundary — no privilege escalation. No bedrock, no ec2, no user admin.
+  Deploy once per account as an admin:
+    sam deploy --template-file deployer-template.yaml \
+      --stack-name barter-deployer --capabilities CAPABILITY_IAM \
+      --parameter-overrides CreateDeployerUser=false   # if the user already exists
+  When CreateDeployerUser=false, attach the AppDeployerPolicy output ARN to
+  the existing user manually (and detach whatever it replaces).
+
+Parameters:
+  DeployerUserName:
+    Type: String
+    Default: app-deployer
+    Description: Name of the deployer IAM user (created when CreateDeployerUser=true).
+  CreateDeployerUser:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: >
+      'true' creates the IAM user with the deploy policy attached. 'false'
+      only creates the two managed policies (adopt-an-existing-user flow).
+  ResourceNamePrefix:
+    Type: String
+    Default: barter-
+    Description: >
+      The deployer may only touch resources whose names start with this
+      prefix (stacks, functions, tables, buckets, roles). The bank stack is
+      named "barter-banks", so every CloudFormation-generated name qualifies.
+
+Conditions:
+  CreateUser: !Equals [!Ref CreateDeployerUser, 'true']
+
+Resources:
+  # --- the permissions boundary ------------------------------------------------
+  # Ceiling for ANY role the deployer creates. It is exactly what the bank's
+  # Lambda execution role needs (SAM DynamoDBCrudPolicy + S3CrudPolicy +
+  # ssm:GetParametersByPath + basic logging) and nothing more: even if the
+  # deployer is coerced into attaching AdministratorAccess to a role, the
+  # role's effective permissions stay clipped to this document.
+  AppDeployerBoundary:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: AppDeployerBoundary
+      Description: Permissions boundary for roles created by app-deployer (bank runtime ceiling).
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: LambdaLogging
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+            Resource: !Sub 'arn:aws:logs:*:${AWS::AccountId}:log-group:/aws/lambda/${ResourceNamePrefix}*'
+          - Sid: LambdaLogStreams
+            Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: !Sub 'arn:aws:logs:*:${AWS::AccountId}:log-group:/aws/lambda/${ResourceNamePrefix}*:*'
+          - Sid: LedgerTable
+            Effect: Allow
+            Action:
+              - dynamodb:BatchGetItem
+              - dynamodb:BatchWriteItem
+              - dynamodb:ConditionCheckItem
+              - dynamodb:DeleteItem
+              - dynamodb:DescribeTable
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:Query
+              - dynamodb:Scan
+              - dynamodb:UpdateItem
+            Resource:
+              - !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/${ResourceNamePrefix}*'
+              - !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/${ResourceNamePrefix}*/index/*'
+          - Sid: AssetsBucket
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:GetObjectVersion
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+              - s3:GetBucketLocation
+              - s3:GetLifecycleConfiguration
+              - s3:PutLifecycleConfiguration
+              - s3:AbortMultipartUpload
+              - s3:ListMultipartUploadParts
+              - s3:ListBucketMultipartUploads
+            Resource:
+              - !Sub 'arn:aws:s3:::${ResourceNamePrefix}*'
+              - !Sub 'arn:aws:s3:::${ResourceNamePrefix}*/*'
+          - Sid: BankKeys
+            Effect: Allow
+            Action:
+              - ssm:GetParameter
+              - ssm:GetParameters
+              - ssm:GetParametersByPath
+            Resource: !Sub 'arn:aws:ssm:*:${AWS::AccountId}:parameter/barter/*'
+
+  # --- the deploy policy -------------------------------------------------------
+  # Replaces PowerUserAccess + the AppDeployerServerlessExtras inline policy.
+  # Every Allow is scoped to this account and the ResourceNamePrefix; the IAM
+  # role-write statements carry the iam:PermissionsBoundary condition, which
+  # is what forces every role the deployer creates (directly or via
+  # CloudFormation, including the SAM-generated BankFunctionRole) to wear the
+  # boundary above.
+  AppDeployerPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: AppDeployerPolicy
+      Description: Least-privilege deploy access for the barter.game bank stack.
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # sam deploy: stack lifecycle for the bank stack and the SAM CLI
+          # managed-artifacts stack (resolve_s3).
+          - Sid: CloudFormationStacks
+            Effect: Allow
+            Action:
+              - cloudformation:CreateStack
+              - cloudformation:UpdateStack
+              - cloudformation:DeleteStack
+              - cloudformation:DescribeStacks
+              - cloudformation:DescribeStackEvents
+              - cloudformation:DescribeStackResource
+              - cloudformation:DescribeStackResources
+              - cloudformation:ListStackResources
+              - cloudformation:GetTemplate
+              - cloudformation:CreateChangeSet
+              - cloudformation:DescribeChangeSet
+              - cloudformation:ExecuteChangeSet
+              - cloudformation:DeleteChangeSet
+              - cloudformation:ListChangeSets
+              - cloudformation:CancelUpdateStack
+              - cloudformation:ContinueUpdateRollback
+              - cloudformation:TagResource
+              - cloudformation:UntagResource
+            Resource:
+              - !Sub 'arn:aws:cloudformation:*:${AWS::AccountId}:stack/${ResourceNamePrefix}*/*'
+              - !Sub 'arn:aws:cloudformation:*:${AWS::AccountId}:stack/aws-sam-cli-managed-default/*'
+              - !Sub 'arn:aws:cloudformation:*:${AWS::AccountId}:changeSet/*'
+              # SAM templates: executing the Serverless transform is a
+              # changeset action on this AWS-owned resource (account "aws").
+              - 'arn:aws:cloudformation:*:aws:transform/Serverless-2016-10-31'
+          # Template validation calls that take no resource ARN.
+          - Sid: CloudFormationGlobalReads
+            Effect: Allow
+            Action:
+              - cloudformation:ValidateTemplate
+              - cloudformation:GetTemplateSummary
+            Resource: '*'
+          # SAM CLI artifact bucket (resolve_s3) — name is account-fixed.
+          - Sid: SamArtifactBucket
+            Effect: Allow
+            Action:
+              - s3:CreateBucket
+              - s3:DeleteBucket
+              - s3:GetBucketLocation
+              - s3:ListBucket
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:GetEncryptionConfiguration
+              - s3:PutEncryptionConfiguration
+              - s3:GetLifecycleConfiguration
+              - s3:PutLifecycleConfiguration
+              - s3:GetBucketPublicAccessBlock
+              - s3:PutBucketPublicAccessBlock
+              - s3:GetBucketTagging
+              - s3:PutBucketTagging
+            Resource:
+              - 'arn:aws:s3:::aws-sam-cli-managed-*'
+              - 'arn:aws:s3:::aws-sam-cli-managed-*/*'
+          # App buckets: CloudFormation bucket management + deploy.sh's
+          # `aws s3 sync` of the web client into webapp/.
+          - Sid: AppBuckets
+            Effect: Allow
+            Action:
+              - s3:CreateBucket
+              - s3:DeleteBucket
+              - s3:GetBucketLocation
+              - s3:ListBucket
+              - s3:GetObject
+              - s3:GetObjectVersion
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:GetBucketPolicy
+              - s3:PutBucketPolicy
+              - s3:DeleteBucketPolicy
+              - s3:GetEncryptionConfiguration
+              - s3:PutEncryptionConfiguration
+              - s3:GetBucketPublicAccessBlock
+              - s3:PutBucketPublicAccessBlock
+              - s3:GetBucketTagging
+              - s3:PutBucketTagging
+            Resource:
+              - !Sub 'arn:aws:s3:::${ResourceNamePrefix}*'
+              - !Sub 'arn:aws:s3:::${ResourceNamePrefix}*/*'
+          # The bank function and its AuthType:NONE Function URL (SAM turns
+          # FunctionUrlConfig into a Lambda Permission -> AddPermission).
+          - Sid: BankFunction
+            Effect: Allow
+            Action:
+              - lambda:CreateFunction
+              - lambda:DeleteFunction
+              - lambda:GetFunction
+              - lambda:GetFunctionConfiguration
+              - lambda:GetFunctionUrlConfig
+              - lambda:GetPolicy
+              - lambda:UpdateFunctionCode
+              - lambda:UpdateFunctionConfiguration
+              - lambda:AddPermission
+              - lambda:RemovePermission
+              - lambda:CreateFunctionUrlConfig
+              - lambda:UpdateFunctionUrlConfig
+              - lambda:DeleteFunctionUrlConfig
+              - lambda:ListTags
+              - lambda:TagResource
+              - lambda:UntagResource
+            Resource: !Sub 'arn:aws:lambda:*:${AWS::AccountId}:function:${ResourceNamePrefix}*'
+          # DynamoDB single table (TTL + point-in-time recovery are updated
+          # out-of-band by CloudFormation after CreateTable).
+          - Sid: LedgerTableManagement
+            Effect: Allow
+            Action:
+              - dynamodb:CreateTable
+              - dynamodb:DeleteTable
+              - dynamodb:DescribeTable
+              - dynamodb:UpdateTable
+              - dynamodb:DescribeTimeToLive
+              - dynamodb:UpdateTimeToLive
+              - dynamodb:DescribeContinuousBackups
+              - dynamodb:UpdateContinuousBackups
+              - dynamodb:ListTagsOfResource
+              - dynamodb:TagResource
+              - dynamodb:UntagResource
+            Resource: !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/${ResourceNamePrefix}*'
+          # CloudFront is global and its APIs do not support name-scoped
+          # resource ARNs; scope is the account. Includes the viewer-request
+          # Functions, the S3 OAC, and deploy.sh's invalidation.
+          - Sid: EdgeDistribution
+            Effect: Allow
+            Action:
+              - cloudfront:CreateDistribution
+              - cloudfront:UpdateDistribution
+              - cloudfront:DeleteDistribution
+              - cloudfront:GetDistribution
+              - cloudfront:GetDistributionConfig
+              - cloudfront:CreateFunction
+              - cloudfront:UpdateFunction
+              - cloudfront:DeleteFunction
+              - cloudfront:GetFunction
+              - cloudfront:DescribeFunction
+              - cloudfront:PublishFunction
+              - cloudfront:CreateOriginAccessControl
+              - cloudfront:UpdateOriginAccessControl
+              - cloudfront:DeleteOriginAccessControl
+              - cloudfront:GetOriginAccessControl
+              - cloudfront:CreateInvalidation
+              - cloudfront:GetInvalidation
+              - cloudfront:ListInvalidations
+              - cloudfront:TagResource
+              - cloudfront:UntagResource
+              - cloudfront:ListTagsForResource
+            Resource:
+              - !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/*'
+              - !Sub 'arn:aws:cloudfront::${AWS::AccountId}:function/*'
+              - !Sub 'arn:aws:cloudfront::${AWS::AccountId}:origin-access-control/*'
+          # Role writes REQUIRE the boundary — this is the escalation gate.
+          # CloudFormation creates the SAM-generated role with
+          # PermissionsBoundary already set (see template.yaml's
+          # RolePermissionsBoundary parameter), which satisfies the condition.
+          - Sid: RoleCreationRequiresBoundary
+            Effect: Allow
+            Action:
+              - iam:CreateRole
+              - iam:PutRolePermissionsBoundary
+            Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${ResourceNamePrefix}*'
+            Condition:
+              StringEquals:
+                iam:PermissionsBoundary: !Ref AppDeployerBoundary
+          # Everything else on prefixed roles: reading, tagging, inline
+          # policies, attaching AWS-managed policies. None of these can lift
+          # the boundary, so attaching even AdministratorAccess stays clipped
+          # to AppDeployerBoundary.
+          - Sid: RoleAdminOnPrefixedRoles
+            Effect: Allow
+            Action:
+              - iam:GetRole
+              - iam:GetRolePolicy
+              - iam:ListRolePolicies
+              - iam:ListAttachedRolePolicies
+              - iam:ListRoleTags
+              - iam:PutRolePolicy
+              - iam:DeleteRolePolicy
+              - iam:AttachRolePolicy
+              - iam:DetachRolePolicy
+              - iam:TagRole
+              - iam:UntagRole
+              - iam:UpdateRole
+              - iam:UpdateRoleDescription
+              - iam:UpdateAssumeRolePolicy
+              - iam:DeleteRole
+              - iam:DeleteRolePermissionsBoundary
+            Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${ResourceNamePrefix}*'
+          # CloudFormation passes the generated role to Lambda.
+          - Sid: PassRoleToLambdaOnly
+            Effect: Allow
+            Action: iam:PassRole
+            Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${ResourceNamePrefix}*'
+            Condition:
+              StringEquals:
+                iam:PassedToService: lambda.amazonaws.com
+          # First deploy in an account creates the Lambda/CloudFront
+          # service-linked roles.
+          - Sid: ServiceLinkedRoles
+            Effect: Allow
+            Action: iam:CreateServiceLinkedRole
+            Resource: '*'
+            Condition:
+              StringEquals:
+                iam:AWSServiceName:
+                  - lambda.amazonaws.com
+                  - cloudfront.amazonaws.com
+          # Read-only IAM visibility for troubleshooting deploy failures.
+          - Sid: IamReadOnly
+            Effect: Allow
+            Action:
+              - iam:GetPolicy
+              - iam:GetPolicyVersion
+              - iam:ListPolicies
+              - iam:ListPolicyVersions
+              - iam:SimulatePrincipalPolicy
+            Resource: '*'
+          # Belt-and-braces: even if a future policy grant opens one of these
+          # doors, the deployer must never mint users/keys, edit account-level
+          # settings, or author standalone policies (which would bypass the
+          # boundary condition on role creation).
+          - Sid: DenyEscalationPaths
+            Effect: Deny
+            Action:
+              - iam:CreateUser
+              - iam:DeleteUser
+              - iam:CreateAccessKey
+              - iam:UpdateAccessKey
+              - iam:AttachUserPolicy
+              - iam:DetachUserPolicy
+              - iam:PutUserPolicy
+              - iam:DeleteUserPolicy
+              - iam:CreateLoginProfile
+              - iam:UpdateLoginProfile
+              - iam:PutUserPermissionsBoundary
+              - iam:DeleteUserPermissionsBoundary
+              - iam:CreatePolicy
+              - iam:CreatePolicyVersion
+              - iam:SetDefaultPolicyVersion
+              - iam:CreateAccountAlias
+              - iam:UpdateAccountPasswordPolicy
+              - iam:DeleteAccountPasswordPolicy
+              - organizations:*
+              - account:*
+            Resource: '*'
+
+  # --- the user (skipped when adopting an existing one) ------------------------
+  AppDeployerUser:
+    Type: AWS::IAM::User
+    Condition: CreateUser
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      UserName: !Ref DeployerUserName
+      ManagedPolicyArns:
+        - !Ref AppDeployerPolicy
+      Tags:
+        - Key: purpose
+          Value: app-deployment
+        - Key: managed-by
+          Value: barter-deployer-stack
+
+Outputs:
+  DeployerPolicyArn:
+    Description: Attach this to the deployer user (replaces PowerUserAccess + inline extras)
+    Value: !Ref AppDeployerPolicy
+  BoundaryArn:
+    Description: >
+      Permissions boundary every deployer-created role must carry; the bank
+      stack sets it via the RolePermissionsBoundary parameter
+    Value: !Ref AppDeployerBoundary
+  BoundaryName:
+    Value: AppDeployerBoundary

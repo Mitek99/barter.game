@@ -33,10 +33,19 @@ Parameters:
       Function URL from being usable directly. Leave empty to derive one
       from the stack id (unique per stack, never sent to viewers); set an
       explicit value to rotate it.
+  RolePermissionsBoundary:
+    Type: String
+    Default: ''
+    Description: >
+      Name of the IAM managed policy to use as the permissions boundary on
+      the Lambda execution role. Required when deploying as app-deployer
+      (see deployer-template.yaml — its deploy policy refuses boundary-less
+      role creation); leave empty only for unconstrained admin deploys.
 
 Conditions:
   HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
   HasOriginSecret: !Not [!Equals [!Ref OriginSecret, '']]
+  HasRoleBoundary: !Not [!Equals [!Ref RolePermissionsBoundary, '']]
 
 Resources:
   # --- storage ---------------------------------------------------------------
@@ -121,6 +130,12 @@ Resources:
       Architectures: [arm64]
       MemorySize: 512
       Timeout: 60
+      # The SAM-generated execution role wears this boundary so deploys run
+      # under app-deployer, whose IAM policy requires it (deployer-template.yaml).
+      PermissionsBoundary: !If
+        - HasRoleBoundary
+        - !Sub 'arn:aws:iam::${AWS::AccountId}:policy/${RolePermissionsBoundary}'
+        - !Ref 'AWS::NoValue'
       Environment:
         Variables:
           BANK_TABLE: !Ref BankTable

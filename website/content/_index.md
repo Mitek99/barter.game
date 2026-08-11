@@ -71,7 +71,9 @@ Every user and every bank is an **ed25519 keypair**. Voucher, Account, Order, Ma
 
 ## See it work
 
-Open the live demo banks — no install needed: [barter-game-banks.ai-1st.deno.net/alice/ui](https://barter-game-banks.ai-1st.deno.net/alice/ui). Register with a handle and password; the key is generated and encrypted in your browser.
+Open the live demo banks — no install needed: [barter-game-banks.ai-1st.deno.net/alice/ui](https://barter-game-banks.ai-1st.deno.net/alice/ui) (Deno Deploy). Register with a handle and password; the key is generated and encrypted in your browser.
+
+The same banks also run on the AWS host (Lambda + DynamoDB + CloudFront) — the two deployments federate with each other like any two banks: [alice](https://d170kplla02ejw.cloudfront.net/alice/ui) · [bob](https://d170kplla02ejw.cloudfront.net/bob/ui).
 
 Or run a bank locally:
 

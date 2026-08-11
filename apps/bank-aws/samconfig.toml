@@ -9,3 +9,6 @@ resolve_s3 = true
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = false
 fail_on_empty_changeset = false
+# The app-deployer user's IAM policy refuses role creation without this
+# permissions boundary (deployer-template.yaml).
+parameter_overrides = "RolePermissionsBoundary=AppDeployerBoundary"

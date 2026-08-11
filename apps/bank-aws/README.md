@@ -97,6 +97,42 @@ client into `webapp/` + CloudFront invalidation. The stack outputs the
 CloudFront domain; banks live at `https://<domain>/<bank>/…` with the UI at
 `/​<bank>/ui`.
 
+### Deploying as `app-deployer` (least privilege)
+
+Deploys run as the `app-deployer` IAM user, not an admin. Its permissions are
+defined in [`deployer-template.yaml`](./deployer-template.yaml) (stack
+`barter-deployer`), which creates two managed policies:
+
+- **`AppDeployerBoundary`** — a permissions boundary that caps any role the
+  deployer creates to exactly what the bank's Lambda execution role needs
+  (DynamoDB CRUD on `barter-*` tables, S3 on `barter-*` buckets, SSM reads
+  under `/barter/*`, logs for `/aws/lambda/barter-*`).
+- **`AppDeployerPolicy`** — the deploy policy: CloudFormation/Lambda/
+  DynamoDB/S3/CloudFront scoped to `barter-*` resources, plus IAM role admin
+  on `barter-*` roles **conditioned on the boundary**
+  (`iam:PermissionsBoundary`), so every role the deployer creates — including
+  the SAM-generated `BankFunctionRole` — must wear the boundary. No ec2, no
+  bedrock, no user/policy authoring.
+
+`template.yaml` sets the boundary on the function via the
+`RolePermissionsBoundary` parameter (pinned in `samconfig.toml`); without it
+the deploy fails at `iam:CreateRole`, which is the mechanism working as
+intended.
+
+One-time account setup (as an admin):
+
+```bash
+# create the two policies (and the user, on a fresh account)
+aws cloudformation deploy --template-file deployer-template.yaml \
+  --stack-name barter-deployer --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides CreateDeployerUser=false   # 'true' creates the user too
+# adopting an existing user: attach AppDeployerPolicy and detach whatever it
+# replaces (this account: PowerUserAccess + the AppDeployerServerlessExtras
+# inline policy were removed).
+```
+
+Bank keys in SSM stay an admin action — the deployer has no SSM write access.
+
 The Deno Deploy deployment stays alive alongside this one; both run the same
 engine and the same e2e suites, and they federate with each other like any
 two banks.
