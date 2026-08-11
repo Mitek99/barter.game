@@ -19,7 +19,7 @@ The best networking happens when people trade real value, not just business card
 2. **Attendees open your bank's web UI** (`<your-bank-url>/ui`) and register with a handle and password. They now have a wallet.
 3. **They mint vouchers** — whatever they can deliver. "1 design review." "1 investor intro." "1 yoga class." Vouchers can carry icons and artwork, so they look like something worth trading.
 4. **They post them.** Every attendee follows the event bank by default, and the bank rebroadcasts every post it accepts — so one post puts a voucher in front of the whole event. The marketplace is automatic; no setup, no announcements channel.
-5. **They trade.** Attendees browse the Discover feed and hit "Trade for this," or scan a QR code / paste an invite string, then place a signed order — the web app coordinates the rest.
+5. **They trade.** Attendees browse the Home feed and hit "Trade for this," or scan a QR code / paste an invite string, then place a signed order — the web app coordinates the rest.
 6. **Banks settle on their own.** Once both sides have signed, balances update. The issuer now owes the holder a deliverable.
 
 Handing out swag? A cheque link lets an attendee claim a voucher just by opening a URL.
@@ -28,7 +28,7 @@ Handing out swag? A cheque link lets an attendee claim a voucher just by opening
 
 1. **Open the bank's web UI** — `https://your-event.example/event-bank/ui` — and register with a handle and password. The key is generated and encrypted right in the browser.
 2. **Mint a voucher** — "1 portfolio review", up to 5 of them — and give it an icon if they like.
-3. **Post it and browse Discover.** A post about the voucher lands in every attendee's feed (everyone follows the event bank by default, and the bank rebroadcasts accepted posts). Discover shows a gallery of everyone else's vouchers with a "Trade for this" button that preloads the swap.
+3. **Post it and browse the feed.** A post about the voucher lands in every attendee's Home feed (everyone follows the event bank by default, and the bank rebroadcasts accepted posts). Home shows a gallery of everyone else's vouchers with a "Trade for this" button that preloads the swap.
 4. **Share the QR code.** Anyone who scans it sees the voucher and can propose a trade.
 5. **Place an order** — give 1 "portfolio review", get 1 of theirs. The app creates the ledger records and clears the orders; the banks settle on their own.
 6. **Watch the balances land** in the wallet.

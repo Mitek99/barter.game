@@ -61,14 +61,14 @@ If you're holding too many vouchers from one issuer, offer them to others at fav
 
 ### The event play
 
-Go to an event with an empty wallet. Mint a voucher on arrival — "1 intro to my network" — and post it, so it shows up in every attendee's Discover feed. Trade it for other vouchers throughout the day. Leave with a diversified portfolio of commitments from people you just met. Follow up next week to redeem.
+Go to an event with an empty wallet. Mint a voucher on arrival — "1 intro to my network" — and post it, so it shows up in every attendee's Home feed. Trade it for other vouchers throughout the day. Leave with a diversified portfolio of commitments from people you just met. Follow up next week to redeem.
 
 ## Get discovered
 
 Trades start where attention is, and the discovery layer is part of the game:
 
 - **Post about your vouchers.** Your bank rebroadcasts every post it accepts, so everyone following the bank sees it — at an event bank, that's everyone.
-- **Curate your follows.** Your Discover feed is a gallery of vouchers from the people you follow (your host bank by default), each with a "Trade for this" button that preloads the swap. Following an issuer is a portfolio decision, not a social nicety.
+- **Curate your follows.** Your Home feed is a gallery of vouchers from the people you follow (your host bank by default), each with a "Trade for this" button that preloads the swap. Following an issuer is a portfolio decision, not a social nicety.
 - **Watch for endorsement-by-repost.** An issuer reposting someone else's voucher is putting their own name behind it — the closest thing this game has to a reputation signal. Use it, and earn it.
 
 ## The meta-game

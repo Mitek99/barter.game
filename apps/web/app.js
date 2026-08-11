@@ -273,7 +273,7 @@ function dealBankFor(dealId) {
 // nav tab while the async screen fetches.
 const ROUTE_TITLES = {
   '': 'Dashboard', vouchers: 'Vouchers', orders: 'Orders', invoices: 'Invoices',
-  cheques: 'Cheques', discover: 'Discover', registry: 'Registry', activity: 'Activity',
+  cheques: 'Cheques', registry: 'Registry', activity: 'Activity',
   network: 'Network', scan: 'Scan', settings: 'Settings', deal: 'Deal', posts: 'Posts',
 };
 
@@ -344,7 +344,8 @@ function dispatch(app, p, rest) {
   if (p === 'invoices') return renderInvoices(app);
   if (p === 'cheques' && rest[0] === 'new') return renderCreateCheque(app);
   if (p === 'cheques') return renderCheques(app);
-  if (p === 'discover') return renderDiscover(app);
+  // Discover merged into Home; keep old links working.
+  if (p === 'discover') { location.replace('#/'); return; }
   if (p === 'registry') return renderRegistry(app);
   if (p === 'posts') return renderPosts(app, rest[0]);
   if (p === 'deal' && rest[0]) return renderDeal(app, rest[0]);
@@ -1170,7 +1171,6 @@ function header(title) {
       <a href="#/orders"${on('Orders')}>Orders</a>
       <a href="#/invoices"${on('Invoices')}>Invoices</a>
       <a href="#/cheques"${on('Cheques')}>Cheques</a>
-      <a href="#/discover"${on('Discover')}>Discover</a>
       <a href="#/posts"${on('Posts')}>Posts</a>
       <a href="#/registry"${on('Registry')}>Registry</a>
       <a href="#/activity"${on('Activity')}>Activity</a>
@@ -1198,7 +1198,6 @@ function bottomNav(title) {
   const act = (t) => title === t ? ' active' : '';
   const ic = {
     home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',
-    discover: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2.2 5.3-5.3 2.2 2.2-5.3z"/></svg>',
     plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg>',
     scan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M4 12h16"/></svg>',
   };
@@ -1215,7 +1214,6 @@ function bottomNav(title) {
   </div>
   <nav class="bottomnav" aria-label="Quick actions">
     <a href="#/" class="bn-item${act('Dashboard')}">${ic.home}<span>Home</span></a>
-    <a href="#/discover" class="bn-item${act('Discover')}">${ic.discover}<span>Discover</span></a>
     <button class="bn-item bn-new" onclick="toggleNewSheet(event)" aria-haspopup="true" aria-label="Create new">${ic.plus}<span>New</span></button>
     <a href="#/scan" class="bn-item${act('Scan')}">${ic.scan}<span>Scan</span></a>
   </nav>`;
@@ -1530,6 +1528,9 @@ function rememberedHandle() {
 }
 
 async function renderDashboard(app) {
+  // Discovery content fetches in parallel with the dashboard's own data; it
+  // catches its own errors and renders them inline, so the promise never rejects.
+  const discovery = discoverSections();
   let holdings = [], holdingsFailed = false;
   try { holdings = await allHoldings(); } catch { holdingsFailed = true; }
   let history = { events: [] }, historyFailed = false;
@@ -1548,7 +1549,6 @@ async function renderDashboard(app) {
     <a class="btn" href="#/vouchers/new">Create voucher</a>
     <a class="btn secondary" href="#/invoices/new">New invoice</a>
     <a class="btn secondary" href="#/cheques/new">New cheque</a>
-    <a class="btn secondary" href="#/discover">Discover</a>
   </div>`);
   body += installSlot('banner');
   body += card('Recent activity', historyFailed ? loadError('activity') : (history.events.map(e => `
@@ -1558,6 +1558,7 @@ async function renderDashboard(app) {
       <span class="chip state-${escapeHtml(e.state)}">${escapeHtml(e.state)}</span>
     </div>
   `).join('') || '<p class="small">No activity</p>'));
+  body += `<h3 style="margin-top:2rem">Discover</h3>` + await discovery;
   body += `</div>`;
   app.innerHTML = body;
 }
@@ -2011,15 +2012,14 @@ window.doCreateOrder = async function(btn) {
  * each in its released meta (image, description), and offer the actions that
  * close the loop — trade for it, read its feed, follow its issuer. Open
  * offers on vouchers you already know remain below as a second channel.
+ * Rendered as a section of Home (renderDashboard); returns HTML, never throws.
  */
-async function renderDiscover(app) {
-  app.innerHTML = header('Discover') + `<div class="container"><p class="small">Loading…</p></div>`;
-
+async function discoverSections() {
   const { feed, failed, names, vMap, vInfo, vMeta } = await buildFeedContext('');
   const known = await knownVouchers().catch(() => []);
   const nameByHash = {};
   known.forEach(v => { nameByHash[v.hash] = v.name; });
-  let body = header('Discover') + `<div class="container">`;
+  let body = '';
 
   // Discovery IS the feed: you meet a voucher by seeing someone's picture of
   // it. The gallery and the open offers stay underneath as the index and the
@@ -2085,8 +2085,7 @@ async function renderDiscover(app) {
   // --- open offers on vouchers you already know (second channel) -----------
   if (!known.length) {
     body += card('Open offers', `<p class="small">To see tradable offers you first need a voucher you issue, or an issuer you trust. <a href="#/vouchers/new">Create a voucher</a> or trade for one above.</p>`);
-    app.innerHTML = body + `</div>`;
-    return;
+    return body;
   }
   // Poll our own bank AND every pinned bank for offers on the vouchers we know.
   // (The bank defaults `vouchers` to an empty catalog and `banks` to pinned-only,
@@ -2124,7 +2123,7 @@ async function renderDiscover(app) {
   }
   if (res.error) body += `<p class="error small">${escapeHtml(res.error)}</p>`;
   body += `<p class="small"><a href="#/registry">Browse this bank's voucher registry →</a></p>`;
-  app.innerHTML = body + `</div>`;
+  return body;
 }
 
 // Browse the bank's public voucher registry, grouped by issuer, so a newcomer
@@ -2186,7 +2185,7 @@ window.trustFromRegistry = async function(btn) {
 // interpolated into markup.
 window.acceptOfferByIdx = function(btn) {
   const o = (window.__discoverOffers || [])[Number(btn.dataset.idx)];
-  if (!o) { toast('Offer no longer available — refresh Discover', 'error'); return; }
+  if (!o) { toast('Offer no longer available — refresh Home', 'error'); return; }
   return window.acceptSwap(o, btn);
 };
 
