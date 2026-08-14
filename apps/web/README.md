@@ -13,19 +13,23 @@ protocol; the scheme below is this client's choice.
 
 ## How it is served
 
-The bank ([`../bank/main.ts`](../bank/main.ts), [`../bank/ui.ts`](../bank/ui.ts))
-hosts the SPA directly:
+The bank ([`packages/bank-core`](../../packages/bank-core/README.md) —
+[`router.ts`](../../packages/bank-core/src/router.ts),
+[`ui.ts`](../../packages/bank-core/src/ui.ts)) hosts the SPA directly:
 
 | Route | What it does |
 |---|---|
 | `GET /:bank/ui` | `308` redirect to `/:bank/ui/`. The trailing slash is load-bearing: scope matching for the service worker and the manifest is a plain string prefix, so the slashless URL sits outside its own app's scope and would never be installable |
 | `GET /:bank/ui/` | Returns `index.html` with `<base href="/:bank/ui/">` injected into `<head>`, so the relative `app/…` asset refs resolve |
-| `GET /:bank/ui/app/*` | Serves the static files from `apps/web/` (paths are relative to the bank process CWD — run the bank from the repo root) |
-| `GET /:bank/ui/manifest.webmanifest` | The install manifest, generated per bank (`webManifest` in `../bank/ui.ts`) — `id`/`start_url`/`scope` all carry this bank's path prefix |
+| `GET /:bank/ui/app/*` | Serves the static files from `apps/web/` (the host resolves the directory itself — the AWS local server defaults to `apps/web`, the Lambda bundles it) |
+| `GET /:bank/ui/manifest.webmanifest` | The install manifest, generated per bank (`webManifest` in `../../packages/bank-core/src/ui.ts`) — `id`/`start_url`/`scope` all carry this bank's path prefix |
 | `GET /:bank/ui/sw.js` | The service worker, served from the UI root so its scope covers the whole SPA |
+| `GET /:bank/ui/feed` | The bank's own posts (its curated auto-reposts) as JSON — unauthenticated, with the mentioned vouchers' docs and released meta bundled. This is what the logged-out landing renders (`bank-rpc.md` §2.5) |
 
 The SPA derives the bank name from the first URL path segment and boots by
 fetching the public `GET /:bank/ui/config` for the bank's pubkey and URL.
+Logged out, the landing page shows the bank's public feed (`/ui/feed`) under
+the hero — every card is verified client-side before it renders.
 
 Runtime dependencies are pinned in an import map in `index.html` and loaded
 from esm.sh (`@noble/ed25519` 3.1.0, `@noble/hashes` 2.2.0, `@scure/base`
@@ -164,17 +168,16 @@ incomplete until this mirror is refreshed.
 ## Developing
 
 There is no build step, and no meaningful standalone dev server — nearly every
-screen needs the bank API. Run the bank from the repo root and let it serve
-the SPA:
+screen needs the bank API. Run the bank's local server and let it serve the
+SPA:
 
 ```sh
-deno run apps/bank/genkey.ts   # prints a fresh BANK_..._PRIV_KEY line
-BANK_ALICE_PRIV_KEY=<base58 seed> \
-  deno run --allow-net --allow-env --allow-read --allow-write --unstable-kv \
-  apps/bank/main.ts
+bun run scripts/genkey.ts   # prints a fresh BANK_PRIV_KEY=<base58> line
+cd apps/bank-aws
+BANK_ALICE_PRIV_KEY=<base58 seed> bun run local   # Node server on :8100
 ```
 
-Open `http://localhost:8000/alice/ui`. The bank name comes from the env var
+Open `http://localhost:8100/alice/ui`. The bank name comes from the env var
 (`BANK_FOO_BAR_PRIV_KEY` → bank `foo-bar`); set several vars to run a local
 federation on one port. Files are read from disk per request — edit and reload.
 

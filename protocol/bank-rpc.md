@@ -140,9 +140,10 @@ Across two banks, the coordinator makes one call to each bank, with `giver`/`rec
 
 ### 2.5 REST endpoints
 
-Two read/serve surfaces are plain HTTP (cacheable, no JSON-RPC envelope):
+Read/serve surfaces that are plain HTTP (cacheable, no JSON-RPC envelope):
 
 - `GET /address/<pubkey>` — return the newest Address doc for the pubkey, or `404`. A bare `GET /address` (no pubkey) returns the bank's own newest Address doc.
+- `GET /ui/feed` — the bank's own newest-first posts (its auto-reposts — the curated public feed, [`post-feed.md`](./post-feed.md)). **Unauthenticated:** post reads are public reads ([`post-feed.md`](./post-feed.md) §3). Takes optional `before` (ULID cursor) and `limit` query params and returns `{ items, next_before?, vouchers, meta }`, where `vouchers`/`meta` bundle the Voucher docs and released presentation meta for every voucher mentioned in the returned trees, so a reader needs no signed follow-up calls. The reference bank's logged-out landing page renders this.
 - `GET /media/<hash>.<ext>` — return a vault blob by its `MediaRef`
   ([`post-feed.md`](./post-feed.md) §5), served with the Content-Type the
   extension implies and immutable caching. **Unauthenticated:** whoever knows

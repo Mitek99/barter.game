@@ -12,6 +12,8 @@ import {
   signDoc,
   verifyDoc,
   type Base58PubKey,
+  type Base58SHA256,
+  type Post,
 } from '@barter.game/protocol';
 import {
   emptyUiState,
@@ -30,8 +32,10 @@ import {
   getSignaturesForRecord,
   getUiState,
   getVoucher,
+  getVoucherMeta,
   listAccounts,
   listOrdersByHolder,
+  listPosts,
   listRecordHashesByAccount,
   listRecordsByDeal,
   listVouchers,
@@ -371,6 +375,39 @@ export async function handlePublicUiRoute(
     });
   }
 
+  // Public bank feed — the bank's own posts, which are exactly its curated
+  // auto-reposts of accepted user posts (post-feed.md). Unauthenticated by
+  // design: post reads are public and MAY be exposed as REST GETs
+  // (post-feed.md §3, bank-rpc.md §2.5). This is what the logged-out landing
+  // page renders. Voucher docs and released meta for every voucher mentioned
+  // in the returned trees ride along so the client needs no signed follow-up
+  // calls; media blobs are already public at /media/:ref.
+  if (uiPath === '/feed' && request.method === 'GET') {
+    const before = url.searchParams.get('before') ?? undefined;
+    if (before !== undefined && !isValidUlid(before)) {
+      return json(400, { code: -32600, message: 'invalid before cursor' });
+    }
+    const limitRaw = Number(url.searchParams.get('limit') ?? '50');
+    const limit = Number.isInteger(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 50) : 50;
+    const page = await listPosts(bank, bank.pubkey, 'all', before, limit);
+    const voucherHashes = new Set<Base58SHA256>();
+    const collect = (p: Post | undefined): void => {
+      if (!p) return;
+      voucherHashes.add(p.voucher);
+      collect(p.reply_to);
+      collect(p.repost);
+    };
+    page.items.forEach((p) => collect(p));
+    const vouchers: Record<string, unknown> = {};
+    const meta: Record<string, unknown> = {};
+    for (const h of voucherHashes) {
+      const [v, m] = await Promise.all([getVoucher(bank, h), getVoucherMeta(bank, h)]);
+      if (v) vouchers[h] = v;
+      if (m) meta[h] = m;
+    }
+    return json(200, { items: page.items, next_before: page.next_before, vouchers, meta });
+  }
+
   return null;
 }
 
@@ -417,7 +454,7 @@ async function requireAuth(
     throw new UiError(408, -32006, 'timestamp skew');
   }
   // `request.body` being non-null does NOT mean a body was sent: some HTTP
-  // clients (Deno's fetch among them) attach an empty stream to a bodyless
+  // clients attach an empty stream to a bodyless
   // DELETE, where a browser attaches none. Hashing that empty string produced
   // a digest the client never signed — it signs `body_sha256: null` when there
   // is no body — so every DELETE route (trusted, contacts, banks, follows) was

@@ -467,7 +467,7 @@ function postAuthorLabel(pubkey, names) {
   // A bank has no registered handle, so /ui/resolve never names it — but the
   // bank reposts every user post, so it is the most frequent author in the
   // feed and must not render as raw base58.
-  if (pubkey === state.bankPubkey) return `${state.bankName} (your bank)`;
+  if (pubkey === state.bankPubkey) return state.user ? `${state.bankName} (your bank)` : `${state.bankName} (bank)`;
   return names[pubkey] || pubkey.slice(0, 10) + '…';
 }
 
@@ -737,10 +737,12 @@ function postCard(entry, ctx) {
       ${renderEmbedded(subject.reply_to, names, 'in reply to', vMap, ctx, bankUrl)}
       ${renderEmbedded(subject.repost, names, 'reposted', vMap, ctx, bankUrl)}
       <div class="flex" style="gap:.5rem;margin-top:.6rem;flex-wrap:wrap">
-        <button class="btn secondary" onclick="startReply('${jsStr(actOn)}')">Reply</button>
+        ${ctx.readOnly
+          ? `<a class="btn" href="#/register">Create an identity to reply or trade</a>`
+          : `<button class="btn secondary" onclick="startReply('${jsStr(actOn)}')">Reply</button>
         <button class="btn secondary" onclick="repostPost('${jsStr(actOn)}')">Repost</button>
         ${followTarget(subject, followSet)}
-        ${wantTarget(subject, vMap)}
+        ${wantTarget(subject, vMap)}`}
       </div>
     </div>
   </div>`;
@@ -1337,7 +1339,77 @@ async function renderWelcome(app) {
     </div>
     ${installSlot('banner')}
     <p class="footnote" style="margin-top:1.6rem">handle + password login · key encrypted in this browser · never sent to the bank</p>
-  </div>`;
+  </div>
+  <div class="container" id="public-feed"></div>`;
+  // The curated bank feed fills in below the hero; a slow or empty feed never
+  // delays the landing itself.
+  loadPublicFeed().catch(() => {});
+}
+
+/**
+ * The logged-out landing shows the bank's own feed — its auto-reposts of the
+ * user posts it accepted, which is the curated public face of the bank
+ * (post-feed.md). Served unsigned at /ui/feed; every post is still
+ * signature-verified here before it renders, exactly like the logged-in
+ * feed. An empty or unreachable feed simply leaves the hero alone.
+ */
+async function loadPublicFeed() {
+  const slot = document.getElementById('public-feed');
+  if (!slot) return;
+  const res = await fetch(`${state.basePath}/ui/feed`)
+    .then(r => (r.ok ? r.json() : null)).catch(() => null);
+  if (!res || !Array.isArray(res.items) || !res.items.length) return;
+
+  // Fail closed, same as loadFeed: shape AND signature, embedded trees too.
+  const entries = [];
+  const seen = new Set();
+  for (const p of res.items) {
+    let hash;
+    try { hash = hashDoc(p); } catch { continue; }
+    if (seen.has(hash)) continue;
+    seen.add(hash);
+    try { validatePost(p); } catch { continue; }
+    try { if (!verifyPostTree(p)) continue; } catch { continue; }
+    entries.push({ hash, post: p, bankUrl: state.basePath });
+  }
+  if (!entries.length) return;
+
+  // Handle labels for every mentioned author via the public resolve route.
+  const mentionedAuthors = new Set();
+  const walk = p => {
+    if (!p) return;
+    if (p.pubkey) mentionedAuthors.add(p.pubkey);
+    walk(p.reply_to);
+    walk(p.repost);
+  };
+  entries.forEach(e => walk(e.post));
+  const names = {};
+  await Promise.all([...mentionedAuthors].map(async pk => {
+    if (pk === state.bankPubkey) return;
+    try {
+      const r = await fetch(`${state.basePath}/ui/resolve/${pk}`)
+        .then(x => (x.ok ? x.json() : null));
+      if (r && r.handle) names[pk] = r.handle;
+    } catch { /* base58 fallback */ }
+  }));
+
+  // Voucher names/issuers and released meta ride along in the feed response.
+  const vMap = {}, vInfo = {}, vMeta = {};
+  Object.entries(res.vouchers || {}).forEach(([h, v]) => {
+    if (v && v.name) {
+      vMap[h] = v.name;
+      vInfo[h] = { name: v.name, issuer: v.pubkey, bank: state.bankPubkey, bank_url: state.bankUrl || state.basePath };
+    }
+  });
+  Object.entries(res.meta || {}).forEach(([h, m]) => { if (m) vMeta[h] = m; });
+
+  embeddedPosts.clear();
+  const ctx = { names, vMap, vMeta, vInfo, followSet: new Set(), readOnly: true };
+  const cards = dedupeReposts(entries).map(e => postCard(e, ctx)).join('');
+  if (!cards) return;
+  slot.innerHTML = `<h3 style="margin-top:2rem">Latest from ${escapeHtml(state.bankName)}</h3>
+    <p class="small">What this bank's members are posting — every card is one the bank chose to repost. <a href="#/register">Create an identity</a> to reply or trade.</p>
+    <div class="feed">${cards}</div>`;
 }
 
 const MIN_PASSWORD = 8;

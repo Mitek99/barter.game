@@ -299,6 +299,27 @@ await rpc(issuer, alice, 'submit_docs', { docs: [repost] });
     bankFeed.items.every((p) => p.pubkey === alice.pubkey && !!p.repost),
     'all bank-authored with an embedded original');
 
+  // The same bank feed is served UNAUTHENTICATED at /ui/feed — this is what
+  // the logged-out landing page renders (post-feed.md §3 allows public REST
+  // reads). Voucher docs and released meta ride along so the client needs no
+  // signed follow-up calls.
+  const pub = await fetch(`${alice.url}/ui/feed`);
+  const pubFeed = pub.status === 200 ? await pub.json() : null;
+  check('public feed served without any auth', pub.status === 200 && Array.isArray(pubFeed?.items),
+    `status ${pub.status}`);
+  check('public feed carries the bank reposts',
+    !!pubFeed && pubFeed.items.some((p: { repost?: { body_md?: string } }) =>
+      p.repost?.body_md === p1.body_md),
+    `${pubFeed?.items?.length} post(s)`);
+  check('public feed reposts verify', !!pubFeed && pubFeed.items.every((p: Post) => {
+    try { return verifyPostTree(p); } catch { return false; }
+  }), 'every tree signature-valid');
+  check('public feed bundles the voucher docs for its trees',
+    !!pubFeed && Object.keys(pubFeed.vouchers ?? {}).length > 0,
+    Object.keys(pubFeed?.vouchers ?? {}).join(','));
+  const badCursor = await fetch(`${alice.url}/ui/feed?before=not-a-ulid`);
+  check('public feed rejects a bad cursor', badCursor.status === 400, String(badCursor.status));
+
   // Unfollowing must stick — resolveFollows only re-seeds when never set.
   await authedReq(fresh, alice, 'DELETE', `/ui/follows/${alice.pubkey}`);
   const f1 = await authedReq(fresh, alice, 'GET', '/ui/follows');
