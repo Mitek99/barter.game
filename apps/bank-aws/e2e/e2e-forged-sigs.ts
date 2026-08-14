@@ -15,7 +15,7 @@
 //
 // PASS = bob refuses to settle and T2 keeps its VY.
 //
-//   deno run --allow-net --allow-env apps/bank/e2e-forged-sigs.ts
+//   bun run apps/bank-aws/e2e/e2e-forged-sigs.ts
 import {
   base58Encode,
   canonicalizeWithoutSig,
@@ -25,9 +25,9 @@ import {
   signDoc,
 } from '@barter.game/protocol';
 
-const BASE_URL = Deno.env.get('E2E_BASE_URL') ?? 'http://localhost:8000';
-const BANK_A_URL = Deno.env.get('E2E_BANK_A_URL') ?? `${BASE_URL}/alice`;
-const BANK_B_URL = Deno.env.get('E2E_BANK_B_URL') ?? `${BASE_URL}/bob`;
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8100';
+const BANK_A_URL = process.env.E2E_BANK_A_URL ?? `${BASE_URL}/alice`;
+const BANK_B_URL = process.env.E2E_BANK_B_URL ?? `${BASE_URL}/bob`;
 
 type User = { privateKey: Uint8Array; pubkey: string };
 type BankRef = { name: string; url: string; pubkey: string };
@@ -232,4 +232,4 @@ if (!ok && storedForged === 0) {
     ? 'FORGERY REJECTED ✅ (bob ignored non-bank signatures; nothing settled, no balance moved)'
     : `FORGERY SUCCEEDED ❌ (settled=${settled} T2=${t2Bal.current} T1=${t1Bal.current} — a keyless attacker drove settlement)`);
 }
-if (!ok) Deno.exit(1);
+if (!ok) process.exit(1);

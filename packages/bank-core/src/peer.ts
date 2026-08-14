@@ -23,9 +23,9 @@ export async function fetchDiscovery(
   url: string,
   expectedPubkey?: Base58PubKey,
 ): Promise<{ pubkey: Base58PubKey; url: string; name: string; protocol_version: string } | null> {
-  // Co-located bank: answer from memory. A Deno Deploy isolate cannot fetch
-  // its own deployment URL (508 Loop Detected), so HTTP discovery of a
-  // same-process bank would always fail.
+  // Co-located bank: answer from memory. A serverless isolate may not be
+  // able to fetch its own deployment URL (Deno Deploy answered 508 Loop
+  // Detected), so HTTP discovery of a same-process bank is not reliable.
   if (expectedPubkey) {
     const local = getLocalBank(expectedPubkey);
     if (local) {
@@ -64,8 +64,8 @@ export async function bankRpcCall(
   method: string,
   params: Record<string, unknown>,
 ): Promise<unknown> {
-  // Co-located target: dispatch in-process. This both avoids the Deno Deploy
-  // self-fetch loop (508) and skips needless network/crypto round-trips. The
+  // Co-located target: dispatch in-process — skips needless network/crypto
+  // round-trips and any self-fetch restrictions of the host platform. The
   // sender identity matches the HTTP path (this bank's pubkey).
   const local = getLocalBank(targetPubkey);
   if (local) {

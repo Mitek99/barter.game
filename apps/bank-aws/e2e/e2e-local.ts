@@ -1,5 +1,5 @@
 // End-to-end smoke test against a local bank server.
-// Run with: deno run --allow-net --allow-env apps/bank/e2e-local.ts
+// Run with: bun run apps/bank-aws/e2e/e2e-local.ts
 import {
   base58Encode,
   base58Decode,
@@ -15,8 +15,8 @@ import {
 } from '@barter.game/protocol';
 import { sha256 } from '@noble/hashes/sha2.js';
 
-const BANK_NAME = Deno.env.get('E2E_BANK') ?? 'alice';
-const BASE_URL = Deno.env.get('E2E_BASE_URL') ?? 'http://localhost:8000';
+const BANK_NAME = process.env.E2E_BANK ?? 'alice';
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8100';
 const BANK_URL = `${BASE_URL}/${BANK_NAME}`;
 
 const bankInfo = await fetch(`${BANK_URL}/barter-bank.json`).then((r) => r.json());

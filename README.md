@@ -29,11 +29,12 @@ See [the Ethos](https://barter.game/docs/ethos/) for the full set of beliefs (so
 
 ## Just test it — here's how
 
-Demo banks run live on Deno Deploy. Each bank serves a full web client:
+Demo banks run live on AWS (Lambda + DynamoDB behind CloudFront). Each bank
+serves a full web client:
 
 ```
-https://barter-game-banks.ai-1st.deno.net/alice/ui
-https://barter-game-banks.ai-1st.deno.net/bob/ui
+https://d170kplla02ejw.cloudfront.net/alice/ui
+https://d170kplla02ejw.cloudfront.net/bob/ui
 ```
 
 1. Open a bank's `/ui`, create an identity (handle + password — the ed25519
@@ -64,7 +65,7 @@ issuer and preloads the swap. The wire format is in
 Machine access works too — every bank publishes its identity document:
 
 ```bash
-curl https://barter-game-banks.ai-1st.deno.net/alice/barter-bank.json
+curl https://d170kplla02ejw.cloudfront.net/alice/barter-bank.json
 ```
 
 To run everything locally and execute the test suite:
@@ -72,14 +73,14 @@ To run everything locally and execute the test suite:
 ```bash
 git clone https://github.com/ai-1st/barter.game.git && cd barter.game
 bun install
-bun run test:all     # Bun protocol suite + the same golden vectors under Deno
-deno test            # cross-runtime parity + the bank integration suite
+bun run test:all     # Bun protocol suite + the bank-aws KvStore contract suite
 ```
 
-Nine end-to-end suites (bank boot, cross- and same-bank swaps, single-bank
+Ten end-to-end suites (bank boot, cross- and same-bank swaps, single-bank
 cheque, reject cascade, settle-replay resistance, forged peer signatures,
-account privacy, post feeds and media) live in `apps/bank/e2e-*.ts` — see
-[`apps/bank/README.md`](./apps/bank/README.md) for how to run them.
+account privacy, post feeds and media, federation) live in
+`apps/bank-aws/e2e/e2e-*.ts` — see
+[`apps/bank-aws/README.md`](./apps/bank-aws/README.md) for how to run them.
 
 Step-by-step protocol walkthroughs — who signs what, in which order —
 are in [`scenarios/`](./scenarios/), including a full
@@ -88,34 +89,33 @@ voucher feeds.
 
 ## Run your own bank — here's how
 
-The reference bank is one Deno process serving any number of named banks
-from a single Deno KV database. Each bank's key is an env var.
+The reference bank is a serverless Node.js host on AWS — Lambda + DynamoDB +
+S3 behind CloudFront — serving any number of named banks from a single
+DynamoDB table. Each bank's key is an env var locally, an SSM SecureString on
+AWS.
 
 ```bash
 # 1. Generate a bank keypair
-deno run apps/bank/genkey.ts        # prints BANK_ALICE_PRIV_KEY=<base58>
+bun run scripts/genkey.ts         # prints BANK_PRIV_KEY= / BANK_PUB_KEY=
 
-# 2. Run locally
-BANK_ALICE_PRIV_KEY=<base58> \
-deno run --allow-net --allow-env --allow-read --allow-write --unstable-kv apps/bank/main.ts
+# 2. Run locally (in-memory KV, KV-chunked media)
+cd apps/bank-aws && bun install
+BANK_ALICE_PRIV_KEY=<base58> bun run local
 
 # 3. Look at it
-curl http://localhost:8000/alice/barter-bank.json
-open http://localhost:8000/alice/ui
+curl http://localhost:8100/alice/barter-bank.json
+open http://localhost:8100/alice/ui
 ```
 
-Deploying to Deno Deploy is `deno deploy` with the `deploy` block already in
-[`deno.json`](./deno.json); serving more banks is just more
-`BANK_<NAME>_PRIV_KEY` env vars — no extra processes. Full routes, storage
-key-space, configuration, and operational notes:
-[`apps/bank/README.md`](./apps/bank/README.md).
+Deploying to AWS is `AWS_PROFILE=app-deployer ./deploy.sh` from
+`apps/bank-aws/` — it builds, runs `sam deploy`, syncs the web client, and
+invalidates CloudFront. Deploys are manual; nothing ships on push. Full
+routes, storage key-space, configuration, and the least-privilege deployer
+setup: [`apps/bank-aws/README.md`](./apps/bank-aws/README.md).
 
-Prefer AWS? The same bank engine
-([`packages/bank-core`](./packages/bank-core/README.md)) also ships as a
-serverless host — Node.js Lambda + DynamoDB + S3 behind CloudFront, deployed
-with SAM: [`apps/bank-aws/README.md`](./apps/bank-aws/README.md). Either
-host runs the same protocol and the same e2e suites; pick a runtime, not a
-fork.
+The whole bank engine lives in
+[`packages/bank-core`](./packages/bank-core/README.md), host-agnostic; the AWS
+app is the one host that wires it to real storage.
 
 You now have a bank. Tell your friends about it, and you're a tiny central
 bank in a federation of exactly however many people you've invited.
@@ -139,7 +139,7 @@ runtime, storage, UI, keypair management — is your choice. The reference
 implementation documents its own choices per package:
 [`packages/protocol/`](./packages/protocol/README.md) (shared primitives —
 port its canonicalizer and validate against the golden vectors),
-[`apps/bank/`](./apps/bank/README.md) (Deno bank server), and
+[`apps/bank-aws/`](./apps/bank-aws/README.md) (the AWS bank host), and
 [`apps/web/`](./apps/web/README.md) (browser SPA).
 
 ## What's in this repo
@@ -155,32 +155,30 @@ barter.game/
 ├── protocol/             ← the INVARIANT protocol contract
 ├── scenarios/            ← step-by-step interaction traces
 ├── packages/protocol/    ← @barter.game/protocol — shared TS primitives
-├── apps/bank/            ← the Deno bank server (serves RPC + web UI)
+├── apps/bank-aws/        ← the AWS bank host — Lambda + DynamoDB + S3 + CloudFront (serves RPC + web UI)
 ├── apps/web/             ← the browser SPA the bank serves at /:bank/ui
 ├── docs/                 ← design notes, reviews, legacy material
-├── scripts/              ← utilities (see note below)
+├── scripts/              ← utilities (emu CLI, genkey, emulated-svg)
 └── website/              ← Hugo/Hextra static site (barter.game)
 ```
 
-> `scripts/demo-local.sh` and `scripts/demo-deploy.sh` predate the removal
-> of the CLI and are currently broken; rebuilding them against the web/RPC
-> flow is tracked in [`TODOS.md`](./TODOS.md). `scripts/emu`
-> (`scripts/emulate.ts`) is a working CLI client — it speaks the same signed
-> RPC envelopes and auth as the web client and targets the live demo banks
-> by default; see [`EMULATED.md`](./EMULATED.md).
+> `scripts/emu` (`scripts/emulate.ts`) is a working CLI client — it speaks
+> the same signed RPC envelopes and auth as the web client and targets the
+> live demo banks by default; see [`EMULATED.md`](./EMULATED.md).
 
 ## Tests
 
 ```bash
-bun run test        # protocol library under Bun
-bun run test:deno   # SAME golden vectors under Deno (cross-runtime parity)
-bun run test:all    # both
-deno test           # parity vectors + the bank integration suite (deno.json test.include)
+bun run test           # protocol library under Bun (incl. web-mirror parity)
+bun run test:bank-aws  # KvStore contract suite (MemoryKv; DynamoDB Local when DDB_ENDPOINT is set)
+bun run test:all       # both
 ```
 
-Cross-runtime canonicalization parity is the load-bearing invariant: if two
-runtimes disagree on one canonical byte, every signature in the federation
-becomes unverifiable. Details in
+The browser-mirror parity test is the load-bearing invariant:
+`packages/protocol/test/web-mirror.test.ts` guards the vendored
+`apps/web/protocol.js` against `packages/protocol/src/index.ts` — if the two
+disagree on one canonical byte, browser-signed docs stop verifying at the
+bank. Details in
 [`packages/protocol/README.md`](./packages/protocol/README.md).
 
 ## Honest limitations

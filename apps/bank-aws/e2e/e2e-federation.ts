@@ -1,11 +1,11 @@
-// Two users, two clouds, one federation.
+// Two users, two deployments, one federation.
 //
 // Ada registers at bank A, Ben at bank B — deliberately on SEPARATE
-// deployments (e.g. Deno Deploy and AWS). They discover each other across the
+// deployments (e.g. local and AWS). They discover each other across the
 // boundary, Ben copies Ada's artwork into his own bank's vault and reposts
 // her, then they settle a bilateral swap. Nothing is co-located, so every
-// bank-to-bank hop is a real HTTPS call between two clouds running two
-// different storage engines — the in-process shortcut cannot mask anything.
+// bank-to-bank hop is a real HTTPS call between two deployments — the
+// in-process shortcut cannot mask anything.
 //
 // Either bank may coordinate; run it both ways to prove the roles are not
 // baked into a runtime.
@@ -17,8 +17,8 @@ import {
   hashDoc, newUlid, signDoc, verifyPostTree, type Post,
 } from '@barter.game/protocol';
 
-const BANK_A_URL = Deno.env.get('E2E_BANK_A_URL')!;
-const BANK_B_URL = Deno.env.get('E2E_BANK_B_URL')!;
+const BANK_A_URL = process.env.E2E_BANK_A_URL!;
+const BANK_B_URL = process.env.E2E_BANK_B_URL!;
 /** Label a bank by its host, so output reads right whichever way it is run. */
 const where = (url: string) => new URL(url).hostname.split('.').slice(0, 2).join('.');
 
@@ -162,7 +162,7 @@ check('the post tree verifies under Ben\'s own keys', !!seen && verifyPostTree(s
 const meta = await rpc(ben, bankA, 'get_voucher_meta', { voucher_hash: adaV });
 check('Ada\'s voucher artwork is published', meta?.icon === adaRef, String(meta?.icon).slice(0, 20) + '…');
 
-// Ben fetches the blob itself, unauthenticated, from the Deno bank.
+// Ben fetches the blob itself, unauthenticated, from bank A's vault.
 const blob = await fetch(`${bankA.url}/media/${adaRef}`);
 const blobBytes = new Uint8Array(await blob.arrayBuffer());
 check(`Ben downloads the artwork from ${A}'s vault`, blob.status === 200 && blobBytes.length > 0,
@@ -279,4 +279,4 @@ check('Ben holds what Ada owes him', benHolder === 1);
 console.log(pass
   ? `\nFEDERATION ${A} <-> ${B} OK ✅`
   : '\nFEDERATION TEST FAILED ❌');
-if (!pass) Deno.exit(1);
+if (!pass) process.exit(1);

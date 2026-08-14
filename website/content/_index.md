@@ -71,19 +71,18 @@ Every user and every bank is an **ed25519 keypair**. Voucher, Account, Order, Ma
 
 ## See it work
 
-Open the live demo banks — no install needed: [barter-game-banks.ai-1st.deno.net/alice/ui](https://barter-game-banks.ai-1st.deno.net/alice/ui) (Deno Deploy). Register with a handle and password; the key is generated and encrypted in your browser.
-
-The same banks also run on the AWS host (Lambda + DynamoDB + CloudFront) — the two deployments federate with each other like any two banks: [alice](https://d170kplla02ejw.cloudfront.net/alice/ui) · [bob](https://d170kplla02ejw.cloudfront.net/bob/ui).
+Open the live demo banks — no install needed: [alice](https://d170kplla02ejw.cloudfront.net/alice/ui) · [bob](https://d170kplla02ejw.cloudfront.net/bob/ui) (AWS: Lambda + DynamoDB + CloudFront). Register with a handle and password; the key is generated and encrypted in your browser.
 
 Or run a bank locally:
 
 ```bash
-git clone https://github.com/ai-1st/barter.game.git
-cd barter.game
-deno run apps/bank/genkey.ts   # prints BANK_ALICE_PRIV_KEY=<base58>
-BANK_ALICE_PRIV_KEY=<base58> deno run --allow-net --allow-env --allow-read --allow-write --unstable-kv apps/bank/main.ts
+git clone https://github.com/Mitek99/barter.game.git
+cd barter.game/apps/bank-aws
+bun install
+bun run ../../scripts/genkey.ts   # prints BANK_PRIV_KEY=<base58> — rename it to BANK_ALICE_PRIV_KEY
+BANK_ALICE_PRIV_KEY=<base58> bun run local
 ```
 
-Then open `http://localhost:8000/alice/ui`, register two users, issue personal currencies, and place matching orders. The banks settle on their own. Sum per Voucher = 0. The cryptographic version of "we're even."
+Then open `http://localhost:8100/alice/ui`, register two users, issue personal currencies, and place matching orders. The banks settle on their own. Sum per Voucher = 0. The cryptographic version of "we're even."
 
 </div>

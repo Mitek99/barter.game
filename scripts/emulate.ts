@@ -13,14 +13,14 @@
  *     handle + password, and a user created in the browser can be driven here.
  *
  * Run from the repo root (the `@barter.game/protocol` specifier resolves via
- * the root deno.json import map):
+ * the root workspace):
  *
- *   deno run --allow-net --allow-env --allow-read --allow-write \
- *     scripts/emulate.ts <command> [args]
+ *   ./scripts/emu <command> [args]
  *
  * Target base URL comes from BARTER_BASE (default: the deployed demo banks).
  */
 
+import { readFileSync, writeFileSync } from 'node:fs';
 import {
   base58Decode,
   base58Encode,
@@ -35,18 +35,18 @@ import {
   signDoc,
   verifyPostTree,
   type Post,
-} from '@barter.game/protocol';
+} from '../packages/protocol/src/index.ts';
 
-const DEFAULT_BASE = 'https://barter-game-banks.ai-1st.deno.net';
+const DEFAULT_BASE = 'https://d170kplla02ejw.cloudfront.net';
 /**
  * An EXPLICIT BARTER_BASE always wins, including over a user's stored
  * deployment — otherwise pointing the script at localhost would silently drive
  * the public banks for every user registered against production.
  */
-const BASE_OVERRIDE = Deno.env.get('BARTER_BASE');
+const BASE_OVERRIDE = process.env.BARTER_BASE;
 const BASE = BASE_OVERRIDE ?? DEFAULT_BASE;
 const STATE_PATH = new URL('../.emulated-state.json', import.meta.url).pathname;
-const DEFAULT_PASSWORD = Deno.env.get('BARTER_PASSWORD') ?? '12345678';
+const DEFAULT_PASSWORD = process.env.BARTER_PASSWORD ?? '12345678';
 
 /* ------------------------------------------------------------------ types */
 
@@ -88,13 +88,13 @@ type State = {
 
 function loadState(): State {
   try {
-    return JSON.parse(Deno.readTextFileSync(STATE_PATH)) as State;
+    return JSON.parse(readFileSync(STATE_PATH)) as State;
   } catch {
     return { users: {}, vouchers: {}, orders: {}, deals: {} };
   }
 }
 function saveState(s: State): void {
-  Deno.writeTextFileSync(STATE_PATH, JSON.stringify(s, null, 2) + '\n');
+  writeFileSync(STATE_PATH, JSON.stringify(s, null, 2) + '\n');
 }
 
 /* --------------------------------------------------------------- keystore */
@@ -175,8 +175,8 @@ const bankCache = new Map<string, BankRef>();
  *
  * A token is either a bare name (`alice`), resolved against `base` — the
  * deployment the acting user lives on — or a full URL, which is how one names
- * a bank on ANOTHER deployment. The federation runs the same banks on Deno
- * Deploy and on AWS, so "alice" alone does not identify a bank.
+ * a bank on ANOTHER deployment. The same bank name can exist on several
+ * deployments, so "alice" alone does not identify a bank.
  */
 async function bank(token: string, base = BASE): Promise<BankRef> {
   const url = /^https?:\/\//.test(token) ? token.replace(/\/+$/, '') : `${base}/${token}`;
@@ -230,8 +230,7 @@ async function uiAuth(
   method: string,
   path: string,
   body: unknown,
-): Promise<// deno-lint-ignore no-explicit-any
-any> {
+): Promise<any> {
   const text = body === null || body === undefined ? undefined : JSON.stringify(body);
   const authdoc = {
     pubkey: user.pubkey,
@@ -298,7 +297,7 @@ async function uploadMediaFile(user: User, b: BankRef, path: string): Promise<st
   if (!Object.hasOwn(MEDIA_EXT_TYPES, ext)) {
     throw new Error(`unsupported media extension: .${ext}`);
   }
-  return uploadMedia(user, b, Deno.readFileSync(path), ext);
+  return uploadMedia(user, b, readFileSync(path), ext);
 }
 
 /**
@@ -401,8 +400,8 @@ async function cmdRegister(ref: string, password = DEFAULT_PASSWORD): Promise<vo
 /**
  * Cache key for a voucher. Vouchers are remembered by name, and both the name
  * and the bank repeat across deployments — so a bare `"1 mug@alice"` would let
- * the AWS alice overwrite the Deno one and hand out the wrong hash. The default
- * deployment keeps the short key so existing state stays readable.
+ * one deployment's alice overwrite another's and hand out the wrong hash. The
+ * default deployment keeps the short key so existing state stays readable.
  */
 function voucherKey(user: User, name: string): string {
   const host = user.base === DEFAULT_BASE ? '' : `@${new URL(user.base).host}`;
@@ -860,7 +859,7 @@ function flags(args: string[]): Record<string, string> {
   return out;
 }
 
-const [cmd, ...rest] = Deno.args;
+const [cmd, ...rest] = process.argv.slice(2);
 
 try {
   switch (cmd) {
@@ -971,8 +970,8 @@ try {
       console.log(`emulate.ts — drive emulated barter.game users (BASE=${BASE})
 
   Every <bankName> may be a bare name, resolved against the acting user's own
-  deployment, or a full URL — which is how you name a bank on another cloud
-  (the same bank names run on Deno Deploy and on AWS). A user's deployment is
+  deployment, or a full URL — which is how you name a bank on another
+  deployment. A user's deployment is
   recorded when they register, so BARTER_BASE is only needed to register.
 
   register <handle@bank> [password]
@@ -1009,5 +1008,5 @@ try {
   }
 } catch (e) {
   console.error(`ERROR: ${(e as Error).message}`);
-  Deno.exit(1);
+  process.exit(1);
 }

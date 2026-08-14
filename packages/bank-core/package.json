@@ -4,7 +4,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Runtime-agnostic bank engine shared by the Deno and AWS deployments. Consumed as TypeScript source; no build step (same policy as @barter.game/protocol).",
+  "description": "Runtime-agnostic bank engine behind the AWS host (apps/bank-aws). Consumed as TypeScript source; no build step (same policy as @barter.game/protocol).",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

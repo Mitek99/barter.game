@@ -10,5 +10,10 @@
     "typecheck": "echo 'No TypeScript files yet — tracked in docs/ui/implementation-plan.md Phase 0'",
     "test": "echo 'No tests yet — tracked in docs/ui/implementation-plan.md Phase 0'"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@noble/ed25519": "^3.1.0",
+    "@noble/hashes": "^2.2.0",
+    "@scure/base": "^2",
+    "ulid": "^2.3.0"
+  }
 }

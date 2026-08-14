@@ -8,8 +8,7 @@ import {
 } from '@barter.game/bank-core';
 
 /**
- * Build the banks map from BANK_<NAME>_PRIV_KEY env vars — same contract as
- * the Deno host.
+ * Build the banks map from BANK_<NAME>_PRIV_KEY env vars.
  *
  * URL resolution, in order: BANK_<NAME>_URL pins one bank; BANK_BASE_URL
  * pins all of them to "<base>/<name>"; otherwise the URL is derived from the

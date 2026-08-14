@@ -14,8 +14,8 @@ posts, replies, reposts and cross-bank feeds.
 **Target:** the deployed banks, not localhost.
 
 ```
-https://barter-game-banks.ai-1st.deno.net/alice/ui
-https://barter-game-banks.ai-1st.deno.net/bob/ui
+https://d170kplla02ejw.cloudfront.net/alice/ui
+https://d170kplla02ejw.cloudfront.net/bob/ui
 ```
 
 **Password for every emulated user: `12345678`.**
@@ -232,16 +232,16 @@ the first leg settles.
 Both interfaces, deliberately.
 
 **UI** — `mira` was registered by hand at
-`https://barter-game-banks.ai-1st.deno.net/alice/ui`, minted `1 logo concept`
+`https://d170kplla02ejw.cloudfront.net/alice/ui`, minted `1 logo concept`
 through the New-voucher form, logged back in with handle + password after a
 reload, and her Network screen was used to verify trust and contact rendering.
 
-**CLI** — the repo has no CLI (`apps/cli/` was deleted; `scripts/demo-*.sh`
-still invoke it and are broken — [gap 8](#8-the-repo-has-no-cli)), so
-`scripts/emulate.ts` was written for this. It speaks the same two transports
-the SPA does, and writes the **same PBKDF2-SHA256(250k) + AES-256-GCM keystore
-blob**, which is what makes the two interchangeable: a CLI-registered user can
-log into the browser, and a browser-registered user can be driven from the CLI.
+**CLI** — the repo has no CLI (`apps/cli/` was deleted — [gap 8](#8-the-repo-has-no-cli)), so
+`scripts/emulate.ts` was written for this. It runs under Bun, speaks the same
+two transports the SPA does, and writes the **same PBKDF2-SHA256(250k) +
+AES-256-GCM keystore blob**, which is what makes the two interchangeable: a
+CLI-registered user can log into the browser, and a browser-registered user
+can be driven from the CLI.
 
 ```bash
 ./scripts/emu register mira@alice          # or log in at /alice/ui — same account
@@ -256,7 +256,7 @@ log into the browser, and a browser-registered user can be driven from the CLI.
 ```
 
 `./scripts/emu` with no arguments prints the full command list. Target another
-deployment with `BARTER_BASE=http://localhost:8000`.
+deployment with `BARTER_BASE=http://localhost:8100`.
 
 `.emulated-state.json` caches handles, pubkeys and private keys locally. It is
 only a cache — `loadUser` falls back to fetching the keystore from the bank and
@@ -567,10 +567,9 @@ explicit "your session ended, log back in" state rather than a silent bounce.
 
 ### 8. The repo has no CLI
 
-`apps/cli/` was deleted; `scripts/demo-local.sh` and `scripts/demo-deploy.sh`
-still invoke it and are broken (already flagged in `README.md`, `AGENTS.md` and
-`TODOS.md`). `scripts/emulate.ts` here is a working substitute for this
-scenario, not a replacement for the removed CLI.
+`apps/cli/` was deleted, and the stale `scripts/demo-*.sh` wrappers that invoked
+it have since been removed too. `scripts/emulate.ts` here is a working
+substitute for this scenario, not a replacement for the removed CLI.
 
 ### 9. Pre-existing debris on the demo banks
 
@@ -578,7 +577,7 @@ The alice and bob registries carry leftovers from earlier e2e runs
 (`FGX-…`, `FGY-…`) plus two `PROBE-…` vouchers from diagnosing gap 2. There is
 no delete path and `list_vouchers` returns everything, so the Registry screen
 shows test junk beside the emulated users' real vouchers. Per the v1 migration
-policy the remedy is to wipe the demo banks' KV.
+policy the remedy is to wipe the demo banks' storage and re-drive the users.
 
 ### 10. Non-issue, worth knowing: content addressing changed recently
 

@@ -29,7 +29,7 @@ Open an issue with a concrete attack or counterexample.
 
 ### Reference implementation
 
-`packages/protocol/`, `apps/bank/`, `apps/web/`. Bug fixes, performance improvements, and tests are always welcome. The cross-runtime parity test is especially load-bearing — improvements to canonicalization coverage are high-value.
+`packages/protocol/`, `packages/bank-core/`, `apps/bank-aws/`, `apps/web/`. Bug fixes, performance improvements, and tests are always welcome. The cross-runtime parity test is especially load-bearing — improvements to canonicalization coverage are high-value.
 
 ### Documentation and website
 
@@ -43,7 +43,7 @@ The `TODOS.md` AI agents section is a brainstorm, not a roadmap. If you build on
 
 1. [The Ethos](/docs/ethos/) — what we believe (10 minutes)
 2. [the `protocol/` spec](https://github.com/ai-1st/barter.game/blob/main/protocol/README.md) — the invariant contract (45 minutes)
-3. [the reference implementation notes](https://github.com/ai-1st/barter.game/blob/main/apps/bank/README.md) — how we built it (30 minutes)
+3. [the reference implementation notes](https://github.com/Mitek99/barter.game/blob/main/apps/bank-aws/README.md) — how we built it (30 minutes)
 4. `packages/protocol/src/` — the code (an afternoon)
 5. `packages/bank-core/src/handlers/` and `packages/bank-core/src/advance.ts` — the server-side state machine
 6. [`TODOS.md`](https://github.com/ai-1st/barter.game/blob/main/TODOS.md) — what's next

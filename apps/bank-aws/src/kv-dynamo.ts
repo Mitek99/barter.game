@@ -46,8 +46,8 @@ import type {
  *            before the delete pass against a newer generation (ABA), which
  *            is exactly how hold exclusivity is enforced.
  *   exp (N)  epoch-seconds TTL (DynamoDB TTL attribute). DynamoDB expiry is
- *            lazy, so every read ALSO filters expired items to match Deno
- *            KV's strict expireIn semantics.
+ *            lazy, so every read ALSO filters expired items to enforce
+ *            strict expireIn semantics.
  *
  * Atomicity: single-item writes use conditional UpdateItem; multi-item
  * commits use TransactWriteItems, folding a check on a written key into the
@@ -98,7 +98,7 @@ function isLive(item: Record<string, AttributeValue>): boolean {
 }
 
 // DynamoDB would take anything up to its ~400 KB item cap, but the shared
-// contract caps values at Deno KV's 64 KiB so both deployments accept
+// KvStore contract caps values at 64 KiB so every storage backend accepts
 // exactly the same writes.
 function encodeValue(value: unknown): { v?: AttributeValue; vb?: AttributeValue } {
   assertValueSize(value);

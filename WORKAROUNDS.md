@@ -59,44 +59,32 @@ architecture for the common case without bundling a deflate library.
 
 ---
 
-## 4. Deno Deploy blocks an isolate from fetching its own URL — co-located banks dispatch in-process
-
-This is a **permanent Deno Deploy platform constraint**, not a transient bug, so
-it stays documented even though the workaround is in place.
+## 4. Co-located banks dispatch in-process
 
 The coordinator (`/ui/propose_deal`) and the advance engine reach participating
 banks over HTTP via [`packages/bank-core/src/peer.ts`](packages/bank-core/src/peer.ts) (`fetchDiscovery` /
-`bankRpcCall`). On Deno Deploy, all four banks (`alice`, `bob`, `carol`, `dave`)
-run in **one deployment**, so those become self-requests, and Deno Deploy
-hard-blocks an isolate from fetching its own deployment URL:
+`bankRpcCall`). When several banks run in one deployment, those become
+self-requests.
 
-```
-508 Loop Detected — Loop detected: the deployment is fetching itself.
-```
-
-(Confirmed empirically.) It works fine locally because localhost self-fetch is
-allowed, so it only surfaces on deployment.
+**Origin (historical):** this shortcut was built for Deno Deploy, which
+hard-blocked an isolate from fetching its own deployment URL
+(`508 Loop Detected`). The Deno host is gone — a Lambda Function URL may call
+itself, so the constraint no longer applies — but the shortcut stays: it is
+load-bearing for co-located banks, which settle in-process instead of paying
+an HTTP round-trip to themselves.
 
 **In effect:** [`packages/bank-core/src/local.ts`](packages/bank-core/src/local.ts) registers the banks
 served by this process; when a target bank's pubkey is local, `bankRpcCall`
 invokes the registry handler directly and `fetchDiscovery` answers from memory
 instead of issuing an HTTP request. Any future change to bank fan-out must keep
-this in-process path, or co-located banks will 508.
+this in-process path, or co-located banks take the slow path (and, on any
+platform that blocks self-fetch, would break outright).
 
-**Status:** the real HTTP bank-to-bank path is now **verified cross-process**: a
-bilateral swap settled between two isolated local bank processes (separate ports
-and KV stores — topologically two deployments) via `E2E_BANK_A_URL`/`E2E_BANK_B_URL`
-in [`apps/bank/e2e-crossbank.ts`](apps/bank/e2e-crossbank.ts). A repeat across two
-real Deno Deploy apps still requires creating the second app in the dashboard.
-`BANK_KV_PATH` (in [`apps/bank/main.ts`](apps/bank/main.ts)) pins the KV file so
-isolated bank processes can share one machine.
-
-It is also verified **cross-runtime**: the same suite settles a swap between a
-Deno/Deno-KV bank and a Node/DynamoDB bank
-([`apps/bank-aws`](apps/bank-aws/README.md)), each in its own single-bank
-process so the in-process shortcut cannot mask a wire bug. Note that the AWS
-host does not need this workaround — a Lambda Function URL may call itself —
-but it keeps the shortcut anyway, for latency.
+**Status:** the real HTTP bank-to-bank path is **verified cross-process**: a
+bilateral swap settles between two isolated local bank processes (separate
+ports and KV stores — topologically two deployments) via
+`E2E_BANK_A_URL`/`E2E_BANK_B_URL` in
+[`apps/bank-aws/e2e/e2e-crossbank.ts`](apps/bank-aws/e2e/e2e-crossbank.ts).
 
 ---
 
@@ -104,5 +92,3 @@ but it keeps the shortcut anyway, for latency.
 
 - Upgrade keystore encryption to Argon2id + XChaCha20-Poly1305 when a WASM build
   pipeline is added (§1).
-- Repeat the (locally proven) cross-process federation test across two real Deno
-  Deploy apps once the second app exists in the dashboard (§4).

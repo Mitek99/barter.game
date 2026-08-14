@@ -1,8 +1,9 @@
-# apps/bank-aws — AWS serverless bank host
+# apps/bank-aws — the bank host
 
-The same bank engine as [`apps/bank`](../bank/README.md)
-([`@barter.game/bank-core`](../../packages/bank-core/README.md)), hosted on
-AWS instead of Deno Deploy:
+The barter.game bank: the shared engine
+([`@barter.game/bank-core`](../../packages/bank-core/README.md)) hosted on
+AWS — Lambda + DynamoDB + S3 behind CloudFront. This is the only bank host in
+the repo; the live demo banks run on it:
 
 ```
 viewer ──> CloudFront ──┬── */ui/app/*  ──> S3 (webapp/ prefix, OAC)
@@ -12,8 +13,8 @@ viewer ──> CloudFront ──┬── */ui/app/*  ──> S3 (webapp/ prefix
                                              └── S3                     (media blobs, media/ prefix)
 ```
 
-- **One Lambda serves every configured bank** (path-scoped, exactly like the
-  Deno host), so co-located banks still settle in-process.
+- **One Lambda serves every configured bank** (path-scoped by bank name), so
+  co-located banks settle in-process.
 - **DynamoDB single-table**: logical KV key `[bankPubkey, v2, kind, ...rest]`
   → `pk` = first three parts, `sk` = the rest; conditional writes /
   `TransactWriteItems` implement the optimistic-concurrency contract;
@@ -37,10 +38,13 @@ bun install
 bun run local          # Node server on :8100, in-memory KV, KV-chunked media
 ```
 
-Point the wire-level e2e suites (pure HTTP clients) at it:
+Point the wire-level e2e suites (pure HTTP clients, run under Bun from the
+repo root) at it. Ten suites in [`e2e/`](./e2e/): `local`, `cheque-local`,
+`crossbank`, `sameswap`, `reject`, `replay`, `forged-sigs`, `account-privacy`,
+`posts`, `federation`.
 
 ```bash
-E2E_BASE_URL=http://localhost:8100 deno run --allow-net --allow-env apps/bank/e2e-crossbank.ts
+E2E_BASE_URL=http://localhost:8100 bun run apps/bank-aws/e2e/e2e-crossbank.ts
 ```
 
 Against DynamoDB Local (`docker run -p 8200:8000 amazon/dynamodb-local`):
@@ -65,22 +69,9 @@ nothing else would notice: **a versionstamp must never repeat after a key is
 deleted and recreated** (hold exclusivity is a compare-and-set against a
 value read earlier; a counter that restarts at 1 lets a stale check steal an
 account that another deal already holds), and **values above 64 KiB must be
-refused** (Deno KV's limit — DynamoDB would take far more, and a doc that
-writes on one deployment but not the other splits the federation).
-
-To prove the two hosts really are interchangeable, run one bank per runtime
-and settle between them over HTTP — single-bank processes, so the co-located
-in-process shortcut cannot hide a wire bug:
-
-```bash
-BANK_ALICE_PRIV_KEY=<key> BANK_ALICE_URL=http://localhost:8400/alice PORT=8400 \
-  deno run --allow-net --allow-env --allow-read --allow-write --unstable-kv apps/bank/main.ts &
-BANK_BOB_PRIV_KEY=<key> BANK_BOB_URL=http://localhost:8500/bob \
-  BANK_TABLE=barter-local DDB_ENDPOINT=http://localhost:8200 PORT=8500 bun run local &
-
-E2E_BANK_A_URL=http://localhost:8400/alice E2E_BANK_B_URL=http://localhost:8500/bob \
-  deno run --allow-net --allow-env apps/bank/e2e-crossbank.ts
-```
+refused** (the `KvStore` contract caps every value at 64 KiB — DynamoDB would
+take far more, and a doc that writes on one deployment but not another splits
+the federation).
 
 ## Deploy
 
@@ -133,6 +124,3 @@ aws cloudformation deploy --template-file deployer-template.yaml \
 
 Bank keys in SSM stay an admin action — the deployer has no SSM write access.
 
-The Deno Deploy deployment stays alive alongside this one; both run the same
-engine and the same e2e suites, and they federate with each other like any
-two banks.

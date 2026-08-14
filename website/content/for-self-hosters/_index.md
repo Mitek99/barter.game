@@ -4,51 +4,56 @@ title: For Self-Hosters
 
 ## Run your own bank in 10 minutes
 
-A barter.game bank is just an HTTP server that holds an ed25519 key and enforces a few invariants. The reference implementation runs on Deno Deploy using Deno KV, but you can port it to any stack that meets the protocol contract.
+A barter.game bank is just an HTTP server that holds an ed25519 key and enforces a few invariants. The reference implementation runs on AWS — Lambda + DynamoDB + S3 behind CloudFront, deployed with SAM — but you can port it to any stack that meets the protocol contract.
 
-## The Deno Deploy path (reference implementation)
+## The AWS path (reference implementation)
 
 This is the fastest way to get a live bank. It uses the same code that runs the live demo banks.
 
 ### Prerequisites
 
-- [Deno](https://deno.com) installed (for key generation and the `deno deploy` CLI)
-- A [Deno Deploy](https://deno.com/deploy) account
+- An [AWS](https://aws.amazon.com) account
+- The [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html) and the AWS CLI
+- [Bun](https://bun.sh) installed (for the build and key generation)
 
 ### Steps
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/ai-1st/barter.game.git && cd barter.game
+git clone https://github.com/Mitek99/barter.game.git && cd barter.game
+bun install
 
 # 2. Generate a bank private key
-deno run apps/bank/genkey.ts
-#    Prints two lines — BANK_ALICE_PRIV_KEY=<base58> and the matching
-#    BANK_ALICE_PUB_KEY. Keep the private key safe; the pubkey is shareable.
+bun run scripts/genkey.ts
+#    Prints BANK_PRIV_KEY=<base58> and the matching BANK_PUB_KEY.
+#    Keep the private key safe; the pubkey is shareable.
 
-# 3. Point the deploy block in deno.json at your own project
-#    "deploy": { "org": "<your-org>", "app": "<your-app>" }
+# 3. Put the bank key into SSM as a SecureString (one per bank)
+aws ssm put-parameter --type SecureString --name /barter/banks/alice --value <base58-priv-key>
 
-# 4. Set the env vars in the Deno Deploy dashboard
-#    BANK_ALICE_PRIV_KEY = <the key from step 2>
-#    Add BANK_BOB_PRIV_KEY, BANK_CAROL_PRIV_KEY, etc. to serve more banks from the same project.
+# 4. One-time per account: create the least-privilege deployer (as an admin)
+cd apps/bank-aws
+aws cloudformation deploy --template-file deployer-template.yaml \
+  --stack-name barter-deployer --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides CreateDeployerUser=true
+#    This creates the app-deployer IAM user, the AppDeployerPolicy deploy
+#    policy, and the AppDeployerBoundary permissions boundary every role it
+#    creates must wear. See apps/bank-aws/README.md for the full model.
 
-# 5. Deploy
-deno deploy
+# 5. Deploy as the app-deployer user
+AWS_PROFILE=app-deployer ./deploy.sh
+#    = bun run build + sam deploy + sync of the web client to S3 + CloudFront
+#    invalidation. First time you can also `bun run build` + `sam deploy --guided`.
 
-# 6. Verify it's live
-curl https://<your-app>.<your-org>.deno.net/alice/barter-bank.json
+# 6. Verify it's live — the stack outputs the CloudFront domain
+curl https://<distribution>.cloudfront.net/alice/barter-bank.json
 ```
 
-You now have a bank. Tell your friends about it. They open `<your-url>/<bank>/ui`, register, and you're a tiny central bank in a federation of exactly however many people you've invited.
-
-{{< callout type="info" >}}
-**Prefer deploy-on-push?** Link your fork to the app in the Deno Deploy dashboard and every push to `main` builds and ships automatically — no CI config or workflow file needed. That's how the reference banks at `barter-game-banks.ai-1st.deno.net` deploy; the `deno deploy` command above then becomes just the manual escape hatch.
-{{< /callout >}}
+You now have a bank. Tell your friends about it. They open `https://<distribution>.cloudfront.net/alice/ui`, register, and you're a tiny central bank in a federation of exactly however many people you've invited. Add more banks by storing more keys under `/barter/banks/<name>` and redeploying — one Lambda serves every configured bank.
 
 ## The "bring your own server" path
 
-Don't want Deno Deploy? No problem. You need four things:
+Don't want AWS? No problem. You need four things:
 
 ### 1. An HTTP server
 
@@ -68,7 +73,7 @@ Generate it however you like. The private key stays on the server. The pubkey is
 - **Sum-to-zero:** For any Voucher, the sum of all account balances equals zero (or the limit).
 - **One active hold per account:** No two in-flight transactions can lock the same debit account simultaneously.
 
-Deno KV with atomic check-and-set is one way. Postgres with a partial unique index is another. SQLite with application-level locking works for smaller deployments. An in-memory store with mutexes works for demos.
+DynamoDB conditional writes (the reference `KvStore` contract) are one way. Postgres with a partial unique index is another. SQLite with application-level locking works for smaller deployments. An in-memory store with mutexes works for demos.
 
 ### 4. The protocol handlers
 
@@ -79,7 +84,7 @@ Implement the methods in `protocol/bank-rpc.md`. The reference handlers in `pack
 - [ ] **Pin your bank's pubkey everywhere.** Clients should store `{pubkey, url}` and reject `barter-bank.json` responses that diverge.
 - [ ] **Backup your private key.** Lose it and every Voucher issued by your bank becomes orphaned.
 - [ ] **Rate-limit RPC endpoints.** Even cheap verification adds up.
-- [ ] **Don't expose your database directly.** The Deno Deploy process / server is the trust boundary.
+- [ ] **Don't expose your database directly.** The bank process (Lambda / server) is the trust boundary.
 - [ ] **Monitor the sum invariant.** Alert if it ever drifts.
 
 ## Federation
@@ -95,6 +100,6 @@ In v1.5 we may add a federated directory. For now, word of mouth is the discover
 ## Read more
 
 - [Protocol contract →](https://github.com/ai-1st/barter.game/blob/main/protocol/README.md)
-- [Reference bank server →](https://github.com/ai-1st/barter.game/blob/main/apps/bank/README.md)
+- [Reference bank server →](https://github.com/Mitek99/barter.game/blob/main/apps/bank-aws/README.md)
 - [Reference web client →](https://github.com/ai-1st/barter.game/blob/main/apps/web/README.md)
 - [Developer guide →](../for-developers)

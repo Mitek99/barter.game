@@ -4,7 +4,7 @@ title: For Developers
 
 ## Build your own implementation
 
-The barter.game protocol is intentionally small. You can read the full contract in an afternoon. The reference implementation is TypeScript + Deno Deploy, but **the protocol does not care what language or stack you use**.
+The barter.game protocol is intentionally small. You can read the full contract in an afternoon. The reference implementation is TypeScript on AWS (Lambda + DynamoDB + CloudFront), but **the protocol does not care what language or stack you use**.
 
 ## The invariant contract
 
@@ -25,14 +25,14 @@ Everything in that file is the contract. Change it and you are no longer speakin
 | Layer | Reference choice | Your choice |
 |---|---|---|
 | Language | TypeScript | Rust, Go, Python, Zig, whatever |
-| Runtime | Deno (Deno Deploy) | Node, Bun, Rust Axum, Go net/http, Python FastAPI |
-| Database | Deno KV | SQLite, Postgres, CockroachDB, DynamoDB, custom WAL |
+| Runtime | Node.js (AWS Lambda) | Bun, Rust Axum, Go net/http, Python FastAPI |
+| Database | DynamoDB single-table | SQLite, Postgres, CockroachDB, custom WAL |
 | Client | Web UI (browser SPA, `apps/web`) | CLI, mobile app, Telegram bot, AI agent loop |
 | Key storage | Plaintext JSON | Encrypted keystore, hardware wallet, OS keychain |
 | Inbox | 10s polling | WebSocket, SSE, push, email |
-| Hosting | Deno Deploy | VPS, Fly, Cloudflare, home server |
+| Hosting | AWS (Lambda + CloudFront) | VPS, Fly, Cloudflare, home server |
 
-See [the reference implementation notes](https://github.com/ai-1st/barter.game/blob/main/apps/bank/README.md) for how the reference team made each choice and what alternatives you might consider.
+See [the reference implementation notes](https://github.com/Mitek99/barter.game/blob/main/apps/bank-aws/README.md) for how the reference team made each choice and what alternatives you might consider.
 
 ## Quickstart checklist
 
@@ -52,7 +52,7 @@ If you're building a bank from scratch:
 
 ## The protocol library
 
-The reference `packages/protocol/` is MIT-licensed, dependency-light, and a **single source file** — `src/index.ts`. It runs under Bun, Deno, and browser. You can import it directly or treat it as the spec to port:
+The reference `packages/protocol/` is MIT-licensed, dependency-light, and a **single source file** — `src/index.ts`. It runs under Bun, Node, and browser. You can import it directly or treat it as the spec to port:
 
 | Piece (all in `src/index.ts`) | What to port |
 |---|---|
@@ -63,6 +63,6 @@ The reference `packages/protocol/` is MIT-licensed, dependency-light, and a **si
 ## Read more
 
 - [Invariant protocol contract →](https://github.com/ai-1st/barter.game/blob/main/protocol/README.md)
-- [Reference bank server →](https://github.com/ai-1st/barter.game/blob/main/apps/bank/README.md)
+- [Reference bank server →](https://github.com/Mitek99/barter.game/blob/main/apps/bank-aws/README.md)
 - [Reference web client →](https://github.com/ai-1st/barter.game/blob/main/apps/web/README.md)
 - [Source code →](https://github.com/ai-1st/barter.game/tree/main/packages/protocol)

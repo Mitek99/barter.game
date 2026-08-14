@@ -43,9 +43,9 @@ export async function sha256Base58Bytes(bytes: Uint8Array): Promise<Base58SHA256
 // --- KV-backed implementation ----------------------------------------------
 
 /**
- * Deno KV caps a single value at 64 KiB, so a blob is split across numbered
- * chunk keys with a small metadata row. Used by the Deno deployment; the AWS
- * deployment stores blobs as S3 objects instead.
+ * The KvStore contract caps a single value at 64 KiB, so a blob is split
+ * across numbered chunk keys with a small metadata row. Used by the local
+ * server; the AWS deployment stores blobs as S3 objects instead.
  */
 const MEDIA_CHUNK_BYTES = 48 * 1024;
 

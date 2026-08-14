@@ -12,7 +12,7 @@
 // Anyone else — including a user of a completely different bank — must be
 // refused.
 //
-//   deno run --allow-net --allow-env apps/bank/e2e-account-privacy.ts
+//   bun run apps/bank-aws/e2e/e2e-account-privacy.ts
 import {
   base58Encode,
   genKeyPair,
@@ -21,8 +21,8 @@ import {
   signDoc,
 } from '@barter.game/protocol';
 
-const BASE_URL = Deno.env.get('E2E_BASE_URL') ?? 'http://localhost:8000';
-const BANK_URL = Deno.env.get('E2E_BANK_URL') ?? `${BASE_URL}/alice`;
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8100';
+const BANK_URL = process.env.E2E_BANK_URL ?? `${BASE_URL}/alice`;
 
 type User = { privateKey: Uint8Array; pubkey: string };
 type BankRef = { name: string; url: string; pubkey: string };
@@ -127,4 +127,4 @@ const check = (label: string, ok: boolean, detail: string) => {
 }
 
 console.log(pass ? 'ACCOUNT PRIVACY OK ✅' : 'ACCOUNT PRIVACY FAILED ❌');
-if (!pass) Deno.exit(1);
+if (!pass) process.exit(1);

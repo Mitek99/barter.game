@@ -4,9 +4,8 @@
 //   PUB_KEY=<base58-32-bytes>
 //
 // Use to bootstrap a new bank: rename the PRIV_KEY line to
-// BANK_<NAME>_PRIV_KEY and set it as an env var (locally or in the
-// Deno Deploy dashboard). `deno run apps/bank/genkey.ts` does the
-// same under Deno and prints the env-var form directly.
+// BANK_<NAME>_PRIV_KEY and set it as an env var (locally), or store it as
+// an SSM SecureString under /barter/banks/<name> for the AWS host.
 //
 // Never commit the resulting private key.
 

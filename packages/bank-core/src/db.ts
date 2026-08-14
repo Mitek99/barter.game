@@ -589,7 +589,7 @@ export async function storeSignature(
 
 // --- media blobs ----------------------------------------------------------
 // Blob storage lives behind the MediaStore interface (media.ts) — chunked KV
-// on Deno, S3 on AWS. These wrappers keep the bank-scoped call shape the
+// locally, S3 on AWS. These wrappers keep the bank-scoped call shape the
 // handlers use.
 
 export async function hasMedia(
@@ -621,10 +621,10 @@ export async function getMedia(
 
 /**
  * ULIDs sort ascending lexicographically, but feeds are read newest-first.
- * Deno KV has no per-query reverse for `list` bounds we can seek into cheaply
- * across two prefixes, so posts are keyed by an INVERTED ULID: each Crockford
- * base32 character is mapped to its complement, turning "newest last" into
- * "newest first" under a plain ascending scan (post-feed.md §8).
+ * The KV seam has no per-query reverse for `list` bounds we can seek into
+ * cheaply across two prefixes, so posts are keyed by an INVERTED ULID: each
+ * Crockford base32 character is mapped to its complement, turning "newest
+ * last" into "newest first" under a plain ascending scan (post-feed.md §8).
  *
  * The inversion is its own inverse, so the same function decodes.
  */

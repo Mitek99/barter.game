@@ -4,7 +4,7 @@ The shared protocol-primitives library of the reference implementation: canonica
 
 > **Do not confuse this package with the spec.** The repo-root [`protocol/`](../../protocol/README.md) directory is the normative contract — [`base.md`](../../protocol/base.md) (identity, canonical JSON, `BaseDoc`, request signing), [`bank-schema.md`](../../protocol/bank-schema.md) (document schemas and ledger semantics), [`bank-rpc.md`](../../protocol/bank-rpc.md) (the RPC API). This package is TypeScript *code implementing* that contract. When the two disagree, the spec wins.
 
-The entire library is one source file, [`src/index.ts`](./src/index.ts), with **no build step**: `main`, `types`, and `exports` all point at the `.ts` source, and the `build` script is an echo no-op. Consumers import the TypeScript directly. Dependencies are pure JS and run identically under Bun, Deno, and browsers: `@noble/ed25519`, `@noble/hashes`, `@scure/base`, `ulid`.
+The entire library is one source file, [`src/index.ts`](./src/index.ts), with **no build step**: `main`, `types`, and `exports` all point at the `.ts` source, and the `build` script is an echo no-op. Consumers import the TypeScript directly. Dependencies are pure JS and run identically under Bun, Node, and browsers: `@noble/ed25519`, `@noble/hashes`, `@scure/base`, `ulid`.
 
 ## API surface
 
@@ -67,7 +67,7 @@ Protocol-level caps, enforced by the validators at every bank (not bank policy):
 | `MAX_POST_EMBED_DEPTH` = 8 | `reply_to`/`repost` nesting a validator will walk |
 | `MAX_POST_SVG_CHARS` = 8192 | Each deprecated inline `icon_svg`/`square_svg` field, in UTF-16 code units |
 
-The reference bank additionally caps the whole embedded tree of a submitted post at 64 media refs — that is intake policy in `apps/bank`, not a protocol export.
+The reference bank additionally caps the whole embedded tree of a submitted post at 64 media refs — that is intake policy in `packages/bank-core`, not a protocol export.
 
 ### Validators
 
@@ -85,19 +85,19 @@ All validators throw `ValidationError` on failure and return the narrowed type o
 
 ## How it is consumed
 
-- **`apps/bank` (Deno):** the repo-root [`deno.json`](../../deno.json) import map aliases `@barter.game/protocol` to `./packages/protocol/src/index.ts` (and the noble/scure/ulid deps to `npm:` specifiers). The bank imports the TypeScript source directly — no build or sync step.
-- **`apps/web` (browser):** does **not** import this package. It ships a hand-compiled vendored copy, [`apps/web/protocol.js`](../../apps/web/protocol.js), whose bare imports resolve through the import map in `apps/web/index.html` (esm.sh). To regenerate after changing `src/index.ts`: run `tsc -p tsconfig.web.json` (emits `apps/web/index.js` per [`tsconfig.web.json`](./tsconfig.web.json)), then manually rename the output to `protocol.js`. No script automates this — if you change the source and skip this step, the web app silently keeps the old logic.
+- **`apps/bank-aws` (Node / Bun):** the bank host imports the TypeScript source directly through the workspace (`@barter.game/protocol`) — no build or sync step, on the Lambda and in the local server alike.
+- **`apps/web` (browser):** does **not** import this package. It ships a hand-compiled vendored copy, [`apps/web/protocol.js`](../../apps/web/protocol.js), whose bare imports resolve through the import map in `apps/web/index.html` (esm.sh). To regenerate after changing `src/index.ts`: run `tsc -p tsconfig.web.json` (emits `apps/web/index.js` per [`tsconfig.web.json`](./tsconfig.web.json)), then manually rename the output to `protocol.js`. No script automates this — if you change the source and skip this step, the web app silently keeps the old logic. [`test/web-mirror.test.ts`](./test/web-mirror.test.ts) is the tripwire: it imports `apps/web/protocol.js` and asserts byte-for-byte canonicalize/hash/sign agreement with `src/index.ts`.
 
 ## Tests & the parity invariant
 
 | Command (from this directory) | What it runs |
 | --- | --- |
 | `bun test` | [`test/protocol.test.ts`](./test/protocol.test.ts) under Bun: golden canonicalization vectors, `canonicalizeWithoutSig` semantics, non-finite number rejection, ed25519 roundtrips + tamper/wrong-key/malformed-input cases, `signDoc`/`hashDoc` determinism, ULID/base58 helpers, and accept/reject cases for every validator |
-| `bun run test:deno` | [`test-deno/protocol.deno-test.ts`](./test-deno/protocol.deno-test.ts) under Deno: re-runs the **same** [`test/fixtures/canonical/vectors.json`](./test/fixtures/canonical/vectors.json) golden vectors plus the `canonicalizeWithoutSig` checks |
+| `bun test test/web-mirror.test.ts` | [`test/web-mirror.test.ts`](./test/web-mirror.test.ts) (part of the `bun test` run): imports the vendored browser copy [`apps/web/protocol.js`](../../apps/web/protocol.js) and asserts it canonicalizes, hashes, signs, and verifies identically to [`src/index.ts`](./src/index.ts) |
 
-From the repo root: `bun run test`, `bun run test:deno`, or `bun run test:all` for both. Repo-root `deno test` also picks up the Deno suite via the `test.include` list in `deno.json`.
+From the repo root: `bun run test`, or `bun run test:all` for the protocol suite plus the bank's KvStore contract suite.
 
-The Deno twin suite is not a formality — **cross-runtime canonicalization parity is the load-bearing invariant of the whole system.** Every hash and every signature is computed over canonical bytes. The bank canonicalizes under Deno, the web client under a browser engine, the tests under Bun. If any two runtimes ever disagree on a single canonical byte, hashes stop matching and signature verification fails across implementations. The golden vectors are the fence that catches this.
+**Cross-runtime canonicalization parity is the load-bearing invariant of the whole system.** Every hash and every signature is computed over canonical bytes. The bank canonicalizes under Node, the web client under a browser engine, the tests under Bun. If any two runtimes ever disagree on a single canonical byte, hashes stop matching and signature verification fails across implementations. The golden vectors in [`test/fixtures/canonical/vectors.json`](./test/fixtures/canonical/vectors.json) and the web-mirror test are the fences that catch this.
 
 ## Porting to another language
 
@@ -109,8 +109,8 @@ Treat [`src/index.ts`](./src/index.ts) as the executable reference for the canon
 
 ## Constraints for contributors
 
-- **No runtime-specific APIs** in this package: no Node `fs`/`path`/`Buffer`/`process.env`, no `Deno.*`, no DOM. `src/index.ts` must run unchanged under Bun, Deno, and browsers.
+- **No runtime-specific APIs** in this package: no Node `fs`/`path`/`Buffer`/`process.env`, no DOM. `src/index.ts` must run unchanged under Bun, Node, and browsers.
 - Dependencies must stay pure-JS and cross-runtime (the current four are; keep it that way).
-- **Any change to the canonicalizer requires new golden vectors** in `vectors.json` and a green `bun run test:all` — the Deno twin test must pass, not just the Bun suite.
+- **Any change to the canonicalizer requires new golden vectors** in `vectors.json` and a green `bun run test:all`.
 - After changing `src/index.ts`, regenerate the vendored `apps/web/protocol.js` (see above).
 - Keep it a single source file with no build step; consumers import the `.ts` directly.

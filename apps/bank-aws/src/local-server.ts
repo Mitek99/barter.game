@@ -1,7 +1,7 @@
 // Local Node host for the AWS bank build — the parity harness.
 //
 // Runs the exact code the Lambda runs (shared router + Node adapters) behind
-// a plain node:http server so the Deno e2e suites can be pointed at it with
+// a plain node:http server so the e2e suites can be pointed at it with
 // E2E_BASE_URL. Storage is selected by env:
 //
 //   BANK_TABLE + (DDB_ENDPOINT?)        -> DynamoDbKv (DynamoDB Local or real)

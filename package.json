@@ -11,8 +11,8 @@
   ],
   "scripts": {
     "test": "bun --filter './packages/protocol' test",
-    "test:deno": "cd packages/protocol && bun run test:deno",
-    "test:all": "bun run test && bun run test:deno",
+    "test:bank-aws": "bun --filter './apps/bank-aws' test",
+    "test:all": "bun run test && bun run test:bank-aws",
     "build": "bun --filter '*' build",
     "typecheck": "bun --filter '*' typecheck",
     "build:website": "cd website && hugo",

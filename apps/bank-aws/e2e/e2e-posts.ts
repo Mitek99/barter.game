@@ -7,7 +7,7 @@
 // signed by someone other than the sender, a forged embedded ancestor, and
 // media that was never uploaded.
 //
-//   deno run --allow-net --allow-env apps/bank/e2e-posts.ts
+//   bun run apps/bank-aws/e2e/e2e-posts.ts
 import {
   base58Encode,
   canonicalizeWithoutSig,
@@ -19,8 +19,8 @@ import {
   type Post,
 } from '@barter.game/protocol';
 
-const BASE_URL = Deno.env.get('E2E_BASE_URL') ?? 'http://localhost:8000';
-const BANK_URL = Deno.env.get('E2E_BANK_URL') ?? `${BASE_URL}/alice`;
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8100';
+const BANK_URL = process.env.E2E_BANK_URL ?? `${BASE_URL}/alice`;
 
 type User = { privateKey: Uint8Array; pubkey: string };
 type BankRef = { name: string; url: string; pubkey: string };
@@ -543,4 +543,4 @@ let refPost: Record<string, unknown> = {};
 }
 
 console.log(pass ? 'POST FEEDS OK ✅' : 'POST FEEDS FAILED ❌');
-if (!pass) Deno.exit(1);
+if (!pass) process.exit(1);

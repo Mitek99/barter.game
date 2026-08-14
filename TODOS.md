@@ -11,23 +11,18 @@ Deferred items. Each entry: **what / why / context / depends on**.
 - **Depends on:** Stable v1 Order semantics; a decision on rate semantics for multi-leg Orders.
 
 ### Implement the new protocol read surfaces
-- **What:** Implement in `apps/bank` what [`protocol/bank-rpc.md`](./protocol/bank-rpc.md) §2.4 now specifies: `list_voucher_records` (issuer backup export — **MUST** for compliance), `list_account_records` (holder history, restricted to the holder unless the account is public), `get_balance` (bank-signed `Balance` doc — needs the `Balance` type + validator in `packages/protocol`), `list_public_balances` + `Account.public`, and pagination on `list_vouchers`.
-- **Done already:** the `get_account_balance` privacy default is enforced — holder or the voucher's issuer only (covered by `apps/bank/e2e-account-privacy.ts`), which closed the docs/REVIEW.md S10 disclosure gap — and `list_vouchers` honors an explicit `issuer` param and `filter:'mine'`.
+- **What:** Implement in the reference bank (`packages/bank-core`) what [`protocol/bank-rpc.md`](./protocol/bank-rpc.md) §2.4 now specifies: `list_voucher_records` (issuer backup export — **MUST** for compliance), `list_account_records` (holder history, restricted to the holder unless the account is public), `get_balance` (bank-signed `Balance` doc — needs the `Balance` type + validator in `packages/protocol`), `list_public_balances` + `Account.public`, and pagination on `list_vouchers`.
+- **Done already:** the `get_account_balance` privacy default is enforced — holder or the voucher's issuer only (covered by `apps/bank-aws/e2e/e2e-account-privacy.ts`), which closed the docs/REVIEW.md S10 disclosure gap — and `list_vouchers` honors an explicit `issuer` param and `filter:'mine'`.
 - **Why:** The spec now leads the implementation. Issuer backup/re-issue (ETHOS §7) and public-holdings discovery ([`protocol/discovery.md`](./protocol/discovery.md) §6) hang off these surfaces.
 - **Context:** `protocol/bank-schema.md` §1.2 (`public` flag) and §1.8 (`Balance`); pagination convention in `bank-rpc.md` §2.4.
 - **Depends on:** Nothing — additive.
 
 ### ~~Implement voucher post feeds~~ — DONE
 - **What:** `Post` doc type + validator in `packages/protocol`; `submit_docs` routing with a bank acceptance-policy hook (spam filter / allowlist / rate limit); `list_posts` + `get_post`; a feed screen in the web UI.
-- **Status:** shipped. `Post` + `validatePost`/`verifyPostTree` in the protocol lib, `submit_docs` acceptance, `list_posts`/`get_post`/`get_post_signatures`, media blobs at `/media`, and a `#/posts` feed with reply/repost in the SPA. Covered by `apps/bank/e2e-posts.ts`. A bank acceptance-policy hook beyond validity is still bank-specific and not implemented here.
+- **Status:** shipped. `Post` + `validatePost`/`verifyPostTree` in the protocol lib, `submit_docs` acceptance, `list_posts`/`get_post`/`get_post_signatures`, media blobs at `/media`, and a `#/posts` feed with reply/repost in the SPA. Covered by `apps/bank-aws/e2e/e2e-posts.ts`. A bank acceptance-policy hook beyond validity is still bank-specific and not implemented here.
 - **Why:** Feeds are the social layer of discovery — issuer announcements, recommendations, testimonials ([`protocol/post-feed.md`](./protocol/post-feed.md)).
 - **Context:** docs/REVIEW.md Part IV ("per-voucher blogs") is the original design sketch.
 - **Depends on:** Nothing — additive.
-
-### Rebuild the demo scripts
-- **What:** `scripts/demo-local.sh` and `scripts/demo-deploy.sh` still invoke the removed CLI (`apps/cli/src/index.ts`) and are broken. A working command-line client has since shipped — [`scripts/emulate.ts`](./scripts/emulate.ts) (documented in [`EMULATED.md`](./EMULATED.md)) speaks the same signed RPC + `/ui` surface as the SPA, with web-compatible keystores — so rebuild the demo scripts as thin wrappers over it (or delete them) rather than reconstructing a CLI from the `apps/bank/e2e-*.ts` scripts. `scripts/genkey-deno.ts` imports a nonexistent module (`apps/bank/protocol.ts`) — fix or remove (`apps/bank/genkey.ts` is the working keygen).
-- **Why:** A README that points at broken scripts costs trust; right now the README routes around them.
-- **Depends on:** Nothing.
 
 ### Deal searcher (linear-programming reference implementation)
 - **What:** A tool that scans public Offers across a number of banks, combines them with the private Orders the user knows about and recent deal-readiness history, and performs an exhaustive search for closable deals — including deals where the user acts as lead holder of vouchers they don't particularly trust. Offers translate into linear expressions; an LP solver finds the profitable compositions.
@@ -75,9 +70,9 @@ Deferred items. Each entry: **what / why / context / depends on**.
 - **Depends on:** Key rotation (above). Without rotation, recovery would break the cryptographic identity model.
 
 ### Per-bank deployment isolation
-- **What:** Migrate from "one Deno Deploy app hosts N banks in one process/KV" to "each bank in its own deployment."
+- **What:** Migrate from "one deployment hosts N banks sharing one storage table" to "each bank in its own deployment."
 - **Why:** Multi-tenancy collapses operational independence — one outage takes down all co-located banks. True federation wants process and storage isolation.
-- **Context:** The protocol already supports it (banks are URLs + keys). Note the Deno Deploy self-fetch constraint (WORKAROUNDS.md §4): co-located banks must dispatch in-process; separated banks talk plain HTTP.
+- **Context:** The protocol already supports it (banks are URLs + keys). Co-located banks settle via the in-process dispatch shortcut (WORKAROUNDS.md §4); separated banks talk plain HTTP.
 - **Depends on:** Stable protocol so the migration doesn't reintroduce bugs.
 
 ### Browser key UX deep tune
@@ -99,7 +94,7 @@ Deferred items. Each entry: **what / why / context / depends on**.
 
 ### Multi-party deals (Order/Mandate model)
 - **What:** A single deal can involve any number of banks and holders, composed from holders' Orders (two-sided or one-sided cheque/invoice specializations). The coordinator creates record pairs at each bank (`create_records`) and clears each Order with a Mandate (`submit_mandate`); banks self-advance `created → approved → held → settled` in lead/follow order, fanning signatures to each other directly.
-- **Status:** Shipped — see `scenarios/merge-branch.md` (3-bank merge/branch), `scenarios/coordinator-arbitrage.md` (spread-taking coordinator), and the `apps/bank/e2e-*.ts` settlement checks (crossbank, reject cascade, settle-replay resistance).
+- **Status:** Shipped — see `scenarios/merge-branch.md` (3-bank merge/branch), `scenarios/coordinator-arbitrage.md` (spread-taking coordinator), and the `apps/bank-aws/e2e/e2e-*.ts` settlement checks (crossbank, reject cascade, settle-replay resistance).
 
 ## v2+ — bigger swings
 

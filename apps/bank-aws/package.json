@@ -20,6 +20,7 @@
     "@barter.game/protocol": "workspace:*"
   },
   "devDependencies": {
+    "@noble/hashes": "^2.2.0",
     "@types/node": "^22",
     "esbuild": "^0.24.0",
     "tsx": "^4.19.0",

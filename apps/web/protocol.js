@@ -1,5 +1,5 @@
 // Protocol primitives and document validators for barter.game v1.
-// Runs under Deno Deploy; uses only pure-JS noble + scure libs.
+// Runs under Bun, Node, and the browser; uses only pure-JS noble + scure libs.
 import * as ed from '@noble/ed25519';
 import { sha256 as sha256hash, sha512 } from '@noble/hashes/sha2.js';
 import { base58 } from '@scure/base';

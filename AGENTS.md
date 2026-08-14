@@ -9,10 +9,9 @@ barter.game is a **federated mutual-credit ledger**. Every user and every bank i
 This repo contains:
 
 - The **protocol spec** (`protocol/`) — the invariant contract every implementation must follow: overview, base types, document schemas, bank RPC, discovery, and post feeds.
-- The **protocol library** (`packages/protocol/`) — canonical JSON, crypto, doc types, validators. Runs identically under Bun, Deno, and browser.
-- The **bank engine** (`packages/bank-core/`) — the whole bank (routing, RPC, advance engine, storage layer), written against web-standard APIs only. Hosts inject storage.
-- The **Deno bank host** (`apps/bank/`) — Deno process serving one or more federated banks from Deno KV, plus the e2e suites.
-- The **AWS bank host** (`apps/bank-aws/`) — the same engine on Lambda + DynamoDB + S3 behind CloudFront, deployed with SAM.
+- The **protocol library** (`packages/protocol/`) — canonical JSON, crypto, doc types, validators. Runs identically under Bun, Node.js, and browser.
+- The **bank engine** (`packages/bank-core/`) — the whole bank (routing, RPC, advance engine, storage layer), written against web-standard APIs only. The host injects storage.
+- The **AWS bank host** (`apps/bank-aws/`) — the only bank host: the engine on Node.js Lambda + DynamoDB + S3 behind CloudFront, deployed with SAM, plus a local Node dev server and the ten e2e suites.
 - The **web UI** (`apps/web/`) — build-less browser SPA the bank serves at `/:bank/ui`.
 - The **scenarios** (`scenarios/`) — step-by-step protocol interaction traces.
 - The **website** (`website/`) — Hugo/Hextra static site.
@@ -22,13 +21,13 @@ This repo contains:
 | Layer | Technology | Notes |
 |---|---|---|
 | Package manager | Bun | `bun.lock` is the lockfile. Use `bun install`, not `npm install`. |
-| Server runtime | Deno, or Node.js on AWS Lambda | Deno Deploy in production — **auto-deploys on push to `main`** via the GitHub integration; `deploy` block in `deno.json`. The AWS host is deployed on demand with SAM (`apps/bank-aws`). Both are stateless and run the same `packages/bank-core` engine. |
-| Protocol lib | TypeScript (ES modules) | Single source file `packages/protocol/src/index.ts`. Must run identically under Bun, Deno, and browser. |
-| Database | Deno KV, or DynamoDB single-table | Behind the `KvStore` seam (`packages/bank-core/src/kv.ts`). Every key is prefixed `[bank_pubkey, schema, kind, ...]`; atomic check-and-set operations. Values are capped at 64 KiB on every implementation so both deployments accept the same writes. |
+| Server runtime | Node.js on AWS Lambda | Deployed on demand with SAM (`apps/bank-aws`) — there is no auto-deploy on push. The host is stateless and runs the `packages/bank-core` engine. Locally, the same host runs as a plain Node server (`bun run local`). |
+| Protocol lib | TypeScript (ES modules) | Single source file `packages/protocol/src/index.ts`. Must run identically under Bun, Node.js, and browser. |
+| Database | DynamoDB single-table | Behind the `KvStore` seam (`packages/bank-core/src/kv.ts`). Every key is prefixed `[bank_pubkey, schema, kind, ...]`; atomic check-and-set operations. Values are capped at 64 KiB on every storage backend — the federation-compat rule so any bank accepts the same writes (the cap originated as Deno KV's limit). |
 | Crypto | `@noble/ed25519`, `@noble/hashes`, `@scure/base` | Pure-JS, auditable, runs in all targets. |
 | Website | Hugo + Hextra theme | Built with `hugo`; deployed via Netlify. |
 | Key storage (user) | Browser-encrypted keystore on the bank | PBKDF2-SHA256 (250k iterations) + AES-256-GCM, encrypted client-side; the bank stores ciphertext only. See `apps/web/README.md`. |
-| Key storage (bank) | Env vars (`BANK_<NAME>_PRIV_KEY`) | One or more bank keys per process. |
+| Key storage (bank) | Env vars (`BANK_<NAME>_PRIV_KEY`) locally; SSM SecureStrings under `/barter/banks/<name>` on AWS | One or more bank keys per process. |
 
 ## Monorepo structure
 
@@ -36,7 +35,6 @@ This repo contains:
 barter.game/
 ├── package.json              # Root workspace manifest (workspaces: packages/*, apps/web, apps/bank-aws)
 ├── tsconfig.json             # Shared TypeScript config (strict, ES2022, bundler resolution)
-├── deno.json                 # Deno config: import map, test includes, Deno Deploy app
 ├── bun.lock                  # Bun lockfile
 ├── README.md TODOS.md WORKAROUNDS.md EMULATED.md
 ├── protocol/                 # THE CONTRACT — invariant protocol spec
@@ -49,8 +47,8 @@ barter.game/
 ├── packages/
 │   ├── protocol/             # @barter.game/protocol — shared protocol library (see its README.md)
 │   │   ├── src/index.ts      #   canonical JSON (JCS), ed25519 signing, doc types, validators
-│   │   ├── test/             #   bun tests + golden canonical vectors
-│   │   └── test-deno/        #   cross-runtime parity tests
+│   │   └── test/             #   bun tests + golden canonical vectors + web-mirror parity
+│   │                         #   (web-mirror.test.ts guards apps/web/protocol.js against src/index.ts)
 │   └── bank-core/            # @barter.game/bank-core — the bank engine, host-agnostic (see its README.md)
 │       └── src/
 │           ├── router.ts     #   HTTP routing: RPC + UI API + SPA + Barter Links + media vault (/:bank/media)
@@ -65,17 +63,16 @@ barter.game/
 │                             #   list_offers, get_offer, get_invoice, get_cheque, get_address, get_account_balance,
 │                             #   list_posts, get_post, get_post_signatures, get_voucher_meta)
 ├── apps/
-│   ├── bank/                 # Deno host: Deno KV + on-disk assets (see its README.md)
-│   │   ├── main.ts           #   wires storage into the engine, Deno.serve
-│   │   ├── genkey.ts         #   bank keypair generator
-│   │   └── e2e-*.ts          #   nine end-to-end checks (local, cheque-local, crossbank, sameswap, reject,
-│   │                         #   replay, forged-sigs, account-privacy, posts) — pure HTTP clients,
-│   │                         #   they run against EITHER host via E2E_BASE_URL
-│   ├── bank-aws/             # AWS host: Lambda + DynamoDB + S3 + CloudFront (see its README.md)
+│   ├── bank-aws/             # AWS host — the only bank host: Lambda + DynamoDB + S3 + CloudFront
+│   │                         #   (see its README.md)
 │   │   ├── src/              #   kv-dynamo.ts, media-s3.ts, adapter.ts (Function URL), local-server.ts
+│   │   ├── e2e/              #   ten end-to-end suites (local, cheque-local, crossbank, sameswap, reject,
+│   │   │                     #   replay, forged-sigs, account-privacy, posts, federation) — pure HTTP
+│   │   │                     #   clients, runnable against any host via E2E_BASE_URL
 │   │   ├── template.yaml     #   SAM stack (deploys as the app-deployer IAM user)
 │   │   ├── deployer-template.yaml # the app-deployer user's IAM: least-privilege deploy
 │   │   │                      #   policy + permissions boundary it must set on every role it creates
+│   │   ├── deploy.sh         #   build + sam deploy + web client sync + CloudFront invalidation
 │   │   └── test/             #   KvStore contract suite (MemoryKv + DynamoDB Local)
 │   └── web/                  # Browser SPA served by the bank (see its README.md)
 │       ├── index.html app.js protocol.js qr.js styles.css vendor/
@@ -84,7 +81,7 @@ barter.game/
 │                             #   the manifest is generated per bank by ui.ts
 ├── scenarios/                # Step-by-step interaction traces (cheque, invoice, swaps, builder event)
 ├── scripts/                  # emulate.ts + emu (emulated-user CLI, see EMULATED.md), genkey.ts (bun),
-│                             #   genkey-deno.ts, emulated-svg/ — NOTE: demo-*.sh are stale (invoke the removed CLI)
+│                             #   emulated-svg/
 ├── docs/                     # Design notes, reviews, UI specs, legacy material
 └── website/                  # Hugo site (Hextra theme)
 ```
@@ -106,20 +103,17 @@ bun run test:all
 
 | Command | Runtime | What it tests |
 |---|---|---|
-| `bun run test` | Bun | Protocol library: canonical JSON golden vectors, crypto, all doc validators |
-| `bun run test:deno` | Deno | The SAME golden vectors under Deno (**cross-runtime parity**) |
-| `deno test` | Deno | Parity vectors + bank tests per `deno.json` `test.include` |
-| `cd apps/bank-aws && bun run test` | Node | `KvStore` contract suite — MemoryKv always, plus DynamoDB Local when `DDB_ENDPOINT` is set. This is what keeps a storage backend from quietly breaking hold exclusivity or the 64 KiB value cap. |
-| `deno run --allow-net --allow-env --allow-read --allow-write --unstable-kv apps/bank/e2e-<name>.ts` | Deno | Nine end-to-end suites: `local` (single-bank lifecycle), `cheque-local` (single-bank cheque settlement), `crossbank` (bilateral swap, lead/follow cascade), `sameswap` (same-bank two-voucher swap minting two record pairs), `reject` (uncoverable debit rejects the deal), `replay` (settle-replay resistance), `forged-sigs` (peer signature-authority checks), `account-privacy` (balance-read authorization), `posts` (posts/feeds/follows, bank auto-repost, media vault) |
+| `bun run test` | Bun | Protocol library: canonical JSON golden vectors, crypto, all doc validators, plus the web-mirror parity test |
+| `bun run test:bank-aws` | Node (via tsx) | `KvStore` contract suite — MemoryKv always, plus DynamoDB Local when `DDB_ENDPOINT` is set. This is what keeps a storage backend from quietly breaking hold exclusivity or the 64 KiB value cap. |
+| `E2E_BASE_URL=http://localhost:8100 bun run apps/bank-aws/e2e/e2e-<name>.ts` | Bun | Ten end-to-end suites: `local` (single-bank lifecycle), `cheque-local` (single-bank cheque settlement), `crossbank` (bilateral swap, lead/follow cascade), `sameswap` (same-bank two-voucher swap minting two record pairs), `reject` (uncoverable debit rejects the deal), `replay` (settle-replay resistance), `forged-sigs` (peer signature-authority checks), `account-privacy` (balance-read authorization), `posts` (posts/feeds/follows, bank auto-repost, media vault), `federation` (multi-host wiring) |
 
-The **cross-runtime parity suite is load-bearing**. If Bun and Deno disagree on a canonical hash, every signature in the protocol becomes unverifiable across implementations. Run it before every release.
+The **web-mirror parity test is load-bearing**. `packages/protocol/test/web-mirror.test.ts` guards the vendored browser copy `apps/web/protocol.js` against `packages/protocol/src/index.ts` — if the two diverge on a canonical hash, browser-signed docs stop verifying at the bank. Run it before every release (it runs as part of `bun run test`).
 
 The e2e suites are wire-protocol HTTP clients with no import from the bank, so
-point `E2E_BASE_URL` at whichever host you changed — the Deno server, or
-`apps/bank-aws`'s local Node server. A change to `packages/bank-core` should be
-run against both, since both deployments ship it.
+point `E2E_BASE_URL` at whatever you are testing — the local Node server
+(`bun run local` in `apps/bank-aws`) or the deployed AWS banks.
 
-> `scripts/demo-local.sh` and `scripts/demo-deploy.sh` are currently **broken** — they invoke the removed CLI (`apps/cli/`). Rebuilding them is tracked in `TODOS.md`. Do not cite them as working. The working command-line client is `scripts/emu` (`scripts/emulate.ts`) — see `EMULATED.md`.
+The working command-line client is `scripts/emu` (`scripts/emulate.ts`), run under Bun — see `EMULATED.md`.
 
 ### Website
 
@@ -137,11 +131,11 @@ cd website && hugo mod get && hugo --gc --minify
   - Single quotes for strings unless interpolating.
   - Explicit return types on exported functions.
   - JSDoc-style block comments for load-bearing invariants.
-- **Runtime parity**: Any code in `packages/protocol/` must run under Bun, Deno, and browser. Avoid:
+- **Runtime parity**: Any code in `packages/protocol/` must run under Bun, Node.js, and browser. Avoid:
   - Node-only APIs (`fs`, `path`, `crypto` module).
   - `Buffer` — use `Uint8Array`.
   - `process.env` — use runtime-specific injection outside the protocol package.
-- **Canonical JSON**: The hand-rolled canonicalizer in `packages/protocol/src/index.ts` is the single source of truth. Do not swap it for an npm package. Any change to it must be accompanied by new golden vectors and a passing Deno test.
+- **Canonical JSON**: The hand-rolled canonicalizer in `packages/protocol/src/index.ts` is the single source of truth. Do not swap it for an npm package. Any change to it must be accompanied by new golden vectors and a passing web-mirror parity test (`packages/protocol/test/web-mirror.test.ts`).
 - **Terminology**: the deal-assembling role is the **coordinator** (never "matchmaker"); the party creating a voucher is the **issuer** (never "emitter").
 
 ## Testing instructions
@@ -149,7 +143,7 @@ cd website && hugo mod get && hugo --gc --minify
 ### Adding a test to the protocol package
 
 1. Add a Bun test in `packages/protocol/test/<name>.test.ts` using `bun:test`.
-2. If the test covers canonical JSON, crypto, or anything runtime-sensitive, add an equivalent Deno test in `packages/protocol/test-deno/<name>.deno-test.ts` using `Deno.test`.
+2. If the change touches canonical JSON or signing, confirm `web-mirror.test.ts` still passes — and regenerate `apps/web/protocol.js` if `src/index.ts` changed (see "Syncing protocol changes" below).
 3. Keep golden vectors in `packages/protocol/test/fixtures/` as JSON.
 4. Run `bun run test:all` before committing.
 
@@ -161,9 +155,10 @@ cd website && hugo mod get && hugo --gc --minify
    - Rely on `rpc.ts` for envelope signature verification and replay claim.
    - Scope every KV operation to this bank's pubkey.
    - Use only web-standard APIs and the injected stores (`bank.kv`, `bank.media`,
-     `bank.assets`) — no `Deno.*`, no `node:*`. The engine has to run on both hosts.
+     `bank.assets`) — no `node:*`. The engine stays host-agnostic: the host
+     injects the stores, and `apps/bank-aws` is currently the one host.
    - Return typed JSON-RPC responses.
-4. Add a Deno test (`apps/bank/*.test.ts` / `*.deno-test.ts`) or extend an e2e script if the handler changes the state machine.
+4. Extend an e2e suite (`apps/bank-aws/e2e/e2e-*.ts`) if the handler changes the state machine.
 
 ## Security considerations
 
@@ -186,35 +181,41 @@ cd website && hugo mod get && hugo --gc --minify
 | `scenarios/*.md` | Step-by-step user/coordinator/bank interaction traces, including the builder-event journey | Implementing or debugging specific flows |
 | `README.md` | Project intro, live demo, quickstarts, repo navigation | New to the repo |
 | [`website/content/docs/ethos.md`](./website/content/docs/ethos.md) | Design beliefs and priors (published at https://barter.game/docs/ethos/) | Changing protocol semantics |
-| `apps/bank/README.md` | Bank server: routes, KV key-space, config, deploy | Modifying server code |
+| `apps/bank-aws/README.md` | Bank host: routes, KV key-space, config, deploy | Modifying server code |
 | `apps/web/README.md` | Web SPA: screens, keystore model, transports | Modifying the web UI |
 | `packages/protocol/README.md` | Library API, parity tests, porting guide | Touching protocol primitives |
 | `EMULATED.md` | Emulated-user playbook: driving the deployed demo banks / reproducing demo state with `scripts/emu` (`scripts/emulate.ts`) | Scripting flows against live or local banks from the command line |
-| `WORKAROUNDS.md` | In-effect implementation compromises (keystore KDF, in-process peer dispatch on Deno Deploy, ...) | Changing fan-out, auth, or deploy behavior |
+| `WORKAROUNDS.md` | In-effect implementation compromises (keystore KDF, in-process peer dispatch for co-located banks, ...) | Changing fan-out, auth, or deploy behavior |
 | `TODOS.md` | Roadmap and deferred work | Planning new features |
 
 ## Deployment notes
 
-### Deno Deploy
+### AWS (the only bank deployment)
 
-**Pushes to `main` deploy automatically.** Deno Deploy's GitHub integration builds this repo on push — there is no GitHub Actions workflow, and none is needed. The absence of `.github/workflows/` does *not* mean deployment is manual; the integration lives in the Deno Deploy dashboard, not in the repo. The `deploy` block in `deno.json` pins the target (org `ai-1st`, app `barter-game-banks`).
+Deploys are **manual** — nothing ships on push to `main`. From `apps/bank-aws/`:
 
-Treat a merge to `main` as a production release of the bank. `deno deploy --prod` from the repo root is the manual escape hatch for out-of-band deploys. Set `BANK_<NAME>_PRIV_KEY` env vars in the Deno Deploy dashboard for each bank the process serves.
+```bash
+AWS_PROFILE=app-deployer ./deploy.sh   # build + sam deploy + web client sync + CloudFront invalidation
+```
+
+The `app-deployer` IAM user and its least-privilege policy + permissions boundary are defined in `apps/bank-aws/deployer-template.yaml` — see the "Deploying as app-deployer" section of `apps/bank-aws/README.md`. On AWS, bank keys live in SSM SecureString parameters under `/barter/banks/<name>`.
+
+The live demo banks are `https://d170kplla02ejw.cloudfront.net/alice/ui` and `https://d170kplla02ejw.cloudfront.net/bob/ui`.
 
 ### Running a bank locally
 
 ```bash
 # 1. Generate a keypair
-deno run apps/bank/genkey.ts          # prints BANK_ALICE_PRIV_KEY=<base58>
-# 2. Run (see .claude/launch.json for the known-good invocation)
-BANK_ALICE_PRIV_KEY=<base58> \
-deno run --allow-net --allow-env --allow-read --allow-write --unstable-kv apps/bank/main.ts
-# 3. Web UI at http://localhost:8000/alice/ui
+bun run scripts/genkey.ts           # prints BANK_PRIV_KEY= / BANK_PUB_KEY=
+# 2. Run the local Node server (in-memory KV, KV-chunked media, port 8100)
+cd apps/bank-aws && bun install
+BANK_ALICE_PRIV_KEY=<base58> bun run local
+# 3. Web UI at http://localhost:8100/alice/ui
 ```
 
 ### Syncing protocol changes
 
-`apps/bank/` imports `@barter.game/protocol` via the `deno.json` import map — no sync step. `apps/web/protocol.js` is a **vendored compiled copy** of the library and must be regenerated manually when `packages/protocol/src/index.ts` changes: run `npx tsc -p tsconfig.web.json` from `packages/protocol/` (it emits `apps/web/index.js`), then rename `apps/web/index.js` to `protocol.js` and review the diff (see `apps/web/README.md`).
+`apps/web/protocol.js` is a **vendored compiled copy** of the library and must be regenerated manually when `packages/protocol/src/index.ts` changes: run `npx tsc -p tsconfig.web.json` from `packages/protocol/` (it emits `apps/web/index.js`), then rename `apps/web/index.js` to `protocol.js` and review the diff (see `apps/web/README.md`). `packages/protocol/test/web-mirror.test.ts` fails if the vendored copy drifts from the source.
 
 ### Website
 
@@ -224,7 +225,7 @@ The Hugo site deploys via Netlify (`bun run deploy:website`, or automatically pe
 
 - **Doc signing model**: see Security considerations above. Account docs ARE holder-signed; Records are bank-minted and carry no holder signature.
 - **Content-addressed docs**: every doc except Records is canonicalized, SHA-256-hashed, and addressed by its base58 hash. References between docs use hashes, not surrogate IDs. Records and their `pair`/`deal_id` grouping use bank-minted ULIDs.
-- **Bank scoping**: every KV key is prefixed with the bank pubkey so one Deno KV database can serve multiple banks. Every query must include the prefix. Missing it is a bug.
+- **Bank scoping**: every KV key is prefixed with the bank pubkey so one storage table can serve multiple banks. Every query must include the prefix. Missing it is a bug.
 - **Base58 everywhere**: hashes, pubkeys, and signatures travel as base58 strings.
 - **Banks self-advance**: clients submit docs (`submit_docs`); the coordinator creates records (`create_records`) and clears them (`submit_mandate`); from there each bank advances its own records `created → approved → held → settled` event-driven — re-evaluating on every `submit_docs`/`submit_mandate`/`notify_signatures`, with no cron. Signatures travel bank-to-bank directly (Address registry), with `get_record_signatures` + `notify_signatures` as the manual relay floor. `reject` is bank-issued only and cascades per deal.
 - **Visibility boundary**: no bank sees another bank's records. A bank sees only records of the vouchers it issues, the Orders and Mandates that touch them, and deal-level signatures from its peers.

@@ -1,4 +1,4 @@
-// Same-bank bilateral swap against a running deployment (local or Deno Deploy).
+// Same-bank bilateral swap against a running deployment (local or AWS).
 //
 // Two traders of the SAME bank swap two vouchers that the SAME bank issues:
 // T1 issues VX, T2 issues VY, both at bank alice, and they trade 10 VX for
@@ -11,7 +11,7 @@
 // only one pair, leaving the counterparty Order's legs unmandated — which the
 // advance engine reads as the permanent missing-leg case and rejects the deal.
 //
-//   deno run --allow-net --allow-env apps/bank/e2e-sameswap.ts
+//   bun run apps/bank-aws/e2e/e2e-sameswap.ts
 import {
   base58Encode,
   canonicalizeWithoutSig,
@@ -21,8 +21,8 @@ import {
   signDoc,
 } from '@barter.game/protocol';
 
-const BASE_URL = Deno.env.get('E2E_BASE_URL') ?? 'http://localhost:8000';
-const BANK_URL = Deno.env.get('E2E_BANK_URL') ?? `${BASE_URL}/alice`;
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8100';
+const BANK_URL = process.env.E2E_BANK_URL ?? `${BASE_URL}/alice`;
 
 type User = { privateKey: Uint8Array; pubkey: string };
 type BankRef = { name: string; url: string; pubkey: string };
@@ -168,4 +168,4 @@ const ok = state === 'settled' &&
   t1vxBal.current === -10 && t2vxBal.current === 10 &&
   t2vyBal.current === -10 && t1vyBal.current === 10;
 console.log(ok ? 'PASS same-bank swap settled' : 'FAIL same-bank swap');
-if (!ok) Deno.exit(1);
+if (!ok) process.exit(1);

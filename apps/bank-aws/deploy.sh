@@ -8,7 +8,7 @@
 #   - AWS credentials for the target account (AWS_PROFILE or env)
 #   - bank keys in SSM, one SecureString per bank:
 #       aws ssm put-parameter --type SecureString --name /barter/banks/alice \
-#         --value "$(deno run ../bank/genkey.ts | grep PRIV | cut -d= -f2)"
+#         --value "$(bun run ../../scripts/genkey.ts | grep PRIV | cut -d= -f2)"
 #   - stack/region settings live in samconfig.toml
 set -euo pipefail
 cd "$(dirname "$0")"

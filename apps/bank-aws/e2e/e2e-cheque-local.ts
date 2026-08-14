@@ -4,7 +4,7 @@
 // a foreign follow leg here: with no foreign records the bank owns every leg
 // and settles directly. Regression guard for the "stuck at held" bug.
 //
-//   deno run --allow-net --allow-env apps/bank/e2e-cheque-local.ts
+//   bun run apps/bank-aws/e2e/e2e-cheque-local.ts
 import {
   base58Encode,
   canonicalizeWithoutSig,
@@ -14,8 +14,8 @@ import {
   signDoc,
 } from '@barter.game/protocol';
 
-const BANK_NAME = Deno.env.get('E2E_BANK') ?? 'alice';
-const BASE_URL = Deno.env.get('E2E_BASE_URL') ?? 'http://localhost:8000';
+const BANK_NAME = process.env.E2E_BANK ?? 'alice';
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8100';
 const BANK_URL = `${BASE_URL}/${BANK_NAME}`;
 
 const info = await fetch(`${BANK_URL}/barter-bank.json`).then((r) => r.json());
@@ -127,4 +127,4 @@ console.log('issuer', issBal, '| claimant', claimBal);
 
 const ok = state === 'settled' && issBal.current === -10 && claimBal.current === 10;
 console.log(ok ? 'SINGLE-BANK CHEQUE OK ✅' : `SINGLE-BANK CHEQUE FAILED ❌ (state=${state})`);
-if (!ok) Deno.exit(1);
+if (!ok) process.exit(1);

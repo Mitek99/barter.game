@@ -21,7 +21,7 @@ This is the most dangerous piece to get wrong. If your canonicalizer produces di
 
 **Golden rule:** Sort object keys by Unicode code-unit order. Serialize numbers via ECMAScript `ToString(Number)`. Escape `"`, `\`, and control characters. Drop `undefined` keys.
 
-**Test:** Canonicalize the same document under your runtime and under Bun/Deno. Assert the hashes match. The reference repo has golden vectors you can copy.
+**Test:** Canonicalize the same document under your runtime and under Bun/Node. Assert the hashes match. The reference repo has golden vectors you can copy.
 
 ## 3. Set up your key model
 
@@ -161,8 +161,7 @@ Test against the reference banks (the browser SPA each bank serves at `/:bank/ui
 | Concern | Path in reference repo |
 |---|---|
 | Canonical JSON, crypto, doc types + validators | `packages/protocol/src/index.ts` (single file) |
-| Deno host (wires storage into the shared engine) | `apps/bank/main.ts` |
-| AWS Lambda host (DynamoDB + S3) | `apps/bank-aws/src/index.ts` |
+| Bank host (wires storage into the shared engine): Lambda adapter + local Node server | `apps/bank-aws/src/index.ts`, `local-server.ts` |
 | Storage seam (`KvStore` / `MediaStore`) | `packages/bank-core/src/kv.ts`, `media.ts` |
 | Env var key loader | `packages/bank-core/src/env.ts` |
 | RPC envelope handler | `packages/bank-core/src/rpc.ts` |

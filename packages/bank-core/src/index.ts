@@ -1,6 +1,6 @@
-// Runtime-agnostic bank engine, shared by the Deno Deploy deployment
-// (apps/bank) and the AWS Lambda deployment (apps/bank-aws). Hosts wire in a
-// KvStore, a MediaStore, and an AssetReader, then forward Requests to route().
+// Runtime-agnostic bank engine, hosted by the AWS deployment
+// (apps/bank-aws). The host wires in a KvStore, a MediaStore, and an
+// AssetReader, then forwards Requests to route().
 export { route, ensureBankAddress } from './router.ts';
 export { loadBankKeys, createBank, type LoadedBank, type BankDeps } from './env.ts';
 export { registerLocalBank, getLocalBank } from './local.ts';

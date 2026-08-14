@@ -1,13 +1,12 @@
-// Cross-bank bilateral swap against a running deployment (local or Deno Deploy).
+// Cross-bank bilateral swap against a running deployment (local or AWS).
 //
 // Two banks served by the SAME process (alice, bob). Trader T1 issues voucher
 // VX at bank alice; trader T2 issues voucher VY at bank bob. They swap 10 VX
 // for 10 VY. This exercises the coordinator creating records on two banks, the
 // per-bank Confirm, and the lead/follow advance cascade — all of which, when
-// the banks are co-located, must dispatch in-process (Deno Deploy blocks an
-// isolate from fetching its own URL).
+// the banks are co-located, dispatch in-process (no self-fetch round-trip).
 //
-//   deno run --allow-net --allow-env apps/bank/e2e-crossbank.ts
+//   bun run apps/bank-aws/e2e/e2e-crossbank.ts
 import {
   genKeyPair,
   hashDoc,
@@ -17,11 +16,11 @@ import {
   base58Encode,
 } from '@barter.game/protocol';
 
-const BASE_URL = Deno.env.get('E2E_BASE_URL') ?? 'http://localhost:8000';
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8100';
 // Federation mode: point the two banks at DIFFERENT deployments to exercise
 // the real HTTP bank-to-bank path (defaults keep the same-deployment test).
-const BANK_A_URL = Deno.env.get('E2E_BANK_A_URL') ?? `${BASE_URL}/alice`;
-const BANK_B_URL = Deno.env.get('E2E_BANK_B_URL') ?? `${BASE_URL}/bob`;
+const BANK_A_URL = process.env.E2E_BANK_A_URL ?? `${BASE_URL}/alice`;
+const BANK_B_URL = process.env.E2E_BANK_B_URL ?? `${BASE_URL}/bob`;
 
 type User = { privateKey: Uint8Array; pubkey: string };
 type BankRef = { name: string; url: string; pubkey: string };
@@ -181,4 +180,4 @@ const ok = finalState === 'settled' &&
   t1vxBal.current === -10 && t2vxBal.current === 10 &&
   t2vyBal.current === -10 && t1vyBal.current === 10;
 console.log(ok ? 'CROSS-BANK SWAP OK ✅' : 'CROSS-BANK SWAP FAILED ❌');
-if (!ok) Deno.exit(1);
+if (!ok) process.exit(1);

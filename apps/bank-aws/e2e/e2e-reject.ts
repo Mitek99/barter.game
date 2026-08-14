@@ -1,7 +1,7 @@
 // Reject-path e2e: an uncoverable debit MUST reject the whole deal (not
 // silently stall), releasing it for both parties. Runs against a live bank:
 //
-//   deno run --allow-net --allow-env apps/bank/e2e-reject.ts
+//   bun run apps/bank-aws/e2e/e2e-reject.ts
 //
 // Flow: issuer publishes a voucher + invoice; a payer with ZERO balance signs
 // a cheque Order for it and the coordinator mandates the deal. The payer's
@@ -16,8 +16,8 @@ import {
   signDoc,
 } from '@barter.game/protocol';
 
-const BANK_NAME = Deno.env.get('E2E_BANK') ?? 'alice';
-const BASE_URL = Deno.env.get('E2E_BASE_URL') ?? 'http://localhost:8000';
+const BANK_NAME = process.env.E2E_BANK ?? 'alice';
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8100';
 const BANK_URL = `${BASE_URL}/${BANK_NAME}`;
 
 const info = await fetch(`${BANK_URL}/barter-bank.json`).then((r) => r.json());
@@ -131,4 +131,4 @@ console.log('issuer', issBal, '| broke payer', brokeBal);
 
 const ok = state === 'rejected' && issBal.current === 0 && brokeBal.current === 0;
 console.log(ok ? 'REJECT CASCADE OK ✅' : `REJECT CASCADE FAILED ❌ (state=${state})`);
-if (!ok) Deno.exit(1);
+if (!ok) process.exit(1);

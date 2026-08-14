@@ -26,7 +26,7 @@ So strangers *can* trade here safely. What the protocol declines to do is tell y
 
 ## Federation is table stakes
 
-Every bank is its own URL, its own ed25519 key, its own ledger. Banks talk to each other via signed HTTP. Anyone running the codebase can be a peer. The demo collapses several banks into one Deno Deploy process and one Deno KV database for operational simplicity; the *protocol* doesn't know or care.
+Every bank is its own URL, its own ed25519 key, its own ledger. Banks talk to each other via signed HTTP. Anyone running the codebase can be a peer. The demo collapses several banks into one Lambda process and one DynamoDB table for operational simplicity; the *protocol* doesn't know or care.
 
 If barter.game ever centralized — even subtly, even for "the demo" — we have built the wrong thing.
 

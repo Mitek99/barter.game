@@ -11,7 +11,7 @@
 // FOLLOW-hold gate requires alice's hold to cite bob's *Deal-B* ready sigs — a
 // stale Deal-A hold does not — so bob never holds, never settles, stays at -10.
 //
-//   deno run --allow-net --allow-env apps/bank/e2e-replay.ts
+//   bun run apps/bank-aws/e2e/e2e-replay.ts
 import {
   genKeyPair,
   hashDoc,
@@ -20,9 +20,9 @@ import {
   base58Encode,
 } from '@barter.game/protocol';
 
-const BASE_URL = Deno.env.get('E2E_BASE_URL') ?? 'http://localhost:8000';
-const BANK_A_URL = Deno.env.get('E2E_BANK_A_URL') ?? `${BASE_URL}/alice`;
-const BANK_B_URL = Deno.env.get('E2E_BANK_B_URL') ?? `${BASE_URL}/bob`;
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8100';
+const BANK_A_URL = process.env.E2E_BANK_A_URL ?? `${BASE_URL}/alice`;
+const BANK_B_URL = process.env.E2E_BANK_B_URL ?? `${BASE_URL}/bob`;
 
 type User = { privateKey: Uint8Array; pubkey: string };
 type BankRef = { name: string; url: string; pubkey: string };
@@ -151,7 +151,7 @@ const bobVyAfterA = await rpc(t2, bob, 'get_account_balance', { account_hash: ha
 console.log('Deal-A', stateA, '| bob VY issuer', bobVyAfterA.current);
 if (stateA !== 'settled' || bobVyAfterA.current !== -10) {
   console.log('SETUP FAILED ❌ (Deal-A did not settle as expected)');
-  Deno.exit(1);
+  process.exit(1);
 }
 
 // ---- Capture alice's Deal-A records + her stale settle sigs ----
@@ -172,7 +172,7 @@ for (const h of aliceHashes) {
 }
 if (!aliceVxDebit || !aliceVxCredit) {
   console.log('SETUP FAILED ❌ (could not capture alice Deal-A records)');
-  Deno.exit(1);
+  process.exit(1);
 }
 console.log('captured alice Deal-A legs + stale settles:', staleSettles.length);
 
@@ -222,4 +222,4 @@ const ok = bobVyFinal === -10 && dealBState !== 'settled';
 console.log(ok
   ? 'REPLAY REJECTED ✅ (bob never re-settled; seen-chain held the follow gate)'
   : `REPLAY SUCCEEDED ❌ (bob drained to ${bobVyFinal} — settle gate bypassed)`);
-if (!ok) Deno.exit(1);
+if (!ok) process.exit(1);
