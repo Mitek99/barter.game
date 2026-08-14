@@ -42,7 +42,7 @@ domain=$(echo "$outputs" | jq -r '.[] | select(.OutputKey=="DistributionDomain")
 
 echo "==> sync web client to s3://$bucket/webapp/"
 aws s3 sync ../web "s3://$bucket/webapp/" --region "$REGION" \
-  --exclude 'package.json' --exclude 'README.md' \
+  --exclude 'package.json' --exclude 'README.md' --exclude 'node_modules/*' \
   --cache-control 'public, max-age=300' --delete
 
 # Invalidate the CACHE-KEY path, not the viewer path: StaticRewriteFunction
