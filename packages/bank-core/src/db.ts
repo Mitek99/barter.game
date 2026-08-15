@@ -1001,3 +1001,93 @@ export async function markProposedDeal(
   const ok = await bank.kv.atomic().check(r).set(key, true).commit();
   return ok.ok === true;
 }
+
+// --- admin (operator) reads -------------------------------------------------
+// Read-only whole-prefix scans backing the operator-only /ui/admin/* routes.
+// Same bank-scoping rule as every other query: the bank pubkey is the first
+// key part. Demo scale — none of these are paginated beyond an explicit cap.
+
+/** Count of keys under one prefix (users, vouchers, accounts, holds, ...). */
+export async function countPrefix(bank: Bank, ...parts: KvKeyPart[]): Promise<number> {
+  let n = 0;
+  const iter = bank.kv.list<unknown>({ prefix: k(bank, ...parts) });
+  for await (const _ of iter) n++;
+  return n;
+}
+
+/** Every registered handle → pubkey. */
+export async function listHandles(
+  bank: Bank,
+): Promise<{ handle: string; pubkey: Base58PubKey }[]> {
+  const iter = bank.kv.list<Base58PubKey>({ prefix: k(bank, 'handle') });
+  const out: { handle: string; pubkey: Base58PubKey }[] = [];
+  for await (const entry of iter) {
+    out.push({ handle: entry.key[entry.key.length - 1] as string, pubkey: entry.value });
+  }
+  out.sort((a, b) => a.handle.localeCompare(b.handle));
+  return out;
+}
+
+/** Every account at this bank, with its row (balance) and doc. */
+export async function listAllAccounts(
+  bank: Bank,
+): Promise<{ hash: Base58SHA256; doc: Account; row: AccountRow }[]> {
+  const iter = bank.kv.list<AccountRow>({ prefix: k(bank, 'account') });
+  const out: { hash: Base58SHA256; doc: Account; row: AccountRow }[] = [];
+  for await (const entry of iter) {
+    const hash = entry.key[entry.key.length - 1] as Base58SHA256;
+    const doc = await getDoc<unknown>(bank, hash);
+    if (!doc || (doc as { type?: string }).type !== 'account') continue;
+    out.push({ hash, doc: doc as Account, row: entry.value });
+  }
+  return out;
+}
+
+/** Every record this bank minted, newest-first by record ULID. */
+export async function listAllRecords(
+  bank: Bank,
+): Promise<{ hash: Base58SHA256; row: RecordRow }[]> {
+  const iter = bank.kv.list<RecordRow>({ prefix: k(bank, 'record') });
+  const out: { hash: Base58SHA256; row: RecordRow }[] = [];
+  for await (const entry of iter) {
+    out.push({ hash: entry.key[entry.key.length - 1] as Base58SHA256, row: entry.value });
+  }
+  out.sort((a, b) => (a.row.doc.ulid < b.row.doc.ulid ? 1 : -1));
+  return out;
+}
+
+/**
+ * Every post stored at this bank, newest-first, capped. Unlike listPosts this
+ * crosses authors — the operator reads everything the bank holds. Scans the
+ * flat doc store and type-checks, exactly like getPost does per hash.
+ */
+export async function listAllPosts(bank: Bank, limit = 200): Promise<Post[]> {
+  const iter = bank.kv.list<unknown>({ prefix: k(bank, 'doc') });
+  const out: Post[] = [];
+  for await (const entry of iter) {
+    const doc = entry.value as { type?: string };
+    if (doc && doc.type === 'post') out.push(doc as unknown as Post);
+  }
+  out.sort((a, b) => (a.ulid < b.ulid ? 1 : -1));
+  return out.slice(0, limit);
+}
+
+/**
+ * Hashes of every post the bank already amplifies: its own posts plus every
+ * node embedded in their repost chains. The admin UI uses this to offer a
+ * "repost as the bank" action only where it would add reach.
+ */
+export async function bankRepostedHashes(
+  bank: Bank,
+  limit = 500,
+): Promise<Set<Base58SHA256>> {
+  const page = await listPosts(bank, bank.pubkey, 'all', undefined, limit);
+  const covered = new Set<Base58SHA256>();
+  const walk = (p: Post | undefined): void => {
+    if (!p) return;
+    try { covered.add(hashDoc(p)); } catch { /* unhashable node: skip */ }
+    walk(p.repost);
+  };
+  page.items.forEach((p) => walk(p));
+  return covered;
+}

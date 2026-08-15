@@ -25,6 +25,11 @@ viewer ──> CloudFront ──┬── */ui/app/*  ──> S3 (webapp/ prefix
   [`deploy.sh`](./deploy.sh), served via CloudFront OAC).
 - Bank keys come from **SSM SecureString** parameters under
   `/barter/banks/<name>` (or plain `BANK_<NAME>_PRIV_KEY` env vars).
+- Operator **admin access** to `/ui/admin/*` (the bank console: users,
+  holdings, transactions, posts, manual bank-repost) is granted by pubkey via
+  the `BANK_ADMINS` env var (comma-separated base58 pubkeys, every bank in the
+  process) or per bank via `BANK_<NAME>_ADMINS`. On AWS set the `BankAdmins`
+  template parameter; locally export the env var next to the bank keys.
 - The Function URL uses `AuthType: NONE` because the protocol authenticates
   every write itself (signed envelopes / `X-Barter-Auth`) and CloudFront
   OAC-signed POSTs would force clients to send `x-amz-content-sha256`.
@@ -39,9 +44,16 @@ bun run local          # Node server on :8100, in-memory KV, KV-chunked media
 ```
 
 Point the wire-level e2e suites (pure HTTP clients, run under Bun from the
-repo root) at it. Ten suites in [`e2e/`](./e2e/): `local`, `cheque-local`,
+repo root) at it. Eleven suites in [`e2e/`](./e2e/): `local`, `cheque-local`,
 `crossbank`, `sameswap`, `reject`, `replay`, `forged-sigs`, `account-privacy`,
-`posts`, `federation`.
+`posts`, `federation`, `admin`.
+
+`admin` needs the server booted with the suite's well-known test admin pubkey
+(committed in `e2e-admin.ts`, test-only):
+
+```bash
+BANK_ADMINS=EWp6umhXgrkk4Jmmdo3x3muHTRQmTJJc7wsmNMskB82P bun run local
+```
 
 ```bash
 E2E_BASE_URL=http://localhost:8100 bun run apps/bank-aws/e2e/e2e-crossbank.ts

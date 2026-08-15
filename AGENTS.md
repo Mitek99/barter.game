@@ -11,7 +11,7 @@ This repo contains:
 - The **protocol spec** (`protocol/`) — the invariant contract every implementation must follow: overview, base types, document schemas, bank RPC, discovery, and post feeds.
 - The **protocol library** (`packages/protocol/`) — canonical JSON, crypto, doc types, validators. Runs identically under Bun, Node.js, and browser.
 - The **bank engine** (`packages/bank-core/`) — the whole bank (routing, RPC, advance engine, storage layer), written against web-standard APIs only. The host injects storage.
-- The **AWS bank host** (`apps/bank-aws/`) — the only bank host: the engine on Node.js Lambda + DynamoDB + S3 behind CloudFront, deployed with SAM, plus a local Node dev server and the ten e2e suites.
+- The **AWS bank host** (`apps/bank-aws/`) — the only bank host: the engine on Node.js Lambda + DynamoDB + S3 behind CloudFront, deployed with SAM, plus a local Node dev server and the eleven e2e suites.
 - The **web UI** (`apps/web/`) — build-less browser SPA the bank serves at `/:bank/ui`.
 - The **scenarios** (`scenarios/`) — step-by-step protocol interaction traces.
 - The **website** (`website/`) — Hugo/Hextra static site.
@@ -66,8 +66,8 @@ barter.game/
 │   ├── bank-aws/             # AWS host — the only bank host: Lambda + DynamoDB + S3 + CloudFront
 │   │                         #   (see its README.md)
 │   │   ├── src/              #   kv-dynamo.ts, media-s3.ts, adapter.ts (Function URL), local-server.ts
-│   │   ├── e2e/              #   ten end-to-end suites (local, cheque-local, crossbank, sameswap, reject,
-│   │   │                     #   replay, forged-sigs, account-privacy, posts, federation) — pure HTTP
+│   │   ├── e2e/              #   eleven end-to-end suites (local, cheque-local, crossbank, sameswap, reject,
+│   │   │                     #   replay, forged-sigs, account-privacy, posts, federation, admin) — pure HTTP
 │   │   │                     #   clients, runnable against any host via E2E_BASE_URL
 │   │   ├── template.yaml     #   SAM stack (deploys as the app-deployer IAM user)
 │   │   ├── deployer-template.yaml # the app-deployer user's IAM: least-privilege deploy
@@ -105,7 +105,7 @@ bun run test:all
 |---|---|---|
 | `bun run test` | Bun | Protocol library: canonical JSON golden vectors, crypto, all doc validators, plus the web-mirror parity test |
 | `bun run test:bank-aws` | Node (via tsx) | `KvStore` contract suite — MemoryKv always, plus DynamoDB Local when `DDB_ENDPOINT` is set. This is what keeps a storage backend from quietly breaking hold exclusivity or the 64 KiB value cap. |
-| `E2E_BASE_URL=http://localhost:8100 bun run apps/bank-aws/e2e/e2e-<name>.ts` | Bun | Ten end-to-end suites: `local` (single-bank lifecycle), `cheque-local` (single-bank cheque settlement), `crossbank` (bilateral swap, lead/follow cascade), `sameswap` (same-bank two-voucher swap minting two record pairs), `reject` (uncoverable debit rejects the deal), `replay` (settle-replay resistance), `forged-sigs` (peer signature-authority checks), `account-privacy` (balance-read authorization), `posts` (posts/feeds/follows, bank auto-repost, media vault), `federation` (multi-host wiring) |
+| `E2E_BASE_URL=http://localhost:8100 bun run apps/bank-aws/e2e/e2e-<name>.ts` | Bun | Eleven end-to-end suites: `local` (single-bank lifecycle), `cheque-local` (single-bank cheque settlement), `crossbank` (bilateral swap, lead/follow cascade), `sameswap` (same-bank two-voucher swap minting two record pairs), `reject` (uncoverable debit rejects the deal), `replay` (settle-replay resistance), `forged-sigs` (peer signature-authority checks), `account-privacy` (balance-read authorization), `posts` (posts/feeds/follows, bank auto-repost, media vault), `federation` (multi-host wiring), `admin` (operator `/ui/admin/*` routes; needs `BANK_ADMINS` set on the server) |
 
 The **web-mirror parity test is load-bearing**. `packages/protocol/test/web-mirror.test.ts` guards the vendored browser copy `apps/web/protocol.js` against `packages/protocol/src/index.ts` — if the two diverge on a canonical hash, browser-signed docs stop verifying at the bank. Run it before every release (it runs as part of `bun run test`).
 
@@ -164,6 +164,7 @@ cd website && hugo mod get && hugo --gc --minify
 
 - **Private keys (user)**: generated in the browser; only the PBKDF2+AES-GCM ciphertext reaches the bank. There is no password recovery — lost password means lost account.
 - **Bank keys**: loaded from `BANK_<NAME>_PRIV_KEY` env vars. Never log them, never return them in RPC responses.
+- **Bank admin routes**: `/ui/admin/*` (overview, users, accounts, records, posts, repost) is operator tooling, not protocol. Access is by registered-user pubkey listed in `BANK_ADMINS` / `BANK_<NAME>_ADMINS` env config (`packages/bank-core/src/env.ts`; on AWS, the `BankAdmins` SAM parameter) — everyone else gets 403 (`requireAdmin` in `ui.ts`). The routes are read-only except `POST /ui/admin/repost`, which mints the same bank-signed repost the auto-repost already produces. Admin reads deliberately bypass the account-privacy gate: the operator sees every balance their bank settles.
 - **Signing model**: Users sign Voucher, Account, Order, Address, and Post docs. The coordinator signs Mandates. Banks sign Offer and Balance docs plus every ledger `Signature` (`ready`/`hold`/`settle`/`reject`) — and banks also sign Post docs: on every accepted user post the bank mints a bank-signed auto-repost embedding the original into its own feed (`packages/bank-core/src/handlers/submit_docs.ts` `bankRepost`; carriage per `protocol/post-feed.md`). Records are bank-minted (bank-assigned ULIDs) and referenced by content hash; only the `pair`/`deal_id` grouping uses ULIDs.
 - **Replay protection / idempotency**: Every RPC envelope carries a ULID `id` bound to `(sender_pubkey, recipient_pubkey)`. The bank stores seen triples in KV with a 24h TTL and rejects duplicates with `-32002`. `create_records` is idempotent on `(deal_id, giver, receiver)` and rejects the same key with different amounts.
 - **Signature verification**: Every inbound request is verified against its `pubkey` before any handler runs. The `to` field must match the recipient bank's pubkey.

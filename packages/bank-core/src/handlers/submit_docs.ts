@@ -27,6 +27,7 @@ import {
   validateVoucher,
   verifyDoc,
   verifyPostTree,
+  type Base58SHA256,
   type Offer,
   type Order,
   type Post,
@@ -284,9 +285,13 @@ export async function deriveOffer(
  *   - fail the user's write. Carriage is bank policy (post-feed.md §2/§6), so
  *     a repost that cannot be minted is the bank's problem, not the author's —
  *     their post is already stored and signed.
+ *
+ * Also exported for the operator-only /ui/admin/repost route: the same curated
+ * amplification, triggered by hand. Returns the new repost's hash, or null
+ * when skipped (own post) or failed.
  */
-async function bankRepost(bank: Bank, post: Post): Promise<void> {
-  if (post.pubkey === bank.pubkey) return;
+export async function bankRepost(bank: Bank, post: Post): Promise<Base58SHA256 | null> {
+  if (post.pubkey === bank.pubkey) return null;
   try {
     const repost: Record<string, unknown> = {
       type: 'post',
@@ -297,8 +302,9 @@ async function bankRepost(bank: Bank, post: Post): Promise<void> {
       repost: post,
     };
     repost.sig = signDoc(repost, bank.privateKey);
-    await storePost(bank, repost as unknown as Post);
+    return await storePost(bank, repost as unknown as Post);
   } catch (e) {
     console.error('bank repost failed', e);
+    return null;
   }
 }

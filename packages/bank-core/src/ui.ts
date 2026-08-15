@@ -26,6 +26,7 @@ import {
   getOffer,
   getOffersForOrder,
   getOrder,
+  getPost,
   getRecord,
   MEDIA_MAX_BYTES,
   storeMedia,
@@ -33,7 +34,13 @@ import {
   getUiState,
   getVoucher,
   getVoucherMeta,
+  bankRepostedHashes,
+  countPrefix,
   listAccounts,
+  listAllAccounts,
+  listAllPosts,
+  listAllRecords,
+  listHandles,
   listOrdersByHolder,
   listPosts,
   listRecordHashesByAccount,
@@ -48,6 +55,7 @@ import {
   type UiState,
 } from './db.ts';
 import { claimReplayId } from './db.ts';
+import { bankRepost } from './handlers/submit_docs.ts';
 import { bankRpcCall, fetchDiscovery } from './peer.ts';
 import type { Bank } from './types.ts';
 import type { KvKey } from './kv.ts';
@@ -112,6 +120,14 @@ export async function handleUiRequest(
     }
 
     const authPubkey = await requireAuth(bank, request, basePath);
+
+    // Operator-only admin routes — env-configured admin pubkeys (env.ts),
+    // checked before any admin handler runs.
+    const adminMatch = uiPath.match(/^\/admin(\/[^/]*)?$/);
+    if (adminMatch) {
+      requireAdmin(bank, authPubkey);
+      return handleAdminRoute(bank, request, adminMatch[1] ?? '/', url);
+    }
 
     if (uiPath === '/state') {
       if (request.method === 'GET') {
@@ -1091,6 +1107,173 @@ async function handleDealStatus(
     else overall = 'created';
   }
   return json(200, { deal_id: dealId, state: overall, legs, updated_at: Date.now() });
+}
+
+// --- operator admin ---------------------------------------------------------
+// Everything under /ui/admin/* is operator tooling, not protocol: it answers
+// "what does my bank manage" from the bank's own KV, and the one write it
+// exposes (repost) is the same curated amplification the bank already applies
+// automatically on accepted posts (submit_docs.ts bankRepost).
+
+function requireAdmin(bank: Bank, pubkey: Base58PubKey): void {
+  if (!bank.admins.includes(pubkey)) {
+    throw new UiError(403, -32007, 'not a bank admin');
+  }
+}
+
+async function handleAdminRoute(
+  bank: Bank,
+  request: Request,
+  sub: string,
+  url: URL,
+): Promise<Response> {
+  if (sub === '/overview' && request.method === 'GET') {
+    const [users, vouchers, accounts, activeHolds, records, posts] = await Promise.all([
+      countPrefix(bank, 'handle'),
+      countPrefix(bank, 'voucher'),
+      countPrefix(bank, 'account'),
+      countPrefix(bank, 'active_hold'),
+      listAllRecords(bank),
+      listAllPosts(bank, 1000),
+    ]);
+    const recordsByState: Record<string, number> = {};
+    for (const r of records) {
+      const sigs = await getSignaturesForRecord(bank, hashDoc(r.row.doc));
+      const state = recordState(sigs);
+      recordsByState[state] = (recordsByState[state] ?? 0) + 1;
+    }
+    return json(200, {
+      users,
+      vouchers,
+      accounts,
+      active_holds: activeHolds,
+      records: records.length,
+      records_by_state: recordsByState,
+      posts: posts.length,
+    });
+  }
+
+  if (sub === '/users' && request.method === 'GET') {
+    const [handles, accounts] = await Promise.all([listHandles(bank), listAllAccounts(bank)]);
+    const countByHolder = new Map<string, number>();
+    for (const a of accounts) {
+      countByHolder.set(a.row.holder, (countByHolder.get(a.row.holder) ?? 0) + 1);
+    }
+    return json(200, {
+      users: handles.map((h) => ({
+        ...h,
+        accounts: countByHolder.get(h.pubkey) ?? 0,
+        admin: bank.admins.includes(h.pubkey),
+      })),
+    });
+  }
+
+  if (sub === '/accounts' && request.method === 'GET') {
+    const accounts = await listAllAccounts(bank);
+    const out = [];
+    for (const a of accounts) {
+      const [voucher, handle, balance] = await Promise.all([
+        getVoucher(bank, a.row.voucher),
+        getHandleByPubkey(bank, a.row.holder),
+        getAccountBalance(bank, a.hash),
+      ]);
+      out.push({
+        hash: a.hash,
+        name: a.doc.name,
+        holder: a.row.holder,
+        holder_handle: handle ?? null,
+        voucher: a.row.voucher,
+        voucher_name: voucher?.name ?? null,
+        balance: balance ?? { current: a.row.balance, pending: 0 },
+      });
+    }
+    return json(200, { accounts: out });
+  }
+
+  if (sub === '/records' && request.method === 'GET') {
+    const records = (await listAllRecords(bank)).slice(0, 100);
+    const out = [];
+    for (const r of records) {
+      const hash = hashDoc(r.row.doc);
+      const sigs = await getSignaturesForRecord(bank, hash);
+      const order = await getOrder(bank, r.row.doc.order);
+      const side = r.row.doc.type === 'debit' ? order?.debit : order?.credit;
+      const voucher = side ? await getVoucher(bank, side.voucher) : null;
+      out.push({
+        hash,
+        deal_id: r.row.details.deal_id,
+        direction: r.row.doc.type,
+        amount: r.row.doc.amount,
+        voucher: side?.voucher ?? null,
+        voucher_name: voucher?.name ?? null,
+        holder: r.row.details.holder,
+        holder_handle: await getHandleByPubkey(bank, r.row.details.holder),
+        state: recordState(sigs),
+        ulid: r.row.doc.ulid,
+      });
+    }
+    return json(200, { records: out });
+  }
+
+  if (sub === '/posts' && request.method === 'GET') {
+    const limitRaw = Number(url.searchParams.get('limit') ?? '100');
+    const limit = Number.isInteger(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 200) : 100;
+    const [posts, covered] = await Promise.all([
+      listAllPosts(bank, limit),
+      bankRepostedHashes(bank),
+    ]);
+    // Voucher names ride along so the admin cards read like the feed's.
+    const voucherHashes = new Set<Base58SHA256>();
+    const collect = (p: Post | undefined): void => {
+      if (!p) return;
+      voucherHashes.add(p.voucher);
+      collect(p.reply_to);
+      collect(p.repost);
+    };
+    posts.forEach(collect);
+    const vouchers: Record<string, string> = {};
+    for (const h of voucherHashes) {
+      const v = await getVoucher(bank, h);
+      if (v) vouchers[h] = v.name;
+    }
+    const out = [];
+    for (const p of posts) {
+      let hash: Base58SHA256;
+      try { hash = hashDoc(p); } catch { continue; }
+      out.push({
+        hash,
+        ulid: p.ulid,
+        author: p.pubkey,
+        author_handle: await getHandleByPubkey(bank, p.pubkey),
+        voucher: p.voucher,
+        excerpt: String(p.body_md ?? '').slice(0, 200),
+        media: Array.isArray(p.media) ? p.media.length : 0,
+        is_bank: p.pubkey === bank.pubkey,
+        bank_reposted: covered.has(hash),
+      });
+    }
+    return json(200, { posts: out, vouchers });
+  }
+
+  if (sub === '/repost' && request.method === 'POST') {
+    const body = await request.json() as { hash?: string };
+    const hash = body.hash;
+    if (typeof hash !== 'string' || !isValidBase58(hash)) {
+      return json(400, { code: -32600, message: 'hash required (base58)' });
+    }
+    const post = await getPost(bank, hash);
+    if (!post) return json(404, { code: -32005, message: 'unknown post' });
+    if (post.pubkey === bank.pubkey) {
+      return json(422, { code: -32600, message: 'bank posts need no repost' });
+    }
+    const covered = await bankRepostedHashes(bank);
+    if (covered.has(hash)) return json(200, { reposted: false, already: true });
+    const repostHash = await bankRepost(bank, post);
+    if (!repostHash) return json(500, { code: -32603, message: 'repost failed' });
+    return json(200, { reposted: true, hash: repostHash });
+  }
+
+  return notFound();
 }
 
 // --- Barter Link routes ---------------------------------------------------

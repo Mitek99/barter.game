@@ -19,6 +19,9 @@ export type Bank = {
   media: MediaStore;
   assets: AssetReader;
   url: string;
+  // Pubkeys allowed to use the operator-only /ui/admin/* routes. Comes from
+  // BANK_ADMINS / BANK_<NAME>_ADMINS env config — pubkeys only, no secrets.
+  admins: Base58PubKey[];
   // True when url came from a BANK_<NAME>_URL env override and must not be
   // overwritten by request-host derivation.
   urlPinned?: boolean;

@@ -118,6 +118,7 @@ Hash-routed; the whole router is one function in `app.js`.
 | `#/scan` | Camera QR scanner (BarcodeDetector, jsQR fallback) or paste a link |
 | `#/settings` | Identity, bank info, install on home screen, recovery kit, lock |
 | `#/land/:kind/:value` | Barter Link landings (`i` profile, `v` invoice, `q` cheque, `o` offer, `x` invite) — work logged out, then resume the action after register/login |
+| `#/admin` | Operator console (visible only when the logged-in pubkey is in the bank's `BANK_ADMINS` env config): overview counts, users, holdings, transactions, every post stored at the bank, and a manual "repost as the bank" action for posts the bank is not already carrying |
 
 Order/invoice/cheque forms use a **voucher chooser** (own issued vouchers plus
 trusted issuers' vouchers resolved via the public `GET /:bank/ui/resolve/:pubkey`)

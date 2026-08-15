@@ -78,6 +78,8 @@ const state = {
   basePath: '',
   user: null, // { handle, pubkey, privateKey }
   uiState: null,
+  // undefined = not probed yet; true/false after the /admin/overview probe.
+  isAdmin: undefined,
 };
 
 function parsePath() {
@@ -150,6 +152,16 @@ async function uiGet(path) { return signedRequest('GET', path, null); }
 async function uiPost(path, body) { return signedRequest('POST', path, body); }
 async function uiPut(path, body) { return signedRequest('PUT', path, body); }
 async function uiDelete(path) { return signedRequest('DELETE', path, null); }
+
+// An admin is just a registered user whose pubkey the operator listed in
+// BANK_ADMINS; the bank answers 403 for everyone else. Probed once per
+// session — the 403 is the normal "not an admin" answer, not an error.
+async function probeAdmin() {
+  if (!state.user || state.isAdmin !== undefined) return;
+  try { await uiGet('/admin/overview'); state.isAdmin = true; }
+  catch { state.isAdmin = false; }
+  route(); // repaint so the Admin nav item reflects the answer
+}
 
 // ---------------- cross-bank calls ----------------
 // A scanned invoice/cheque may live at another bank (the voucher's issuing
@@ -275,6 +287,7 @@ const ROUTE_TITLES = {
   '': 'Dashboard', vouchers: 'Vouchers', orders: 'Orders', invoices: 'Invoices',
   cheques: 'Cheques', registry: 'Registry', activity: 'Activity',
   network: 'Network', scan: 'Scan', settings: 'Settings', deal: 'Deal', posts: 'Posts',
+  admin: 'Admin',
 };
 
 // route() is a coalescing scheduler: many actions do `location.hash = X; route()`,
@@ -336,6 +349,8 @@ function dispatch(app, p, rest) {
   }
 
   if (p === 'unlock') return renderUnlock(app);
+  probeAdmin(); // fire-and-forget; sets state.isAdmin once per session
+  if (p === 'admin') return renderAdmin(app);
   if (p === 'vouchers' && rest[0] === 'new') return renderCreateVoucher(app);
   if (p === 'vouchers') return renderVouchers(app);
   if (p === 'orders' && rest[0] === 'new') return renderCreateOrder(app, rest[1]);
@@ -1178,6 +1193,7 @@ function header(title) {
       <a href="#/activity"${on('Activity')}>Activity</a>
       <a href="#/network"${on('Network')}>Network</a>
       <a href="#/scan"${on('Scan')}>Scan</a>
+      ${state.isAdmin ? `<a href="#/admin"${on('Admin')}>Admin</a>` : ''}
       <a href="#/settings"${on('Settings')}>Settings</a>
       <a href="#/unlock" class="logout" onclick="logout();return false">Log out</a>
     </nav>
@@ -1310,6 +1326,7 @@ function toast(msg, type = 'success') {
 window.logout = function() {
   state.user = null;
   state.uiState = null;
+  state.isAdmin = undefined;
   location.hash = '#/unlock';
   route();
 };
@@ -1672,6 +1689,90 @@ async function renderDashboard(app) {
   body += `</div>`;
   app.innerHTML = body;
 }
+
+// ---------------- operator admin ----------------
+// Everything the bank manages, read-only, plus the one write an operator
+// needs: carrying a post into the bank's curated feed by hand. The server
+// refuses non-admins; the sections below just render their 403 as a loadError.
+
+async function renderAdmin(app) {
+  const [overview, users, accounts, records, postsRes] = await Promise.all([
+    uiGet('/admin/overview').catch(() => null),
+    uiGet('/admin/users').catch(() => null),
+    uiGet('/admin/accounts').catch(() => null),
+    uiGet('/admin/records').catch(() => null),
+    uiGet('/admin/posts?limit=100').catch(() => null),
+  ]);
+  let body = header('Admin');
+  body += `<div class="container">`;
+
+  const tile = (n, label) => `<div><div style="font-size:1.4rem;font-weight:700">${escapeHtml(String(n))}</div><div class="small">${label}</div></div>`;
+  const states = overview && overview.records_by_state
+    ? Object.entries(overview.records_by_state).map(([s, n]) => `<span class="chip state-${escapeHtml(s)}">${escapeHtml(s)} ${n}</span>`).join(' ')
+    : '';
+  body += card('Overview', overview ? `<div class="grid">
+    ${tile(overview.users, 'registered users')}
+    ${tile(overview.vouchers, 'vouchers')}
+    ${tile(overview.accounts, 'accounts')}
+    ${tile(overview.records, 'records')}
+    ${tile(overview.active_holds, 'active holds')}
+    ${tile(overview.posts, 'posts stored')}
+  </div>${states ? `<div style="margin-top:.7rem">${states}</div>` : ''}` : loadError('the overview'));
+
+  body += card('Users', users ? (users.users.map(u => `
+    <div class="flex" style="justify-content:space-between;margin:0.4rem 0">
+      <span><b>${escapeHtml(u.handle)}</b>${u.admin ? ' <span class="chip">admin</span>' : ''}</span>
+      <span class="mono small">${escapeHtml(u.pubkey.slice(0, 12))}…</span>
+      <span class="small">${u.accounts} account${u.accounts === 1 ? '' : 's'}</span>
+    </div>`).join('') || '<p class="small">No users yet</p>') : loadError('users'));
+
+  body += card('Holdings', accounts ? (accounts.accounts.map(a => `
+    <div class="flex" style="justify-content:space-between;margin:0.4rem 0">
+      <span>${escapeHtml(a.name)} <span class="small">· ${escapeHtml(a.holder_handle || a.holder.slice(0, 8))}</span></span>
+      <span><strong>${a.balance.current}</strong> <span class="small">${escapeHtml(a.voucher_name || '')}${a.balance.pending ? ` · pending ${a.balance.pending}` : ''}</span></span>
+    </div>`).join('') || '<p class="small">No accounts yet</p>') : loadError('holdings'));
+
+  body += card('Transactions', records ? (records.records.map(r => `
+    <div class="flex" style="justify-content:space-between;margin:0.4rem 0">
+      <span class="mono small">${escapeHtml(r.deal_id.slice(0, 12))}…</span>
+      <span>${r.direction === 'credit' ? '↓' : '↑'} ${escapeHtml(String(r.amount))} ${escapeHtml(r.voucher_name || '')} <span class="small">${escapeHtml(r.holder_handle || '')}</span></span>
+      <span class="chip state-${escapeHtml(r.state)}">${escapeHtml(r.state)}</span>
+    </div>`).join('') || '<p class="small">No records yet</p>') : loadError('transactions'));
+
+  const vNames = (postsRes && postsRes.vouchers) || {};
+  body += card('Posts', postsRes ? `<p class="small">Everything stored at this bank. Carried posts already reach the bank's public feed; the rest can be carried by hand.</p>` + (postsRes.posts.map(p => `
+    <div class="card post">
+      <div class="post-head">
+        <div style="min-width:0">
+          <div><b>${escapeHtml(p.author_handle || p.author.slice(0, 8))}</b>${p.is_bank ? ' <span class="chip">bank</span>' : ''}</div>
+          <div class="small">${escapeHtml(vNames[p.voucher] || (p.voucher || '').slice(0, 10) + '…')}${p.media ? ` · ${p.media} media` : ''}</div>
+        </div>
+      </div>
+      <div class="post-body">
+        ${p.excerpt ? `<div>${escapeHtml(p.excerpt)}</div>` : '<div class="small">(no text)</div>'}
+        <div class="flex" style="gap:.5rem;margin-top:.6rem;flex-wrap:wrap">
+          ${p.is_bank || p.bank_reposted
+            ? '<span class="small">↻ carried by the bank</span>'
+            : `<button class="btn" onclick="adminRepost(this, '${jsStr(p.hash)}')">Repost as ${escapeHtml(state.bankName)}</button>`}
+        </div>
+      </div>
+    </div>`).join('') || '<p class="small">No posts yet</p>') : loadError('posts'));
+
+  body += `</div>`;
+  app.innerHTML = body;
+}
+
+window.adminRepost = async function(btn, hash) {
+  const release = lockBtn(btn);
+  try {
+    const r = await uiPost('/admin/repost', { hash });
+    toast(r.already ? 'Already carried by the bank' : `Reposted as ${state.bankName}`);
+    route();
+  } catch (e) {
+    release();
+    toast(e.message, 'error');
+  }
+};
 
 async function renderVouchers(app) {
   let vouchers = [], failed = false;

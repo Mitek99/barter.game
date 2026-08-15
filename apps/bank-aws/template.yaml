@@ -33,6 +33,13 @@ Parameters:
       Function URL from being usable directly. Leave empty to derive one
       from the stack id (unique per stack, never sent to viewers); set an
       explicit value to rotate it.
+  BankAdmins:
+    Type: String
+    Default: ''
+    Description: >
+      Comma-separated base58 pubkeys allowed to use the operator-only
+      /ui/admin/* routes on every bank in this stack (BANK_ADMINS env var).
+      Pubkeys only — no secrets.
   RolePermissionsBoundary:
     Type: String
     Default: ''
@@ -141,6 +148,7 @@ Resources:
           BANK_TABLE: !Ref BankTable
           BANK_MEDIA_BUCKET: !Ref AssetsBucket
           BANK_KEYS_SSM_PATH: !Ref BankKeysSsmPath
+          BANK_ADMINS: !Ref BankAdmins
           ORIGIN_SECRET: !If
             - HasOriginSecret
             - !Ref OriginSecret
