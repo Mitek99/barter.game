@@ -1321,28 +1321,31 @@ window.lock = window.logout;
 
 async function renderWelcome(app) {
   const cfg = await fetchConfig().catch(() => null);
-  app.innerHTML = `<div class="container welcome">
-    <div class="logo-mark large"><span></span></div>
-    <h1>Mint your own<br>currency.</h1>
-    <p class="lede">Mint a currency only you can issue — <b>1 logo</b>, <b>1 hour of consulting</b>, <b>1 home-cooked dinner</b> — and settle it with people who already trust you.</p>
-    ${cfg ? `<div class="bank-pill">
-      <div class="ic">◈</div>
-      <div>
-        <div style="font-size:0.87rem;font-weight:600">Connected to ${escapeHtml(cfg.name)}</div>
-        <div class="mono" style="font-size:0.7rem;color:var(--faint)">${escapeHtml(cfg.pubkey.slice(0,16))}… · protocol v1</div>
+  // The feed IS the landing: like the authenticated home, the post stream is
+  // the main content. The pitch shrinks to a compact header with the sign-up
+  // and login actions; the posts make the argument.
+  app.innerHTML = `<div class="container">
+    <div class="card" style="margin-top:1.2rem">
+      <div class="flex" style="justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
+        <div class="flex" style="align-items:center;gap:.7rem;min-width:0">
+          <div class="logo-mark"><span></span></div>
+          <div style="min-width:0">
+            <div style="font-weight:700">Mint your own currency.</div>
+            <div class="small">A currency only you can issue — settled with people who already trust you.</div>
+          </div>
+        </div>
+        <div class="flex" style="gap:.5rem;flex-wrap:wrap">
+          <a class="btn" href="#/register">Create an identity</a>
+          <a class="btn secondary" href="#/unlock">Log in</a>
+        </div>
       </div>
-    </div>` : ''}
-    <div class="stack">
-      <a class="btn" href="#/register">Create an identity</a>
-      <a class="btn secondary" href="#/unlock">Log in</a>
-      <a href="#/connect" style="text-align:center;font-size:0.87rem;color:var(--muted);padding:0.3rem">I have a raw key instead</a>
+      ${cfg ? `<div class="small" style="margin-top:.8rem">Connected to <b>${escapeHtml(cfg.name)}</b> · <span class="mono">${escapeHtml(cfg.pubkey.slice(0, 16))}…</span> · protocol v1</div>` : ''}
+      <div class="small" style="margin-top:.4rem"><a href="#/connect">I have a raw key instead</a> · handle + password login · key encrypted in this browser, never sent to the bank</div>
     </div>
     ${installSlot('banner')}
-    <p class="footnote" style="margin-top:1.6rem">handle + password login · key encrypted in this browser · never sent to the bank</p>
   </div>
   <div class="container" id="public-feed"></div>`;
-  // The curated bank feed fills in below the hero; a slow or empty feed never
-  // delays the landing itself.
+  // A slow or empty feed never delays the landing itself.
   loadPublicFeed().catch(() => {});
 }
 
@@ -1407,9 +1410,44 @@ async function loadPublicFeed() {
   const ctx = { names, vMap, vMeta, vInfo, followSet: new Set(), readOnly: true };
   const cards = dedupeReposts(entries).map(e => postCard(e, ctx)).join('');
   if (!cards) return;
-  slot.innerHTML = `<h3 style="margin-top:2rem">Latest from ${escapeHtml(state.bankName)}</h3>
-    <p class="small">What this bank's members are posting — every card is one the bank chose to repost. <a href="#/register">Create an identity</a> to reply or trade.</p>
-    <div class="feed">${cards}</div>`;
+
+  // The same shelf the authenticated home shows under its feed: every voucher
+  // sighted in the stream, as a tile. Logged-out, the trade action becomes the
+  // sign-up call to action.
+  const seenVouchers = [];
+  const seenV = new Set();
+  const noteVoucher = p => {
+    if (!p) return;
+    if (p.voucher && !seenV.has(p.voucher)) { seenV.add(p.voucher); seenVouchers.push(p.voucher); }
+    noteVoucher(p.reply_to);
+    noteVoucher(p.repost);
+  };
+  entries.forEach(e => noteVoucher(e.post));
+  const shelf = seenVouchers.map(h => {
+    const info = vInfo[h];
+    if (!info) return '';
+    const meta = vMeta[h];
+    const desc = meta && meta.description_md
+      ? `<p class="small">${escapeHtml(meta.description_md.slice(0, 160))}${meta.description_md.length > 160 ? '…' : ''}</p>` : '';
+    const art = metaSrc(meta, info, 'square');
+    return `<div class="card tile">
+      ${art ? `<div class="tile-art"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async"></div>` : ''}
+      <div class="tile-body">
+        <div><strong>${escapeHtml(info.name)}</strong></div>
+        <div class="small">issued by <b>${escapeHtml(postAuthorLabel(info.issuer, names))}</b></div>
+        ${desc}
+        <div class="flex" style="gap:.5rem;margin-top:.6rem;flex-wrap:wrap">
+          <a class="btn" href="#/register">Create an identity to trade</a>
+        </div>
+      </div>
+    </div>`;
+  }).filter(Boolean).join('');
+
+  slot.innerHTML = `<h3 style="margin-top:1.4rem">Latest from ${escapeHtml(state.bankName)}</h3>
+    <p class="small">What this bank's members are posting — every card is one the bank chose to repost, so there is no spam. <a href="#/register">Create an identity</a> to reply or trade.</p>
+    <div class="feed">${cards}</div>
+    ${shelf ? `<h3 style="margin-top:2rem">Vouchers in this feed</h3>
+      <p class="small">Everything above, as a shelf.</p><div class="tile-grid">${shelf}</div>` : ''}`;
 }
 
 const MIN_PASSWORD = 8;
