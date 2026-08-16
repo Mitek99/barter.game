@@ -10,5 +10,6 @@ capabilities = "CAPABILITY_IAM"
 confirm_changeset = false
 fail_on_empty_changeset = false
 # The app-deployer user's IAM policy refuses role creation without this
-# permissions boundary (deployer-template.yaml).
-parameter_overrides = "RolePermissionsBoundary=AppDeployerBoundary"
+# permissions boundary (deployer-template.yaml). BankAdmins: operator pubkey(s)
+# allowed on /ui/admin/* (see README "admin access").
+parameter_overrides = "RolePermissionsBoundary=AppDeployerBoundary BankAdmins=D3Gh4oyipxyxkHfAVUFfwx9qAZkieH7C4Tc3RtsiMA6z"
