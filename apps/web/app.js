@@ -253,16 +253,29 @@ async function remoteHoldings(bankRef) {
   return out;
 }
 
-async function allHoldings() {
-  // The LOCAL portfolio is load-bearing: let its failure propagate so the
-  // dashboard shows an error rather than a false "no balances yet". Only the
-  // remote per-bank reads below degrade to nothing.
+async function localHoldings() {
+  // The LOCAL portfolio is load-bearing: let its failure propagate so callers
+  // show an error rather than a false "no balances yet".
   const local = await uiGet('/portfolio');
-  const out = (local.holdings || []).map(h => ({ ...h, remote: false }));
+  return (local.holdings || []).map(h => ({ ...h, remote: false }));
+}
+
+/**
+ * Holdings at every pinned bank, delivered PER BANK as each answer arrives:
+ * `onBatch(list)` fires once per reachable bank. A slow or unreachable bank
+ * holds up nothing — its batch simply never lands (its error is swallowed).
+ */
+async function remoteHoldingsProgressive(onBatch) {
   const banks = await uiGet('/banks').catch(() => []);
   const remotes = (banks || []).filter(b => b.pubkey && b.pubkey !== state.bankPubkey);
-  const fetched = await Promise.all(remotes.map(b => remoteHoldings(b).catch(() => [])));
-  fetched.forEach(list => out.push(...list));
+  await Promise.all(remotes.map(b =>
+    remoteHoldings(b).then(list => { if (list.length) onBatch(list); }).catch(() => {})));
+}
+
+async function allHoldings() {
+  const local = await localHoldings();
+  const out = [...local];
+  await remoteHoldingsProgressive(list => out.push(...list));
   return out;
 }
 
@@ -1286,6 +1299,16 @@ function loadError(what) {
   return `<div class="small error">Couldn't load ${escapeHtml(what)} — the bank may be unreachable. <button class="btn secondary" onclick="route()">Retry</button></div>`;
 }
 
+// Progressive section loading. Screens that collect data across MULTIPLE banks
+// paint their shell immediately and fill each placeholder as its data arrives:
+// a slow or unreachable pinned bank must never hold up the rest of the screen.
+// A fill landing after the user navigated away finds no element and is a no-op.
+const SECTION_SPINNER = '<p class="small"><span class="spinner"></span> Loading…</p>';
+function fillSection(id, html) {
+  const el = document.getElementById(id);
+  if (el) el.innerHTML = html;
+}
+
 // Escapes AFTER stringifying, never before: a value that is not a string is
 // exactly the case worth escaping — an array of attacker-chosen strings
 // stringifies to raw quotes and would break straight out of an attribute.
@@ -1657,40 +1680,59 @@ function rememberedHandle() {
   try { return localStorage.getItem(`barter.handle.${state.bankName}`) || ''; } catch { return ''; }
 }
 
-async function renderDashboard(app) {
-  // Discovery content fetches in parallel with the dashboard's own data; it
-  // catches its own errors and renders them inline, so the promise never rejects.
-  const discovery = discoverSections();
-  let holdings = [], holdingsFailed = false;
-  try { holdings = await allHoldings(); } catch { holdingsFailed = true; }
-  let history = { events: [] }, historyFailed = false;
-  try { history = await uiGet('/history?limit=5'); } catch { historyFailed = true; }
+// The Balances card body, shared by the progressive fills. While remote banks
+// are still answering, a quiet note says so instead of flashing "no balances".
+function balancesGrid(holdings, checkingRemote) {
   const amt = (n) => n === null || n === undefined ? '—' : n;
-  let body = header('Dashboard');
-  body += `<div class="container">`;
-  body += card('Balances', holdingsFailed ? loadError('balances') : `<div class="grid">${holdings.map(h => `
+  const grid = holdings.length ? `<div class="grid">${holdings.map(h => `
     <div>
       <div class="small">${escapeHtml(h.name)}${h.remote ? ` <span class="chip" title="${escapeHtml(h.bank_url || '')}">@ ${escapeHtml((h.bank || '').slice(0, 8))}…</span>` : ''}</div>
       <div><strong>${amt(h.current)}</strong> <span class="small">pending ${amt(h.pending)}</span></div>
       <div class="mono small">${escapeHtml(h.account.slice(0,12))}…</div>
     </div>
-  `).join('') || '<p class="small">No balances yet</p>'}</div>`);
+  `).join('')}</div>` : '<p class="small">No balances yet</p>';
+  return grid + (checkingRemote ? '<p class="small">Checking pinned banks…</p>' : '');
+}
+
+async function renderDashboard(app) {
+  // Paint the shell immediately; every data section fills in on its own
+  // timeline, local bank first, pinned banks as they answer (fillSection).
+  let body = header('Dashboard');
+  body += `<div class="container">`;
+  body += `<div class="card"><h3>Balances</h3><div id="dash-bal">${SECTION_SPINNER}</div></div>`;
   body += card('Quick actions', `<div class="flex" style="flex-wrap:wrap;gap:0.6rem">
     <a class="btn" href="#/vouchers/new">Create voucher</a>
     <a class="btn secondary" href="#/invoices/new">New invoice</a>
     <a class="btn secondary" href="#/cheques/new">New cheque</a>
   </div>`);
   body += installSlot('banner');
-  body += card('Recent activity', historyFailed ? loadError('activity') : (history.events.map(e => `
+  body += `<div class="card"><h3>Recent activity</h3><div id="dash-act">${SECTION_SPINNER}</div></div>`;
+  body += `<h3 style="margin-top:2rem">Discover</h3><div id="dash-disc">${SECTION_SPINNER}</div>`;
+  body += `</div>`;
+  app.innerHTML = body;
+
+  (async () => {
+    const local = await localHoldings();
+    fillSection('dash-bal', balancesGrid(local, true));
+    const holdings = [...local];
+    await remoteHoldingsProgressive(list => {
+      holdings.push(...list);
+      fillSection('dash-bal', balancesGrid(holdings, true));
+    });
+    fillSection('dash-bal', balancesGrid(holdings, false));
+  })().catch(() => fillSection('dash-bal', loadError('balances')));
+
+  uiGet('/history?limit=5').then(history => fillSection('dash-act',
+    (history.events || []).map(e => `
     <div class="flex" style="justify-content:space-between;margin:0.4rem 0">
       <span class="mono small">${escapeHtml(e.deal_id.slice(0,12))}…</span>
       <span>${e.direction === 'credit' ? '↓ received' : '↑ sent'} ${escapeHtml(String(e.amount))} ${escapeHtml(e.voucher_name || e.voucher.slice(0,8))}</span>
       <span class="chip state-${escapeHtml(e.state)}">${escapeHtml(e.state)}</span>
-    </div>
-  `).join('') || '<p class="small">No activity</p>'));
-  body += `<h3 style="margin-top:2rem">Discover</h3>` + await discovery;
-  body += `</div>`;
-  app.innerHTML = body;
+    </div>`).join('') || '<p class="small">No activity</p>'))
+    .catch(() => fillSection('dash-act', loadError('activity')));
+
+  // discoverSections catches its own errors and renders them inline.
+  discoverSections().then(html => fillSection('dash-disc', html));
 }
 
 // ---------------- operator admin ----------------
@@ -1800,35 +1842,12 @@ function voucherDocArt(v, bankUrl) {
   return ref ? mediaSrc(bankUrl, ref) : '';
 }
 
-async function renderVouchers(app) {
-  const [mine, holdings, trusted, bases] = await Promise.all([
-    rpcCall('list_vouchers', { filter: 'mine' }).catch(() => null),
-    allHoldings().catch(() => null),
-    uiGet('/trusted').catch(() => []),
-    issuerResolveBases(),
-  ]);
-  let body = header('Vouchers') + `<div class="container">`;
-  body += `<div class="flex" style="margin-bottom:1rem;gap:.6rem;flex-wrap:wrap">
-    <a class="btn" href="#/vouchers/new">Create voucher</a>
-    <button class="btn secondary" onclick="showShare('i', '${jsStr(state.user.pubkey)}', 'My issuer profile')">Share my profile QR</button>
-  </div>`;
-
-  // 1. Issued by you.
-  body += `<h3>Issued by you</h3>`;
-  body += mine === null ? loadError('your vouchers')
-    : mine.length ? `<div class="tile-grid">${mine.map(v => {
-        const hash = hashDoc(v);
-        return voucherTile(hash, {
-          name: v.name,
-          art: voucherDocArt(v, state.bankUrl),
-          sub: `${v.limit !== undefined ? `limit ${v.limit}` : 'unlimited'}${v.integer ? ' · integer' : ''}`,
-        });
-      }).join('')}</div>`
-    : '<p class="small">No vouchers yet. <a href="#/vouchers/new">Create one.</a></p>';
-
-  // 2. You hold — one tile per voucher, balances summed across your accounts.
+// The "You hold" section body, shared by the progressive fills: one tile per
+// voucher, balances summed across accounts. While pinned banks are still
+// answering, a quiet note says so instead of flashing a premature empty state.
+function holdTilesHtml(holdings, checkingRemote) {
   const heldByVoucher = new Map();
-  (holdings || []).forEach(h => {
+  holdings.forEach(h => {
     const cur = heldByVoucher.get(h.voucher) || { name: h.name, current: 0, pending: 0, unknown: false, remote: false };
     if (h.current === null || h.current === undefined) cur.unknown = true;
     else cur.current += h.current;
@@ -1836,78 +1855,114 @@ async function renderVouchers(app) {
     if (h.remote) cur.remote = true;
     heldByVoucher.set(h.voucher, cur);
   });
-  body += `<h3 style="margin-top:2rem">You hold</h3>`;
-  body += holdings === null ? loadError('your holdings')
-    : heldByVoucher.size ? `<div class="tile-grid">${[...heldByVoucher].map(([hash, h]) =>
-        voucherTile(hash, {
-          name: h.name,
-          sub: h.remote ? 'at a pinned bank' : '',
-          stat: `<strong>${h.unknown ? '—' : h.current}</strong>${h.pending ? ` <span class="small">pending ${h.pending}</span>` : ''}`,
-        })).join('')}</div>`
-    : '<p class="small">Nothing held yet — accept a swap, pay an invoice, or claim a cheque.</p>';
-
-  // 3. You follow — vouchers of issuers you trust, minus what you already
-  // issue or hold (those have their own sections above).
-  const seenF = new Set([...(mine || []).map(v => hashDoc(v)), ...heldByVoucher.keys()]);
-  const followed = [];
-  const resolved = await Promise.all((trusted || []).map(t =>
-    resolveIssuerAt(bases, typeof t === 'string' ? t : t.pubkey).catch(() => null)));
-  resolved.forEach(r => {
-    if (!r || !Array.isArray(r.vouchers)) return;
-    r.vouchers.forEach(v => {
-      if (!v || typeof v.name !== 'string') return;
-      const hash = hashDoc(v);
-      if (seenF.has(hash)) return;
-      seenF.add(hash);
-      followed.push({ v, hash, who: r.handle || (r.pubkey || '').slice(0, 8) + '…', bankUrl: r.bank_url });
-    });
-  });
-  body += `<h3 style="margin-top:2rem">You follow</h3>`;
-  body += followed.length ? `<div class="tile-grid">${followed.map(f => voucherTile(f.hash, {
-      name: f.v.name,
-      art: voucherDocArt(f.v, f.bankUrl),
-      sub: `issued by ${escapeHtml(f.who)}`,
+  const tiles = heldByVoucher.size ? `<div class="tile-grid">${[...heldByVoucher].map(([hash, h]) =>
+    voucherTile(hash, {
+      name: h.name,
+      sub: h.remote ? 'at a pinned bank' : '',
+      stat: `<strong>${h.unknown ? '—' : h.current}</strong>${h.pending ? ` <span class="small">pending ${h.pending}</span>` : ''}`,
     })).join('')}</div>`
-    : '<p class="small">Nothing followed beyond what you already hold. <a href="#/network">Trust an issuer</a> or <a href="#/registry">browse the registry</a>.</p>';
+    : '<p class="small">Nothing held yet — accept a swap, pay an invoice, or claim a cheque.</p>';
+  return tiles + (checkingRemote ? '<p class="small">Checking pinned banks…</p>' : '');
+}
 
+async function renderVouchers(app) {
+  let body = header('Vouchers') + `<div class="container">`;
+  body += `<div class="flex" style="margin-bottom:1rem;gap:.6rem;flex-wrap:wrap">
+    <a class="btn" href="#/vouchers/new">Create voucher</a>
+    <button class="btn secondary" onclick="showShare('i', '${jsStr(state.user.pubkey)}', 'My issuer profile')">Share my profile QR</button>
+  </div>`;
+  body += `<h3>Issued by you</h3><div id="v-mine">${SECTION_SPINNER}</div>`;
+  body += `<h3 style="margin-top:2rem">You hold</h3><div id="v-hold">${SECTION_SPINNER}</div>`;
+  body += `<h3 style="margin-top:2rem">You follow</h3><div id="v-follow">${SECTION_SPINNER}</div>`;
   body += `</div>`;
   app.innerHTML = body;
+
+  // 1. Issued by you — a single local RPC, lands first.
+  const mineP = rpcCall('list_vouchers', { filter: 'mine' })
+    .then(mine => {
+      fillSection('v-mine', mine.length ? `<div class="tile-grid">${mine.map(v => {
+        const hash = hashDoc(v);
+        return voucherTile(hash, {
+          name: v.name,
+          art: voucherDocArt(v, state.bankUrl),
+          sub: `${v.limit !== undefined ? `limit ${v.limit}` : 'unlimited'}${v.integer ? ' · integer' : ''}`,
+        });
+      }).join('')}</div>`
+        : '<p class="small">No vouchers yet. <a href="#/vouchers/new">Create one.</a></p>');
+      return mine;
+    })
+    .catch(() => { fillSection('v-mine', loadError('your vouchers')); return []; });
+
+  // 2. You hold — local portfolio first, each pinned bank merges as it answers.
+  const holdP = (async () => {
+    const local = await localHoldings();
+    fillSection('v-hold', holdTilesHtml(local, true));
+    const holdings = [...local];
+    await remoteHoldingsProgressive(list => {
+      holdings.push(...list);
+      fillSection('v-hold', holdTilesHtml(holdings, true));
+    });
+    fillSection('v-hold', holdTilesHtml(holdings, false));
+    return holdings;
+  })().catch(() => { fillSection('v-hold', loadError('your holdings')); return []; });
+
+  // 3. You follow — trusted issuers resolved across their banks, minus what
+  // the sections above already show (your own issues and your holdings).
+  Promise.all([mineP, holdP, uiGet('/trusted').catch(() => []), issuerResolveBases()])
+    .then(async ([mine, holdings, trusted, bases]) => {
+      const seenF = new Set([...mine.map(v => hashDoc(v)), ...holdings.map(h => h.voucher)]);
+      const followed = [];
+      const resolved = await Promise.all((trusted || []).map(t =>
+        resolveIssuerAt(bases, typeof t === 'string' ? t : t.pubkey).catch(() => null)));
+      resolved.forEach(r => {
+        if (!r || !Array.isArray(r.vouchers)) return;
+        r.vouchers.forEach(v => {
+          if (!v || typeof v.name !== 'string') return;
+          const hash = hashDoc(v);
+          if (seenF.has(hash)) return;
+          seenF.add(hash);
+          followed.push({ v, hash, who: r.handle || (r.pubkey || '').slice(0, 8) + '…', bankUrl: r.bank_url });
+        });
+      });
+      fillSection('v-follow', followed.length ? `<div class="tile-grid">${followed.map(f => voucherTile(f.hash, {
+        name: f.v.name,
+        art: voucherDocArt(f.v, f.bankUrl),
+        sub: `issued by ${escapeHtml(f.who)}`,
+      })).join('')}</div>`
+        : '<p class="small">Nothing followed beyond what you already hold. <a href="#/network">Trust an issuer</a> or <a href="#/registry">browse the registry</a>.</p>');
+    })
+    .catch(() => fillSection('v-follow', loadError('followed vouchers')));
 }
 
 // Voucher detail: what it is, your position in it, and every action the
-// voucher supports — trade, invoice, cheque, post, and its QR.
+// voucher supports — trade, invoice, cheque, post, and its QR. The head card
+// paints as soon as ANY known bank answers with the doc; presentation (meta),
+// your position, and the actions each fill in on their own timeline.
 async function renderVoucherDetail(app, hash) {
-  // Resolve the doc across our bank and every pinned bank.
-  let v = null, at = null;
+  app.innerHTML = header('Vouchers') + `<div class="container">
+    <p class="small"><a href="#/vouchers">← All vouchers</a></p>
+    <div id="v-head">${SECTION_SPINNER}</div>
+    <div id="v-pos"></div>
+    <div id="v-act">${SECTION_SPINNER}</div>
+  </div>`;
+
   const banks = await feedBanks().catch(() => [{ url: state.bankUrl || state.basePath, pubkey: state.bankPubkey }]);
-  for (const b of banks) {
-    try {
-      const doc = await rpcCallAt(b.url, b.pubkey, 'get_voucher', { voucher_hash: hash });
-      if (doc && doc.name) { v = doc; at = b; break; }
-    } catch { /* this bank does not carry it */ }
-  }
-  if (!v) {
-    app.innerHTML = header('Vouchers') + `<div class="container">${card('Voucher',
-      `<p class="small">Unknown voucher at every bank you know.</p><p><a href="#/vouchers">Back to vouchers</a></p>`)}</div>`;
+  const found = await Promise.any(banks.map(b =>
+    rpcCallAt(b.url, b.pubkey, 'get_voucher', { voucher_hash: hash })
+      .then(doc => { if (!doc || !doc.name) throw new Error('not carried here'); return { doc, at: b }; })
+  )).catch(() => null);
+  if (!found) {
+    fillSection('v-head', card('Voucher', '<p class="small">Unknown voucher at every bank you know.</p>'));
+    document.getElementById('v-act')?.remove();
     return;
   }
-  const [meta, holdings, issuerInfo, known] = await Promise.all([
-    rpcCallAt(at.url, at.pubkey, 'get_voucher_meta', { voucher_hash: hash }).catch(() => null),
-    allHoldings().catch(() => []),
-    resolveIssuerAt(await issuerResolveBases(), v.pubkey).catch(() => null),
-    knownVouchers().catch(() => []),
-  ]);
-  const mineAccounts = (holdings || []).filter(h => h.voucher === hash);
-  const issuerLabel = v.pubkey === state.user.pubkey
-    ? 'you' : (issuerInfo && issuerInfo.handle) || v.pubkey.slice(0, 8) + '…';
-  const art = metaSrc(meta, { bank_url: at.url }, 'square') || voucherDocArt(v, at.url);
-  const desc = (meta && meta.description_md) || v.description_md || '';
-  // Trade/invoice/cheque/post forms pick from own + trusted-issuer vouchers.
-  const usable = (known || []).some(k => k.hash === hash);
+  const { doc: v, at } = found;
+  const shortIssuer = v.pubkey === state.user.pubkey ? 'you' : v.pubkey.slice(0, 8) + '…';
 
-  let body = header('Vouchers') + `<div class="container">`;
-  body += `<p class="small"><a href="#/vouchers">← All vouchers</a></p>`;
-  body += `<div class="card">
+  const headHtml = (meta, issuerLabel) => {
+    const art = metaSrc(meta, { bank_url: at.url }, 'square') || voucherDocArt(v, at.url);
+    const desc = (meta && meta.description_md) || v.description_md || '';
+    return `<div class="card">
     <div class="flex" style="gap:1rem;align-items:flex-start;flex-wrap:wrap">
       ${art ? `<img src="${escapeHtml(art)}" alt="" style="width:96px;height:96px;border-radius:12px;object-fit:cover;flex:0 0 auto">` : ''}
       <div style="min-width:0;flex:1">
@@ -1919,16 +1974,36 @@ async function renderVoucherDetail(app, hash) {
     </div>
     ${desc ? `<p class="small" style="margin-top:.8rem">${escapeHtml(desc)}</p>` : ''}
   </div>`;
+  };
+  fillSection('v-head', headHtml(null, shortIssuer));
 
-  if (mineAccounts.length) {
-    body += card('Your position', mineAccounts.map(h => `
+  // Enriched head (released look + issuer handle) repaints once, when both
+  // best-effort reads settle.
+  Promise.all([
+    rpcCallAt(at.url, at.pubkey, 'get_voucher_meta', { voucher_hash: hash }).catch(() => null),
+    issuerResolveBases().then(bases => resolveIssuerAt(bases, v.pubkey)).catch(() => null),
+  ]).then(([meta, issuerInfo]) => {
+    const label = v.pubkey === state.user.pubkey ? 'you' : (issuerInfo && issuerInfo.handle) || shortIssuer;
+    if (meta || label !== shortIssuer) fillSection('v-head', headHtml(meta, label));
+  });
+
+  // Your position fills in only when you actually hold some.
+  allHoldings().then(holdings => {
+    const mineAccounts = (holdings || []).filter(h => h.voucher === hash);
+    if (mineAccounts.length) {
+      fillSection('v-pos', card('Your position', mineAccounts.map(h => `
       <div class="flex" style="justify-content:space-between;margin:0.4rem 0">
         <span class="mono small">${escapeHtml(h.account.slice(0, 12))}…${h.remote ? ' <span class="chip">remote</span>' : ''}</span>
         <span><strong>${h.current === null || h.current === undefined ? '—' : h.current}</strong> <span class="small">pending ${h.pending ?? '—'}</span></span>
-      </div>`).join(''));
-  }
+      </div>`).join('')));
+    }
+  }).catch(() => {});
 
-  body += card('Actions', `<div class="flex" style="flex-wrap:wrap;gap:0.6rem">
+  // Actions depend on the chooser set (own + trusted issuers), which resolves
+  // issuers across banks — fill when it lands.
+  knownVouchers().then(known => {
+    const usable = (known || []).some(k => k.hash === hash);
+    fillSection('v-act', card('Actions', `<div class="flex" style="flex-wrap:wrap;gap:0.6rem">
     ${usable ? `
       <a class="btn" href="#/orders/new/${escapeHtml(hash)}">Trade</a>
       <a class="btn secondary" href="#/invoices/new/${escapeHtml(hash)}">Invoice</a>
@@ -1938,10 +2013,8 @@ async function renderVoucherDetail(app, hash) {
        <button class="btn" onclick="wantVoucher('${jsStr(hash)}')">Trade for this</button>`}
       <button class="btn secondary" onclick="showShare('i', '${jsStr(v.pubkey)}', 'Voucher QR — ${jsStr(v.name)}', '${jsStr(at.url)}')">Voucher QR</button>
     </div>
-    <p class="small" style="margin-top:.7rem"><a href="#/posts/${escapeHtml(hash)}">Read its feed →</a></p>`);
-
-  body += `</div>`;
-  app.innerHTML = body;
+    <p class="small" style="margin-top:.7rem"><a href="#/posts/${escapeHtml(hash)}">Read its feed →</a></p>`));
+  }).catch(() => fillSection('v-act', card('Actions', loadError('the actions'))));
 }
 
 function renderCreateVoucher(app) {

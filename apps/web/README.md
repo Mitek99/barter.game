@@ -125,6 +125,22 @@ Order/invoice/cheque forms use a **voucher chooser** (own issued vouchers plus
 trusted issuers' vouchers resolved via the public `GET /:bank/ui/resolve/:pubkey`)
 instead of raw hash pasting.
 
+## Loading pattern
+
+Screens that collect data across multiple banks never block first paint on a
+peer: the shell renders immediately and each section fills in as its data
+arrives (`SECTION_SPINNER` + `fillSection`). Local data lands first; pinned
+banks merge per bank as they answer (`remoteHoldingsProgressive`). A slow or
+unreachable peer shows a "Checking pinned banks…" note, never a frozen screen.
+
+## Browser tests
+
+`scripts/ui-test/` holds a Playwright (Python) harness: `slowbank.py` is a
+stub peer that answers everything after 5s, and `ui_test.py` drives headless
+Chromium through register → mint → pin-slow-bank → vouchers/detail/mobile,
+asserting that local content paints fast and sections settle independently.
+Run a local bank on :8100, then `python3 scripts/ui-test/ui_test.py`.
+
 ## Transports
 
 Two signed channels, both authenticated by the user's ed25519 key:
