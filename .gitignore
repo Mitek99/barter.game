@@ -27,3 +27,4 @@ website/.hugo_build.lock
 
 # Local cache for scripts/emulate.ts (emulated demo users' keys)
 .emulated-state.json
+__pycache__/
