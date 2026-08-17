@@ -352,12 +352,13 @@ function dispatch(app, p, rest) {
   probeAdmin(); // fire-and-forget; sets state.isAdmin once per session
   if (p === 'admin') return renderAdmin(app);
   if (p === 'vouchers' && rest[0] === 'new') return renderCreateVoucher(app);
+  if (p === 'vouchers' && rest[0]) return renderVoucherDetail(app, rest[0]);
   if (p === 'vouchers') return renderVouchers(app);
   if (p === 'orders' && rest[0] === 'new') return renderCreateOrder(app, rest[1]);
   if (p === 'orders') return renderOrders(app);
-  if (p === 'invoices' && rest[0] === 'new') return renderCreateInvoice(app);
+  if (p === 'invoices' && rest[0] === 'new') return renderCreateInvoice(app, rest[1]);
   if (p === 'invoices') return renderInvoices(app);
-  if (p === 'cheques' && rest[0] === 'new') return renderCreateCheque(app);
+  if (p === 'cheques' && rest[0] === 'new') return renderCreateCheque(app, rest[1]);
   if (p === 'cheques') return renderCheques(app);
   // Discover merged into Home; keep old links working.
   if (p === 'discover') { location.replace('#/'); return; }
@@ -1216,6 +1217,7 @@ function bottomNav(title) {
   const act = (t) => title === t ? ' active' : '';
   const ic = {
     home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',
+    voucher: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2.2a2.3 2.3 0 0 0 0 5.6V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2.2a2.3 2.3 0 0 0 0-5.6z"/></svg>',
     plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg>',
     scan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M4 12h16"/></svg>',
   };
@@ -1232,6 +1234,7 @@ function bottomNav(title) {
   </div>
   <nav class="bottomnav" aria-label="Quick actions">
     <a href="#/" class="bn-item${act('Dashboard')}">${ic.home}<span>Home</span></a>
+    <a href="#/vouchers" class="bn-item${act('Vouchers')}">${ic.voucher}<span>Vouchers</span></a>
     <button class="bn-item bn-new" onclick="toggleNewSheet(event)" aria-haspopup="true" aria-label="Create new">${ic.plus}<span>New</span></button>
     <a href="#/scan" class="bn-item${act('Scan')}">${ic.scan}<span>Scan</span></a>
   </nav>`;
@@ -1774,24 +1777,169 @@ window.adminRepost = async function(btn, hash) {
   }
 };
 
+// A voucher tile: the square art when the doc carries images, the name, and
+// one line of context. The whole tile links to the voucher's detail screen.
+function voucherTile(hash, opts) {
+  const art = opts.art ? `<div class="tile-art"><img src="${escapeHtml(opts.art)}" alt="" loading="lazy" decoding="async"></div>` : '';
+  return `<a class="card tile" href="#/vouchers/${escapeHtml(hash)}" style="text-decoration:none;color:inherit">
+    ${art}
+    <div class="tile-body">
+      <div><strong>${escapeHtml(opts.name)}</strong></div>
+      ${opts.sub ? `<div class="small">${opts.sub}</div>` : ''}
+      ${opts.stat ? `<div style="margin-top:.3rem">${opts.stat}</div>` : ''}
+    </div>
+  </a>`;
+}
+
+// Art straight from the Voucher doc's own images: images[0] = icon,
+// images[1] = square (bank-schema.md convention); refs resolve at the
+// voucher's bank, which is not necessarily ours.
+function voucherDocArt(v, bankUrl) {
+  const images = Array.isArray(v.images) ? v.images.filter(Boolean) : [];
+  const ref = images[1] || images[0];
+  return ref ? mediaSrc(bankUrl, ref) : '';
+}
+
 async function renderVouchers(app) {
-  let vouchers = [], failed = false;
-  try { vouchers = await rpcCall('list_vouchers', { filter: 'mine' }); } catch { failed = true; }
-  let body = header('Vouchers');
-  body += `<div class="container">`;
-  body += `<div class="flex" style="margin-bottom:1rem">
+  const [mine, holdings, trusted, bases] = await Promise.all([
+    rpcCall('list_vouchers', { filter: 'mine' }).catch(() => null),
+    allHoldings().catch(() => null),
+    uiGet('/trusted').catch(() => []),
+    issuerResolveBases(),
+  ]);
+  let body = header('Vouchers') + `<div class="container">`;
+  body += `<div class="flex" style="margin-bottom:1rem;gap:.6rem;flex-wrap:wrap">
     <a class="btn" href="#/vouchers/new">Create voucher</a>
     <button class="btn secondary" onclick="showShare('i', '${jsStr(state.user.pubkey)}', 'My issuer profile')">Share my profile QR</button>
   </div>`;
-  body += failed ? loadError('your vouchers') : `<div class="grid">${vouchers.map(v => `
-    <div class="card">
-      <div><strong>${escapeHtml(v.name)}</strong></div>
-      <div class="mono small">${escapeHtml(hashDoc(v).slice(0,16))}…</div>
-      <div class="small">${v.limit !== undefined ? `limit ${v.limit}` : 'unlimited'} ${v.integer ? '· integer' : ''}</div>
-      ${expiryNote(v.expires)}
-      <button class="btn secondary" onclick="showShare('i', '${jsStr(v.pubkey)}', 'Issuer profile — ${jsStr(v.name)}')">Share issuer QR</button>
+
+  // 1. Issued by you.
+  body += `<h3>Issued by you</h3>`;
+  body += mine === null ? loadError('your vouchers')
+    : mine.length ? `<div class="tile-grid">${mine.map(v => {
+        const hash = hashDoc(v);
+        return voucherTile(hash, {
+          name: v.name,
+          art: voucherDocArt(v, state.bankUrl),
+          sub: `${v.limit !== undefined ? `limit ${v.limit}` : 'unlimited'}${v.integer ? ' · integer' : ''}`,
+        });
+      }).join('')}</div>`
+    : '<p class="small">No vouchers yet. <a href="#/vouchers/new">Create one.</a></p>';
+
+  // 2. You hold — one tile per voucher, balances summed across your accounts.
+  const heldByVoucher = new Map();
+  (holdings || []).forEach(h => {
+    const cur = heldByVoucher.get(h.voucher) || { name: h.name, current: 0, pending: 0, unknown: false, remote: false };
+    if (h.current === null || h.current === undefined) cur.unknown = true;
+    else cur.current += h.current;
+    cur.pending += h.pending || 0;
+    if (h.remote) cur.remote = true;
+    heldByVoucher.set(h.voucher, cur);
+  });
+  body += `<h3 style="margin-top:2rem">You hold</h3>`;
+  body += holdings === null ? loadError('your holdings')
+    : heldByVoucher.size ? `<div class="tile-grid">${[...heldByVoucher].map(([hash, h]) =>
+        voucherTile(hash, {
+          name: h.name,
+          sub: h.remote ? 'at a pinned bank' : '',
+          stat: `<strong>${h.unknown ? '—' : h.current}</strong>${h.pending ? ` <span class="small">pending ${h.pending}</span>` : ''}`,
+        })).join('')}</div>`
+    : '<p class="small">Nothing held yet — accept a swap, pay an invoice, or claim a cheque.</p>';
+
+  // 3. You follow — vouchers of issuers you trust, minus what you already
+  // issue or hold (those have their own sections above).
+  const seenF = new Set([...(mine || []).map(v => hashDoc(v)), ...heldByVoucher.keys()]);
+  const followed = [];
+  const resolved = await Promise.all((trusted || []).map(t =>
+    resolveIssuerAt(bases, typeof t === 'string' ? t : t.pubkey).catch(() => null)));
+  resolved.forEach(r => {
+    if (!r || !Array.isArray(r.vouchers)) return;
+    r.vouchers.forEach(v => {
+      if (!v || typeof v.name !== 'string') return;
+      const hash = hashDoc(v);
+      if (seenF.has(hash)) return;
+      seenF.add(hash);
+      followed.push({ v, hash, who: r.handle || (r.pubkey || '').slice(0, 8) + '…', bankUrl: r.bank_url });
+    });
+  });
+  body += `<h3 style="margin-top:2rem">You follow</h3>`;
+  body += followed.length ? `<div class="tile-grid">${followed.map(f => voucherTile(f.hash, {
+      name: f.v.name,
+      art: voucherDocArt(f.v, f.bankUrl),
+      sub: `issued by ${escapeHtml(f.who)}`,
+    })).join('')}</div>`
+    : '<p class="small">Nothing followed beyond what you already hold. <a href="#/network">Trust an issuer</a> or <a href="#/registry">browse the registry</a>.</p>';
+
+  body += `</div>`;
+  app.innerHTML = body;
+}
+
+// Voucher detail: what it is, your position in it, and every action the
+// voucher supports — trade, invoice, cheque, post, and its QR.
+async function renderVoucherDetail(app, hash) {
+  // Resolve the doc across our bank and every pinned bank.
+  let v = null, at = null;
+  const banks = await feedBanks().catch(() => [{ url: state.bankUrl || state.basePath, pubkey: state.bankPubkey }]);
+  for (const b of banks) {
+    try {
+      const doc = await rpcCallAt(b.url, b.pubkey, 'get_voucher', { voucher_hash: hash });
+      if (doc && doc.name) { v = doc; at = b; break; }
+    } catch { /* this bank does not carry it */ }
+  }
+  if (!v) {
+    app.innerHTML = header('Vouchers') + `<div class="container">${card('Voucher',
+      `<p class="small">Unknown voucher at every bank you know.</p><p><a href="#/vouchers">Back to vouchers</a></p>`)}</div>`;
+    return;
+  }
+  const [meta, holdings, issuerInfo, known] = await Promise.all([
+    rpcCallAt(at.url, at.pubkey, 'get_voucher_meta', { voucher_hash: hash }).catch(() => null),
+    allHoldings().catch(() => []),
+    resolveIssuerAt(await issuerResolveBases(), v.pubkey).catch(() => null),
+    knownVouchers().catch(() => []),
+  ]);
+  const mineAccounts = (holdings || []).filter(h => h.voucher === hash);
+  const issuerLabel = v.pubkey === state.user.pubkey
+    ? 'you' : (issuerInfo && issuerInfo.handle) || v.pubkey.slice(0, 8) + '…';
+  const art = metaSrc(meta, { bank_url: at.url }, 'square') || voucherDocArt(v, at.url);
+  const desc = (meta && meta.description_md) || v.description_md || '';
+  // Trade/invoice/cheque/post forms pick from own + trusted-issuer vouchers.
+  const usable = (known || []).some(k => k.hash === hash);
+
+  let body = header('Vouchers') + `<div class="container">`;
+  body += `<p class="small"><a href="#/vouchers">← All vouchers</a></p>`;
+  body += `<div class="card">
+    <div class="flex" style="gap:1rem;align-items:flex-start;flex-wrap:wrap">
+      ${art ? `<img src="${escapeHtml(art)}" alt="" style="width:96px;height:96px;border-radius:12px;object-fit:cover;flex:0 0 auto">` : ''}
+      <div style="min-width:0;flex:1">
+        <div style="font-size:1.2rem"><strong>${escapeHtml(v.name)}</strong></div>
+        <div class="small">issued by <b>${escapeHtml(issuerLabel)}</b> · ${escapeHtml(at.url.replace(/^https?:\/\//, ''))}</div>
+        <div class="small">${v.limit !== undefined ? `limit ${v.limit}` : 'unlimited'}${v.integer ? ' · integer amounts' : ''}</div>
+        ${expiryNote(v.expires)}
+      </div>
     </div>
-  `).join('') || '<p class="small">No vouchers yet. <a href="#/vouchers/new">Create one.</a></p>'}</div>`;
+    ${desc ? `<p class="small" style="margin-top:.8rem">${escapeHtml(desc)}</p>` : ''}
+  </div>`;
+
+  if (mineAccounts.length) {
+    body += card('Your position', mineAccounts.map(h => `
+      <div class="flex" style="justify-content:space-between;margin:0.4rem 0">
+        <span class="mono small">${escapeHtml(h.account.slice(0, 12))}…${h.remote ? ' <span class="chip">remote</span>' : ''}</span>
+        <span><strong>${h.current === null || h.current === undefined ? '—' : h.current}</strong> <span class="small">pending ${h.pending ?? '—'}</span></span>
+      </div>`).join(''));
+  }
+
+  body += card('Actions', `<div class="flex" style="flex-wrap:wrap;gap:0.6rem">
+    ${usable ? `
+      <a class="btn" href="#/orders/new/${escapeHtml(hash)}">Trade</a>
+      <a class="btn secondary" href="#/invoices/new/${escapeHtml(hash)}">Invoice</a>
+      <a class="btn secondary" href="#/cheques/new/${escapeHtml(hash)}">Cheque</a>
+      <a class="btn secondary" href="#/posts/${escapeHtml(hash)}">Post about it</a>`
+    : `<span class="small">Trust the issuer to trade, invoice, or write cheques in this voucher:</span>
+       <button class="btn" onclick="wantVoucher('${jsStr(hash)}')">Trade for this</button>`}
+      <button class="btn secondary" onclick="showShare('i', '${jsStr(v.pubkey)}', 'Voucher QR — ${jsStr(v.name)}', '${jsStr(at.url)}')">Voucher QR</button>
+    </div>
+    <p class="small" style="margin-top:.7rem"><a href="#/posts/${escapeHtml(hash)}">Read its feed →</a></p>`);
+
   body += `</div>`;
   app.innerHTML = body;
 }
@@ -1980,12 +2128,14 @@ function expiryNote(expires) {
     : `<div class="small">expires ${escapeHtml(day)}</div>`;
 }
 
-async function renderCreateInvoice(app) {
+async function renderCreateInvoice(app, voucherHash) {
   const vouchers = await knownVouchers();
+  // Arriving from a voucher's detail screen: preselect it when it is ours to use.
+  const selected = voucherHash && vouchers.some(v => v.hash === voucherHash) ? voucherHash : undefined;
   app.innerHTML = header('New invoice') + `<div class="container">
     ${card('Request a payment (invoice)', vouchers.length ? `
       <p class="small">Creates a shareable request: whoever opens it pays you the amount below, in the chosen voucher.</p>
-      <label for="i-voucher">Voucher to receive</label>${voucherChooser('i-voucher', vouchers)}
+      <label for="i-voucher">Voucher to receive</label>${voucherChooser('i-voucher', vouchers, selected)}
       <label for="i-acct">Account name <span class="small">(where the payment lands)</span></label><input id="i-acct" value="receiving">
       <label for="i-amount">Amount to receive</label><input id="i-amount" type="number" min="0" step="any" value="10">
       <button class="btn" style="width:100%;margin-top:1rem" onclick="doCreateInvoice(this)">Create invoice</button>
@@ -2043,12 +2193,14 @@ async function renderCheques(app) {
   app.innerHTML = body;
 }
 
-async function renderCreateCheque(app) {
+async function renderCreateCheque(app, voucherHash) {
   const vouchers = await knownVouchers();
+  // Arriving from a voucher's detail screen: preselect it when it is ours to use.
+  const selected = voucherHash && vouchers.some(v => v.hash === voucherHash) ? voucherHash : undefined;
   app.innerHTML = header('New cheque') + `<div class="container">
     ${card('Write a cheque', vouchers.length ? `
       <p class="small">Creates a shareable link: whoever opens it claims the amount below from you, in the chosen voucher.</p>
-      <label for="q-voucher">Voucher to pay out</label>${voucherChooser('q-voucher', vouchers)}
+      <label for="q-voucher">Voucher to pay out</label>${voucherChooser('q-voucher', vouchers, selected)}
       <label for="q-acct">Account name <span class="small">(paid from)</span></label><input id="q-acct" value="spending">
       <label for="q-amount">Amount to pay</label><input id="q-amount" type="number" min="0" step="any" value="10">
       <button class="btn" style="width:100%;margin-top:1rem" onclick="doCreateCheque(this)">Create cheque</button>
