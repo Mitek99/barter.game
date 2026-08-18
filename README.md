@@ -33,8 +33,8 @@ Demo banks run live on AWS (Lambda + DynamoDB behind CloudFront). Each bank
 serves a full web client:
 
 ```
-https://d170kplla02ejw.cloudfront.net/alice/ui
-https://d170kplla02ejw.cloudfront.net/bob/ui
+https://barter.game/alice/ui
+https://barter.game/bob/ui
 ```
 
 1. Open a bank's `/ui`, create an identity (handle + password — the ed25519
@@ -65,7 +65,7 @@ issuer and preloads the swap. The wire format is in
 Machine access works too — every bank publishes its identity document:
 
 ```bash
-curl https://d170kplla02ejw.cloudfront.net/alice/barter-bank.json
+curl https://barter.game/alice/barter-bank.json
 ```
 
 To run everything locally and execute the test suite:

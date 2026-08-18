@@ -37,7 +37,7 @@ import {
   type Post,
 } from '../packages/protocol/src/index.ts';
 
-const DEFAULT_BASE = 'https://d170kplla02ejw.cloudfront.net';
+const DEFAULT_BASE = 'https://barter.game';
 /**
  * An EXPLICIT BARTER_BASE always wins, including over a user's stored
  * deployment — otherwise pointing the script at localhost would silently drive

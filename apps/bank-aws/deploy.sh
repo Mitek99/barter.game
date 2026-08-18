@@ -54,5 +54,5 @@ aws cloudfront create-invalidation --distribution-id "$dist_id" \
   --paths '/webapp/*' >/dev/null
 
 echo "==> done: https://$domain/"
-echo "    banks list:   https://$domain/"
+echo "    website:      https://$domain/"
 echo "    bank UI:      https://$domain/<bank>/ui"

@@ -25,7 +25,7 @@ This repo contains:
 | Protocol lib | TypeScript (ES modules) | Single source file `packages/protocol/src/index.ts`. Must run identically under Bun, Node.js, and browser. |
 | Database | DynamoDB single-table | Behind the `KvStore` seam (`packages/bank-core/src/kv.ts`). Every key is prefixed `[bank_pubkey, schema, kind, ...]`; atomic check-and-set operations. Values are capped at 64 KiB on every storage backend — the federation-compat rule so any bank accepts the same writes (the cap originated as Deno KV's limit). |
 | Crypto | `@noble/ed25519`, `@noble/hashes`, `@scure/base` | Pure-JS, auditable, runs in all targets. |
-| Website | Hugo + Hextra theme | Built with `hugo`; deployed via Netlify. |
+| Website | Hugo + Hextra theme | Built with `hugo`; deployed to the bank stack's S3/CloudFront via `apps/bank-aws/deploy-website.sh` (no Netlify). |
 | Key storage (user) | Browser-encrypted keystore on the bank | PBKDF2-SHA256 (250k iterations) + AES-256-GCM, encrypted client-side; the bank stores ciphertext only. See `apps/web/README.md`. |
 | Key storage (bank) | Env vars (`BANK_<NAME>_PRIV_KEY`) locally; SSM SecureStrings under `/barter/banks/<name>` on AWS | One or more bank keys per process. |
 
@@ -201,7 +201,7 @@ AWS_PROFILE=app-deployer ./deploy.sh   # build + sam deploy + web client sync + 
 
 The `app-deployer` IAM user and its least-privilege policy + permissions boundary are defined in `apps/bank-aws/deployer-template.yaml` — see the "Deploying as app-deployer" section of `apps/bank-aws/README.md`. On AWS, bank keys live in SSM SecureString parameters under `/barter/banks/<name>`.
 
-The live demo banks are `https://d170kplla02ejw.cloudfront.net/alice/ui` and `https://d170kplla02ejw.cloudfront.net/bob/ui`.
+The live demo banks are `https://barter.game/alice/ui` and `https://barter.game/bob/ui`.
 
 ### Running a bank locally
 
@@ -220,7 +220,7 @@ BANK_ALICE_PRIV_KEY=<base58> bun run local
 
 ### Website
 
-The Hugo site deploys via Netlify (`bun run deploy:website`, or automatically per `netlify.toml`).
+The Hugo site deploys to the bank stack's S3/CloudFront (`bun run deploy:website` → `apps/bank-aws/deploy-website.sh`: hugo build, sync to `s3://<assets>/site/`, CloudFront invalidation). The same distribution serves site and banks: default behavior → `site/`, `/alice/*` + `/bob/*` → the bank Lambda. Netlify is retired.
 
 ## Development conventions
 

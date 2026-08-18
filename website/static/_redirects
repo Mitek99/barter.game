@@ -1,6 +1,0 @@
-# Netlify redirects — also declared in root netlify.toml
-# This file is a fallback for edge cases; netlify.toml is authoritative
-
-https://barter.games/*      https://barter.game/:splat    301!
-https://www.barter.games/*  https://barter.game/:splat    301!
-https://www.barter.game/*   https://barter.game/:splat    301!

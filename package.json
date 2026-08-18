@@ -16,7 +16,7 @@
     "build": "bun --filter '*' build",
     "typecheck": "bun --filter '*' typecheck",
     "build:website": "cd website && hugo",
-    "deploy:website": "cd website && hugo --gc --minify && netlify deploy --prod --dir=public"
+    "deploy:website": "cd apps/bank-aws && ./deploy-website.sh"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

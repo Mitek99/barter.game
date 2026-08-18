@@ -1,9 +1,9 @@
 {{/*
   Overrides Hextra's empty custom/head-end.html stub, injected just before </head>.
 
-  PostHog analytics. Gated to production builds only: netlify.toml sets
-  HUGO_ENV=production for the live site and HUGO_ENV=development for deploy
-  previews, so previews and local `hugo server` runs never report traffic.
+  PostHog analytics. Gated to production builds only: deploy-website.sh sets
+  HUGO_ENV=production for the live site, so local `hugo server` runs and
+  non-production builds never report traffic.
 
   No favicon tags here: Hextra's own favicons.html partial already links
   favicon.ico / favicon.svg / favicon-16x16.png / favicon-32x32.png /

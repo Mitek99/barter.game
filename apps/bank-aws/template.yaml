@@ -18,7 +18,8 @@ Parameters:
     Default: ''
     Description: >
       Optional custom domain for CloudFront (requires AcmCertificateArn).
-      Leave empty to use the d123.cloudfront.net domain.
+      www.<DomainName> is added as a second alias automatically and redirected
+      to the apex. Leave empty to use the d123.cloudfront.net domain.
   AcmCertificateArn:
     Type: String
     Default: ''
@@ -79,9 +80,10 @@ Resources:
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
 
-  # Media blobs (media/<bankPubkey>/<hash>) and the static web client
-  # (webapp/*). Private; CloudFront reads webapp/* through OAC, media is
-  # served by the Lambda (auth on upload, immutable caching on download).
+  # Media blobs (media/<bankPubkey>/<hash>), the static web client (webapp/*),
+  # and the public website (site/*, synced by deploy-website.sh). Private;
+  # CloudFront reads webapp/* and site/* through OAC, media is served by the
+  # Lambda (auth on upload, immutable caching on download).
   AssetsBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
@@ -109,7 +111,9 @@ Resources:
             Principal:
               Service: cloudfront.amazonaws.com
             Action: s3:GetObject
-            Resource: !Sub '${AssetsBucket.Arn}/webapp/*'
+            Resource:
+              - !Sub '${AssetsBucket.Arn}/webapp/*'
+              - !Sub '${AssetsBucket.Arn}/site/*'
             Condition:
               StringEquals:
                 AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
@@ -218,6 +222,34 @@ Resources:
           return request;
         }
 
+  # Website (default behavior): www -> apex redirect, Hugo pretty URLs ->
+  # /site/... keys ("/docs/x/" and extension-less paths get /index.html).
+  SiteRewriteFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub '${AWS::StackName}-site-rewrite'
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Serve the Hugo site from the site/ prefix; redirect www to apex
+        Runtime: cloudfront-js-2.0
+      FunctionCode: !Sub |
+        function handler(event) {
+          var request = event.request;
+          var host = request.headers.host.value;
+          if (host === 'www.${DomainName}') {
+            return {
+              statusCode: 301,
+              statusDescription: 'Moved Permanently',
+              headers: { location: { value: 'https://${DomainName}' + request.uri } }
+            };
+          }
+          var uri = request.uri;
+          if (uri.endsWith('/')) uri += 'index.html';
+          else if (uri.split('/').pop().indexOf('.') === -1) uri += '/index.html';
+          request.uri = '/site' + uri;
+          return request;
+        }
+
   S3OriginAccessControl:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
@@ -245,7 +277,7 @@ Resources:
             ErrorCachingMinTTL: 0
           - ErrorCode: 404
             ErrorCachingMinTTL: 0
-        Aliases: !If [HasCustomDomain, [!Ref DomainName], !Ref 'AWS::NoValue']
+        Aliases: !If [HasCustomDomain, [!Ref DomainName, !Sub 'www.${DomainName}'], !Ref 'AWS::NoValue']
         ViewerCertificate: !If
           - HasCustomDomain
           - AcmCertificateArn: !Ref AcmCertificateArn
@@ -276,25 +308,26 @@ Resources:
             OriginAccessControlId: !Ref S3OriginAccessControl
             S3OriginConfig:
               OriginAccessIdentity: ''
-        # Everything dynamic: RPC, signed UI API, barter links, manifest, media
-        # upload. Never cached; all headers/query/cookies pass through except
-        # Host (Lambda URLs need their own Host to route).
+        # Default: the public website (Hugo, synced to site/ by
+        # deploy-website.sh). The banks live under their path prefixes below —
+        # adding a bank means adding a behavior like those.
         DefaultCacheBehavior:
-          TargetOriginId: bank-lambda
+          TargetOriginId: webapp-s3
           ViewerProtocolPolicy: redirect-to-https
-          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+          AllowedMethods: [GET, HEAD]
           CachedMethods: [GET, HEAD]
-          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # Managed-CachingDisabled
-          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac # Managed-AllViewerExceptHostHeader
-          # No Compress: Managed-CachingDisabled turns compression off, so
-          # setting it here would only imply a behavior that never happens.
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
+          # Carries over the security headers Netlify used to set (nosniff,
+          # frame protection, referrer policy, HSTS).
+          ResponseHeadersPolicyId: 67cbb72e-38ab-4b2e-97e2-4f0e7f4b7b38 # Managed-SecurityHeadersPolicy
+          Compress: true
           FunctionAssociations:
             - EventType: viewer-request
-              FunctionARN: !GetAtt ForwardHostFunction.FunctionMetadata.FunctionARN
+              FunctionARN: !GetAtt SiteRewriteFunction.FunctionMetadata.FunctionARN
         CacheBehaviors:
           # Immutable content-addressed media downloads — cache at the edge.
           # Uploads are POST /:bank/media (no trailing segment) and fall
-          # through to the default behavior.
+          # through to their bank's behavior.
           - PathPattern: '*/media/*'
             TargetOriginId: bank-lambda
             ViewerProtocolPolicy: redirect-to-https
@@ -317,6 +350,30 @@ Resources:
             FunctionAssociations:
               - EventType: viewer-request
                 FunctionARN: !GetAtt StaticRewriteFunction.FunctionMetadata.FunctionARN
+          # The banks. Everything dynamic: RPC, signed UI API, barter links,
+          # manifest, media upload. Never cached; all headers/query/cookies
+          # pass through except Host (Lambda URLs need their own Host).
+          # ADDING A BANK = adding one of these behaviors for its name.
+          - PathPattern: '/alice/*'
+            TargetOriginId: bank-lambda
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachedMethods: [GET, HEAD]
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # Managed-CachingDisabled
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac # Managed-AllViewerExceptHostHeader
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN: !GetAtt ForwardHostFunction.FunctionMetadata.FunctionARN
+          - PathPattern: '/bob/*'
+            TargetOriginId: bank-lambda
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachedMethods: [GET, HEAD]
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # Managed-CachingDisabled
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac # Managed-AllViewerExceptHostHeader
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN: !GetAtt ForwardHostFunction.FunctionMetadata.FunctionARN
 
 Outputs:
   DistributionDomain:

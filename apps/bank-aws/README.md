@@ -6,12 +6,19 @@ AWS — Lambda + DynamoDB + S3 behind CloudFront. This is the only bank host in
 the repo; the live demo banks run on it:
 
 ```
-viewer ──> CloudFront ──┬── */ui/app/*  ──> S3 (webapp/ prefix, OAC)
+viewer ──> CloudFront ──┬── /alice/*, /bob/* ──> Lambda Function URL (the banks)
+                        │                           ├── DynamoDB single table  (ledger, docs, indexes)
+                        │                           └── S3                     (media blobs, media/ prefix)
                         ├── */media/*   ──> Lambda (edge-cached: immutable blobs)
-                        └── everything  ──> Lambda Function URL
-                                             ├── DynamoDB single table  (ledger, docs, indexes)
-                                             └── S3                     (media blobs, media/ prefix)
+                        ├── */ui/app/*  ──> S3 (webapp/ prefix, OAC — the SPA)
+                        └── everything  ──> S3 (site/ prefix, OAC — the Hugo website,
+                                             synced by deploy-website.sh)
 ```
+
+With the `DomainName` + `AcmCertificateArn` parameters set (see samconfig.toml)
+the same distribution serves `https://barter.game/` (website) and
+`https://barter.game/<bank>/…` (banks); `www.<domain>` redirects to the apex.
+Adding a bank means adding its `/<name>/*` behavior in template.yaml.
 
 - **One Lambda serves every configured bank** (path-scoped by bank name), so
   co-located banks settle in-process.
