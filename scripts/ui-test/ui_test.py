@@ -95,6 +95,11 @@ with sync_playwright() as p:
     dt = time.time() - t0
     check("dashboard local content paints despite slow peer", dt < 4.0, f"{dt:.1f}s")
 
+    # A page refresh keeps the session — no password prompt.
+    page.reload()
+    page.wait_for_selector("text=Quick actions", timeout=15000)
+    check("refresh keeps the session (no re-login)", True)
+
     # Voucher detail screen: head card fast, actions fill in.
     page.goto(BASE + "#/vouchers")
     page.wait_for_selector("#v-mine >> text=" + VOUCHER, timeout=10000)
@@ -111,6 +116,13 @@ with sync_playwright() as p:
     page.wait_for_selector(".modal img.qr", timeout=5000)
     check("voucher QR modal opens", True)
     page.click("#share-close")
+
+    # Logging out clears the session: a refresh then shows the login form.
+    page.click("a.logout")
+    page.wait_for_selector("#u-handle", timeout=10000)
+    page.reload()
+    page.wait_for_selector("#u-handle", timeout=10000)
+    check("logout clears the session across refresh", True)
 
     # ---------------- mobile flow ----------------
     mctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)

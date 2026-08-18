@@ -88,9 +88,11 @@ and never sees the password or the plaintext key.
   `GET /:bank/ui/keystore/:handle` (bank rate-limits it to 5/min per handle),
   decrypted locally, and the pubkey derived from the seed must match the
   registered pubkey. There is no password recovery.
-- **In memory only**: the decrypted key lives in a JS variable; `localStorage`
-  keeps only the last handle used. **Auto-lock** wipes the key after 10
-  minutes of inactivity (checked every 30 s).
+- **Session lifetime**: the decrypted seed is mirrored into `sessionStorage`
+  (per-tab) so a page refresh keeps the session; it dies with the tab and
+  never crosses origins. `localStorage` keeps only the last handle used.
+  **Auto-lock** wipes the key (memory + session entry) after 10 minutes of
+  inactivity (checked every 30 s), and logging out clears both.
 - **Recovery kit** (`#/settings`): downloads
   `{handle, pubkey, bank, keystore}` as JSON — useful only with the password.
 - **Barter Links**: landing pages fetch the `?format=json` envelope and verify

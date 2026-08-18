@@ -1346,13 +1346,40 @@ function toast(msg, type = 'success') {
   setTimeout(() => t.remove(), 4000);
 }
 
-// Drops the decrypted key from memory and returns to the login screen. The
-// key only ever lives in memory, so this is the whole of "logging out" — there
-// is no server session to end.
+// ---------------- session persistence ----------------
+// The decrypted seed is mirrored into sessionStorage so a page refresh keeps
+// the session. sessionStorage is the right lifetime: it survives reloads but
+// dies with the tab, never crosses origins, and logout/auto-lock clears it.
+// (localStorage would outlive a browser restart — too long-lived for a raw
+// key.) The bank still only ever sees the PBKDF2+AES-GCM ciphertext.
+const SESSION_KEY = `barter.session.${state.bankName}`;
+function saveSession(handle, seed) {
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ handle, seed: base58Encode(seed) })); } catch { /* ignore */ }
+}
+function clearSession() {
+  try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
+}
+function restoreSession() {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return false;
+    const { handle, seed } = JSON.parse(raw);
+    const privateKey = base58Decode(seed);
+    if (typeof handle !== 'string' || privateKey.length !== 32) return false;
+    const { pubkeyBase58 } = publicKeyOf(privateKey);
+    state.user = { handle, pubkey: pubkeyBase58, privateKey };
+    return true;
+  } catch { return false; }
+}
+
+// Drops the decrypted key from memory and session storage, and returns to the
+// login screen. There is no server session to end, so this is the whole of
+// "logging out".
 window.logout = function() {
   state.user = null;
   state.uiState = null;
   state.isAdmin = undefined;
+  clearSession();
   location.hash = '#/unlock';
   route();
 };
@@ -1540,6 +1567,7 @@ window.doRegister = async function() {
     if (data.code) throw bankError(data.code, data.message);
     rememberHandle(handle);
     state.user = { handle, pubkey: pubkeyBase58, privateKey };
+    saveSession(handle, privateKey);
     // The account exists now; a transient /state blip must not bounce the user
     // back to a register error (a retry would hit "handle taken"). Fall back to
     // a default state, exactly like doUnlock.
@@ -1594,6 +1622,7 @@ window.restoreFromKit = async function(btn) {
     const handle = kit.handle || pubkeyBase58.slice(0, 8);
     rememberHandle(handle);
     state.user = { handle, pubkey: pubkeyBase58, privateKey: seed };
+    saveSession(handle, seed);
     state.uiState = await uiGet('/state').catch(() => ({ pubkey: pubkeyBase58, trusted: [], contacts: [], banks: [], catalog: [], drafts: [], prefs: {}, rev: 0 }));
     toast(`Welcome back, ${handle}`);
     location.hash = '#/';
@@ -1612,6 +1641,7 @@ window.doConnect = async function() {
     if (privateKey.length !== 32) throw new Error('seed must be 32 bytes');
     const { pubkeyBase58 } = publicKeyOf(privateKey);
     state.user = { pubkey: pubkeyBase58, privateKey, handle: pubkeyBase58.slice(0, 8) };
+    saveSession(state.user.handle, privateKey);
     state.uiState = await uiGet('/state').catch(() => null);
     location.hash = '#/';
     route();
@@ -1662,6 +1692,7 @@ window.doUnlock = async function() {
     if (pubkeyBase58 !== data.pubkey) { err.textContent = 'Wrong password'; return; }
     rememberHandle(handle);
     state.user = { handle, pubkey: pubkeyBase58, privateKey: seed };
+    saveSession(handle, seed);
     state.uiState = await uiGet('/state').catch(() => ({ pubkey: pubkeyBase58, trusted: [], contacts: [], banks: [], catalog: [], drafts: [], prefs: {}, rev: 0 }));
     if (resumePendingAction()) return;
     location.hash = '#/';
@@ -3550,6 +3581,13 @@ try {
 
 registerServiceWorker();
 
-fetchConfig().then(() => route()).catch(e => {
+fetchConfig().then(async () => {
+  // A refresh keeps the session: the seed is mirrored in sessionStorage (see
+  // saveSession). A missing/stale /state is tolerated exactly like doConnect.
+  if (restoreSession()) {
+    state.uiState = await uiGet('/state').catch(() => null);
+  }
+  route();
+}).catch(e => {
   document.getElementById('app').innerHTML = `<div class="container"><p class="error">Failed to load bank config: ${e.message}</p></div>`;
 });
