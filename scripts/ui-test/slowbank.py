@@ -15,12 +15,18 @@ DELAY = 5
 class Handler(BaseHTTPRequestHandler):
     def _go(self):
         time.sleep(DELAY)
-        body = json.dumps({
-            "name": "slowbank",
-            "pubkey": PUB,
-            "url": "http://localhost:8201",
-            "protocol_version": "barter.game/v1",
-        }).encode()
+        if self.path.startswith("/rpc"):
+            # RPC-shaped error: slow AND failing, so the client counts the
+            # bank unreachable (a junk 200 would read as "reachable, empty").
+            body = json.dumps({"jsonrpc": "2.0", "id": None,
+                               "error": {"code": -32603, "message": "slow bank"}}).encode()
+        else:
+            body = json.dumps({
+                "name": "slowbank",
+                "pubkey": PUB,
+                "url": "http://localhost:8201",
+                "protocol_version": "barter.game/v1",
+            }).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")

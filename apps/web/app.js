@@ -168,13 +168,24 @@ async function probeAdmin() {
 // bank). These variants address an explicit bank base URL + pubkey instead of
 // the bank the SPA is served from.
 
+// A peer bank that never answers must not stall a screen: every cross-bank
+// read goes through this. 10s is generous for a healthy bank and bounded for
+// a dead one (a decommissioned deployment, a typo'd pin).
+const FETCH_TIMEOUT_MS = 10000;
+async function fetchWithTimeout(url, opts = {}, ms = FETCH_TIMEOUT_MS) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  try { return await fetch(url, { ...opts, signal: ctl.signal }); }
+  finally { clearTimeout(t); }
+}
+
 async function rpcCallAt(base, toPubkey, method, params) {
   const envelope = {
     jsonrpc: '2.0', id: newUlid(), method, params,
     pubkey: state.user.pubkey, to: toPubkey, sig: ''
   };
   envelope.sig = signDoc(envelope, state.user.privateKey);
-  const res = await fetch(`${base.replace(/\/$/, '')}/rpc`, {
+  const res = await fetchWithTimeout(`${base.replace(/\/$/, '')}/rpc`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(envelope)
@@ -427,55 +438,126 @@ async function feedBanks() {
 }
 
 /**
- * Merge one page from every (author, bank) source. Each source is already
- * newest-first, so a k-way merge by ULID yields a correct global order without
- * the bank doing any cross-author ranking.
+ * Progressive feed loader. Every (bank, author) source is fetched
+ * independently and in parallel; `onUpdate(snapshot)` fires as soon as ANY
+ * source has yielded verified posts (and again as their context — names,
+ * vouchers, meta — resolves), so the screen shows posts long before slow or
+ * dead banks have answered. A source that fails lands only in `unreachable`.
+ *
+ * The snapshot: { posts (merged, newest-first), authors, names, vMap, vInfo,
+ * vMeta, unreachable, settled }. `settled` is true on the final call, made
+ * after every source and all context resolution has finished.
  *
  * Every post is signature-checked here — including its embedded ancestors —
- * before it is allowed into the feed. A bank serves what it stored; trusting
- * it to have verified is not the reader's job.
+ * before it is allowed into the feed, exactly like the old one-shot loader.
  */
-async function loadFeed(voucherFilter, limit = 30) {
-  const [authors, banks] = await Promise.all([feedAuthors(), feedBanks()]);
-  if (!authors.length) return { posts: [], authors, unreachable: [] };
-
+async function streamFeed(voucherFilter, limit, onUpdate) {
+  const [authors, banks, known, bases] = await Promise.all([
+    feedAuthors(), feedBanks(), knownVouchers().catch(() => []), issuerResolveBases(),
+  ]);
+  const entries = new Map(); // hash -> {post, bankUrl}
+  const names = {}, vMap = {}, vInfo = {}, vMeta = {};
+  const seenAuthors = new Set(), seenVouchers = new Set();
   const unreachable = [];
-  const results = await Promise.all(
-    banks.flatMap(b => authors.map(async author => {
+  (known || []).forEach(v => { vMap[v.hash] = v.name; });
+
+  const snapshot = (settled) => ({
+    posts: [...entries.entries()]
+      .map(([hash, e]) => ({ hash, post: e.post, bankUrl: e.bankUrl }))
+      .sort((a, b) => (a.post.ulid < b.post.ulid ? 1 : a.post.ulid > b.post.ulid ? -1 : 0)),
+    authors, names, vMap, vInfo, vMeta,
+    unreachable: [...unreachable],
+    settled,
+  });
+  const emit = () => onUpdate(snapshot(false));
+
+  // Resolve labels for newly mentioned authors/vouchers. Batches chain so two
+  // sources finishing together never resolve the same mention twice.
+  const seenCtx = { authors: new Set(), vouchers: new Set() };
+  let ctxChain = Promise.resolve();
+  const queueContext = () => {
+    ctxChain = ctxChain.then(async () => {
+      const newAuthors = new Set(), newVouchers = new Set();
+      const walk = p => {
+        if (!p) return;
+        if (p.pubkey && !seenCtx.authors.has(p.pubkey)) { seenCtx.authors.add(p.pubkey); newAuthors.add(p.pubkey); }
+        if (p.voucher && !seenCtx.vouchers.has(p.voucher)) { seenCtx.vouchers.add(p.voucher); newVouchers.add(p.voucher); }
+        walk(p.reply_to);
+        walk(p.repost);
+      };
+      entries.forEach(({ post }) => walk(post));
+      if (!newAuthors.size && !newVouchers.size) { emit(); return; }
+      await Promise.all([
+        ...[...newAuthors].map(async pk => {
+          if (state.user && pk === state.user.pubkey) return;
+          if (names[pk]) return; // a named bank, resolved up front
+          const r = await resolveIssuerAt(bases, pk).catch(() => null);
+          if (r && r.handle) names[pk] = r.handle;
+        }),
+        ...[...newVouchers].map(async h => {
+          for (const b of banks) {
+            try {
+              const v = await rpcCallAt(b.url, b.pubkey, 'get_voucher', { voucher_hash: h });
+              if (v && v.name) {
+                if (!vMap[h]) vMap[h] = v.name;
+                vInfo[h] = { name: v.name, issuer: v.pubkey, bank: b.pubkey, bank_url: b.url };
+                break;
+              }
+            } catch { /* this bank does not carry it */ }
+          }
+          const info = vInfo[h];
+          if (info) {
+            try {
+              const m = await rpcCallAt(info.bank_url, info.bank, 'get_voucher_meta', { voucher_hash: h });
+              if (m) vMeta[h] = m;
+            } catch { /* no meta released */ }
+          }
+        }),
+      ]);
+      window.__feedVouchers = vInfo;
+      emit();
+    });
+  };
+
+  // Foreign bank display names up front (unreachable banks fall back to
+  // base58): the bank is the most frequent author in a cross-bank feed.
+  const bankNamesDone = Promise.all(banks.map(async b => {
+    if (!b.pubkey || b.pubkey === state.bankPubkey) return;
+    try {
+      const info = await fetchWithTimeout(`${b.url.replace(/\/$/, '')}/barter-bank.json`).then(r => r.json());
+      if (info && info.name) names[b.pubkey] = `${info.name} (bank)`;
+    } catch { /* fall back to base58 */ }
+  }));
+
+  if (authors.length) {
+    await Promise.all(banks.flatMap(b => authors.map(async author => {
+      let items;
       try {
         const r = await rpcCallAt(b.url, b.pubkey, 'list_posts', {
           pubkey: author, voucher_hash: voucherFilter || 'all', limit,
         });
-        // Keep the serving bank with each post: its media refs resolve THERE
-        // (and copying them is the reposter's job, post-feed.md §5).
-        return ((r && r.items) || []).map(p => ({ p, src: b.url }));
+        items = (r && r.items) || [];
       } catch {
-        const label = b.url;
-        if (!unreachable.includes(label)) unreachable.push(label);
-        return [];
+        if (!unreachable.includes(b.url)) unreachable.push(b.url);
+        return;
       }
-    })),
-  );
-
-  const byHash = new Map();
-  results.flat().forEach(({ p, src }) => {
-    let hash;
-    try { hash = hashDoc(p); } catch { return; }
-    if (byHash.has(hash)) return;
-    // Fail closed: an unverifiable post is dropped, not rendered with a warning.
-    // Shape is checked as well as signature — a signature only proves the
-    // author meant those bytes, not that `voucher` is a hash rather than an
-    // array of markup. This is the same validator the bank applies on intake,
-    // so an honest bank cannot be storing anything this rejects.
-    try { validatePost(p); } catch { return; }
-    try { if (!verifyPostTree(p)) return; } catch { return; }
-    byHash.set(hash, { post: p, bankUrl: src });
-  });
-
-  const posts = [...byHash.entries()]
-    .map(([hash, { post, bankUrl }]) => ({ hash, post, bankUrl }))
-    .sort((a, b) => (a.post.ulid < b.post.ulid ? 1 : a.post.ulid > b.post.ulid ? -1 : 0));
-  return { posts, authors, unreachable };
+      let added = false;
+      for (const p of items) {
+        let hash;
+        try { hash = hashDoc(p); } catch { continue; }
+        if (entries.has(hash)) continue;
+        // Fail closed, same as the old loader: shape AND signature, trees too.
+        try { validatePost(p); } catch { continue; }
+        try { if (!verifyPostTree(p)) continue; } catch { continue; }
+        entries.set(hash, { post: p, bankUrl: b.url });
+        added = true;
+      }
+      if (added) queueContext();
+    })));
+  }
+  await bankNamesDone;
+  await ctxChain;
+  onUpdate(snapshot(true));
 }
 
 // Markdown is NOT rendered — body_md is escaped and shown as text, with only
@@ -867,103 +949,14 @@ window.wantVoucher = async function(voucherHash) {
   route();
 };
 
-/**
- * Everything a feed-driven screen needs, assembled once: the merged feed,
- * display names, and per-voucher {name, issuer, bank, meta}. Shared by the
- * Posts screen and Discover — both are views over the same follows graph.
- */
-async function buildFeedContext(voucherFilter) {
-  let vouchers = [];
-  let feed = { posts: [], authors: [], unreachable: [] };
-  let failed = false;
-  try {
-    [vouchers, feed] = await Promise.all([knownVouchers().catch(() => []), loadFeed(voucherFilter)]);
-  } catch { failed = true; }
-
-  // Resolve labels for EVERY pubkey and voucher the feed actually mentions —
-  // not just the reader's own trust list. A repost embeds a post by someone the
-  // reader may not follow, and it anchors to a voucher the reader may not hold;
-  // both would otherwise render as raw base58.
-  const mentionedAuthors = new Set(feed.authors);
-  const mentionedVouchers = new Set();
-  const walk = p => {
-    if (!p) return;
-    if (p.pubkey) mentionedAuthors.add(p.pubkey);
-    if (p.voucher) mentionedVouchers.add(p.voucher);
-    walk(p.reply_to);
-    walk(p.repost);
-  };
-  feed.posts.forEach(({ post }) => walk(post));
-
-  const names = {};
-  // A bank has no registered handle, so /ui/resolve never names one. Every
-  // pinned bank reposts its own users, so an unnamed foreign bank is the most
-  // frequent author in a cross-bank feed — and would read as raw base58.
-  const feedBankList = await feedBanks().catch(() => []);
-  const bankNames = (await Promise.all(feedBankList.map(async b => {
-    if (!b.pubkey || b.pubkey === state.bankPubkey) return null;
-    try {
-      const info = await fetch(`${b.url}/barter-bank.json`).then(r => r.json());
-      if (!info || !info.name) return null;
-      return { pubkey: b.pubkey, name: info.name, host: new URL(b.url).host.split('.')[0] };
-    } catch { return null; } // unreachable bank: fall back to base58
-  }))).filter(Boolean);
-  bankNames.forEach(b => {
-    // The same bank name runs on more than one deployment, so say which host
-    // when the name alone would point at two different banks.
-    const twins = bankNames.filter(o => o.name === b.name).length > 1;
-    names[b.pubkey] = twins ? `${b.name} (bank at ${b.host})` : `${b.name} (bank)`;
-  });
-  const bases = await issuerResolveBases().catch(() => []);
-  await Promise.all([...mentionedAuthors].map(async pk => {
-    if (state.user && pk === state.user.pubkey) return;
-    const r = await resolveIssuerAt(bases, pk).catch(() => null);
-    if (r && r.handle) names[pk] = r.handle;
-  }));
-
-  const vMap = {};
-  // vInfo carries the issuer and bank as well as the name, because acting on a
-  // post ("I want that voucher") means trusting the voucher's ISSUER — who is
-  // not necessarily the post's author. A reply or a bank repost is anchored to
-  // someone else's voucher.
-  const vInfo = {};
-  vouchers.forEach(v => { vMap[v.hash] = v.name; });
-  const knownBanks = await feedBanks().catch(() => []);
-  await Promise.all([...mentionedVouchers].map(async h => {
-    for (const b of knownBanks) {
-      try {
-        const v = await rpcCallAt(b.url, b.pubkey, 'get_voucher', { voucher_hash: h });
-        if (v && v.name) {
-          if (!vMap[h]) vMap[h] = v.name;
-          vInfo[h] = { name: v.name, issuer: v.pubkey, bank: b.pubkey, bank_url: b.url };
-          return;
-        }
-      } catch { /* this bank does not carry it */ }
-    }
-  }));
-  window.__feedVouchers = vInfo;
-
-  // One cheap read per voucher for its current presentation — the bank keeps
-  // the latest release cached (or synthesizes it from the Voucher's own
-  // images), so no feed scanning is needed.
-  const vMeta = {};
-  await Promise.all([...mentionedVouchers].map(async h => {
-    const info = vInfo[h];
-    if (!info) return;
-    try {
-      const m = await rpcCallAt(info.bank_url, info.bank, 'get_voucher_meta', { voucher_hash: h });
-      if (m) vMeta[h] = m;
-    } catch { /* no meta released */ }
-  }));
-
-  return { vouchers, feed, failed, names, vMap, vInfo, vMeta };
-}
-
 async function renderPosts(app, voucherFilter) {
-  app.innerHTML = header('Posts') + `<div class="container"><p class="small">Loading feed…</p></div>`;
-
-  const { vouchers, feed, failed, names, vMap, vMeta, vInfo } = await buildFeedContext(voucherFilter);
-  const selected = voucherFilter && vMap[voucherFilter] ? voucherFilter : '';
+  // Filter bar + composer paint as soon as the chooser set is known; the
+  // stream below them fills in progressively as each bank/author source
+  // answers (streamFeed).
+  const vouchers = await knownVouchers().catch(() => []);
+  const vNames = {};
+  vouchers.forEach(v => { vNames[v.hash] = v.name; });
+  const selected = voucherFilter && vNames[voucherFilter] ? voucherFilter : '';
 
   const filterBar = `<div class="card">
     <label for="feed-voucher">Feed</label>
@@ -1002,21 +995,42 @@ async function renderPosts(app, voucherFilter) {
         <p class="small">A post is anchored to a voucher. Mint one, or trust an issuer, and you can post about it.</p>
         <a class="btn secondary" href="#/vouchers/new">Mint a voucher</a>`);
 
-  const followSet = new Set(feed.authors);
-  const ctx = { names, vMap, vMeta, vInfo, followSet };
-  embeddedPosts.clear();
-  const shown = dedupeReposts(feed.posts);
-  const list = shown.length
-    ? shown.map(entry => postCard(entry, ctx)).join('')
-    : `<div class="card"><p class="small">No posts yet from you or the issuers you trust${selected ? ' about this voucher' : ''}.</p></div>`;
-
-  const warn = feed.unreachable.length
-    ? `<div class="card"><p class="small">Couldn't reach: ${feed.unreachable.map(escapeHtml).join(', ')}</p></div>`
-    : '';
-
   app.innerHTML = header('Posts') + `<div class="container">
-    <div class="feed">${failed ? loadError('the feed') : `${filterBar}${composer}${warn}${list}`}</div>
+    <div class="feed">${filterBar}${composer}
+      <div id="feed-note"></div>
+      <div id="feed-stream">${SECTION_SPINNER}</div>
+    </div>
   </div>`;
+
+  renderFeedStream('feed-stream', 'feed-note', voucherFilter, selected);
+}
+
+/**
+ * Shared progressive stream renderer (Posts screen and Discover). Fills elId
+ * with cards as soon as any source yields, re-rendering as more sources and
+ * context land; noteId gets the "couldn't reach" card once settled. Resolves
+ * the final snapshot so callers can build follow-on sections (gallery, offers).
+ */
+function renderFeedStream(elId, noteId, voucherFilter, selected, emptyText) {
+  return new Promise((resolve) => {
+    streamFeed(voucherFilter, 30, (snap) => {
+      if (!snap.posts.length && !snap.settled) return; // keep the spinner
+      const ctx = { names: snap.names, vMap: snap.vMap, vMeta: snap.vMeta, vInfo: snap.vInfo, followSet: new Set(snap.authors) };
+      embeddedPosts.clear();
+      const stream = dedupeReposts(snap.posts).map(entry => postCard(entry, ctx)).join('');
+      if (stream) {
+        fillSection(elId, stream);
+      } else if (snap.settled) {
+        fillSection(elId, `<div class="card"><p class="small">${emptyText ||
+          `No posts yet from you or the issuers you trust${selected ? ' about this voucher' : ''}.`}</p></div>`);
+      }
+      if (snap.settled && noteId) {
+        fillSection(noteId, snap.unreachable.length
+          ? `<div class="card"><p class="small">Couldn't reach: ${snap.unreachable.map(escapeHtml).join(', ')}</p></div>` : '');
+      }
+      if (snap.settled) resolve(snap);
+    });
+  });
 }
 
 window.toggleMetaFields = function() {
@@ -1762,8 +1776,8 @@ async function renderDashboard(app) {
     </div>`).join('') || '<p class="small">No activity</p>'))
     .catch(() => fillSection('dash-act', loadError('activity')));
 
-  // discoverSections catches its own errors and renders them inline.
-  discoverSections().then(html => fillSection('dash-disc', html));
+  // Discover fills progressively: the stream appears as sources answer.
+  renderDiscoverInto('dash-disc');
 }
 
 // ---------------- operator admin ----------------
@@ -2143,7 +2157,7 @@ async function issuerResolveBases() {
 async function resolveIssuerAt(bases, pubkey) {
   for (const base of bases) {
     try {
-      const r = await fetch(`${base.replace(/\/$/, '')}/ui/resolve/${pubkey}`).then(x => x.json());
+      const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/ui/resolve/${pubkey}`).then(x => x.json());
       if (r && (r.handle || (Array.isArray(r.vouchers) && r.vouchers.length))) {
         return { ...r, pubkey };
       }
@@ -2481,22 +2495,27 @@ window.doCreateOrder = async function(btn) {
  * offers on vouchers you already know remain below as a second channel.
  * Rendered as a section of Home (renderDashboard); returns HTML, never throws.
  */
-async function discoverSections() {
-  const { feed, failed, names, vMap, vInfo, vMeta } = await buildFeedContext('');
+// Discovery IS the feed: you meet a voucher by seeing someone's picture of
+// it. The stream fills in progressively (renderFeedStream); the gallery and
+// the open offers stay underneath as the index and the shortcut, rendered
+// once the stream has settled.
+async function renderDiscoverInto(elId) {
+  fillSection(elId, `<p class="small">What the people you <a href="#/network">follow</a> are posting — your bank reposts what its users publish, so following your bank is enough to start. There is no global search: your follows are the index. <a href="#/posts">Post something</a> yourself.</p>
+    <div id="disc-note"></div>
+    <div id="disc-stream" class="feed">${SECTION_SPINNER}</div>
+    <div id="disc-rest"></div>`);
+
   const known = await knownVouchers().catch(() => []);
   const nameByHash = {};
   known.forEach(v => { nameByHash[v.hash] = v.name; });
-  let body = '';
 
-  // Discovery IS the feed: you meet a voucher by seeing someone's picture of
-  // it. The gallery and the open offers stay underneath as the index and the
-  // shortcut, but the pictures come first.
-  const followSet = new Set(feed.authors);
-  const ctx = { names, vMap, vMeta, vInfo, followSet };
-  embeddedPosts.clear();
-  const stream = dedupeReposts(feed.posts).map(entry => postCard(entry, ctx)).join('');
+  const snap = await renderFeedStream('disc-stream', 'disc-note', '', '',
+    'Nothing discovered yet. Follow more people under <a href="#/network">Network</a>, browse <a href="#/registry">the registry</a>, or check back once the people you follow have posted.');
 
   // --- vouchers seen in the feed, newest sighting first --------------------
+  let rest = '';
+  const { names, vInfo, vMeta } = snap;
+  const followSet = new Set(snap.authors);
   const seenVouchers = [];
   const seenSet = new Set();
   const noteVoucher = p => {
@@ -2505,7 +2524,7 @@ async function discoverSections() {
     noteVoucher(p.reply_to);
     noteVoucher(p.repost);
   };
-  feed.posts.forEach(({ post }) => noteVoucher(post));
+  snap.posts.forEach(({ post }) => noteVoucher(post));
 
   const cards = seenVouchers.map(h => {
     const info = vInfo[h];
@@ -2534,25 +2553,16 @@ async function discoverSections() {
       </div>
     </div>`;
   }).filter(Boolean).join('');
-  const gallery = cards ? `<div class="tile-grid">${cards}</div>` : '';
-
-  body += `<p class="small">What the people you <a href="#/network">follow</a> are posting — your bank reposts what its users publish, so following your bank is enough to start. There is no global search: your follows are the index. <a href="#/posts">Post something</a> yourself.</p>`;
-  if (failed) {
-    body += loadError('the feed');
-  } else if (!stream) {
-    body += `<div class="card"><p class="small">Nothing discovered yet. Follow more people under <a href="#/network">Network</a>, browse <a href="#/registry">the registry</a>, or check back once the people you follow have posted.</p></div>`;
-  } else {
-    body += `<div class="feed">${stream}</div>`;
-    if (gallery) {
-      body += `<h3 style="margin-top:2rem">Vouchers in your feed</h3>
-        <p class="small">Everything above, as a shelf.</p>${gallery}`;
-    }
+  if (cards) {
+    rest += `<h3 style="margin-top:2rem">Vouchers in your feed</h3>
+      <p class="small">Everything above, as a shelf.</p><div class="tile-grid">${cards}</div>`;
   }
 
   // --- open offers on vouchers you already know (second channel) -----------
   if (!known.length) {
-    body += card('Open offers', `<p class="small">To see tradable offers you first need a voucher you issue, or an issuer you trust. <a href="#/vouchers/new">Create a voucher</a> or trade for one above.</p>`);
-    return body;
+    rest += card('Open offers', `<p class="small">To see tradable offers you first need a voucher you issue, or an issuer you trust. <a href="#/vouchers/new">Create a voucher</a> or trade for one above.</p>`);
+    fillSection('disc-rest', rest);
+    return;
   }
   // Poll our own bank AND every pinned bank for offers on the vouchers we know.
   // (The bank defaults `vouchers` to an empty catalog and `banks` to pinned-only,
@@ -2571,7 +2581,7 @@ async function discoverSections() {
   // click handler reads the full offer object back from this stash by index.
   window.__discoverOffers = uniq;
   const name = (h) => h ? (nameByHash[h] || (h.slice(0, 8) + '…')) : '';
-  body += card('Offers', uniq.map((o, i) => {
+  rest += card('Offers', uniq.map((o, i) => {
     const give = o.debit ? `give ${escapeHtml(String(o.debit.max))} ${escapeHtml(name(o.debit.voucher))}` : '';
     const get = o.credit ? `get ${escapeHtml(String(o.credit.max))} ${escapeHtml(name(o.credit.voucher))}` : '';
     const summary = [give, get].filter(Boolean).join(' · ') || 'offer';
@@ -2584,13 +2594,13 @@ async function discoverSections() {
         : `<p class="small">One-sided offer — open its link to pay or claim.</p>`}
     </div>`;
   }).join('') || '<p class="small">No offers found at your bank or pinned banks yet. Publish an order, or pin more banks under Network.</p>');
-  const unreachable = res.unreachable || [];
-  if (unreachable.length) {
-    body += card('Couldn\'t reach', unreachable.map(u => `<div class="small">bank ${escapeHtml((u.bank || '').slice(0, 12))}…</div>`).join(''));
+  const unreachableOffers = res.unreachable || [];
+  if (unreachableOffers.length) {
+    rest += card('Couldn\'t reach', unreachableOffers.map(u => `<div class="small">bank ${escapeHtml((u.bank || '').slice(0, 12))}…</div>`).join(''));
   }
-  if (res.error) body += `<p class="error small">${escapeHtml(res.error)}</p>`;
-  body += `<p class="small"><a href="#/registry">Browse this bank's voucher registry →</a></p>`;
-  return body;
+  if (res.error) rest += `<p class="error small">${escapeHtml(res.error)}</p>`;
+  rest += `<p class="small"><a href="#/registry">Browse this bank's voucher registry →</a></p>`;
+  fillSection('disc-rest', rest);
 }
 
 // Browse the bank's public voucher registry, grouped by issuer, so a newcomer

@@ -63,12 +63,32 @@ with sync_playwright() as p:
     page.wait_for_selector("#v-mine >> text=" + VOUCHER, timeout=15000)
     check("voucher minted, 'Issued by you' tile", True)
 
+    # Post about the voucher through the composer.
+    page.goto(BASE + "#/posts")
+    page.wait_for_selector("#post-body", timeout=15000)
+    page.fill("#post-body", "hello feed " + HANDLE)
+    page.click("#post-submit")
+    page.wait_for_selector(".card.post", timeout=15000)
+    check("post appears in own feed", True)
+
     # Pin the slow bank (its discovery doc takes 5s).
     page.goto(BASE + "#/network")
     page.fill("#n-bank-url", "http://localhost:8201")
     page.click("button:has-text('Pin bank')")
     page.wait_for_selector("text=Pinned slowbank", timeout=20000)
     check("slow bank pinned", True)
+
+    # THE feed test: posts from the local bank render while the slow source
+    # is still pending; the unreachable note lands only after settle.
+    t0 = time.time()
+    page.goto(BASE + "#/posts")
+    page.wait_for_selector("#feed-stream .card.post", timeout=10000)
+    dt = time.time() - t0
+    check("feed shows posts before slow source settles", dt < 4.0, f"{dt:.1f}s (peer needs 5s)")
+    page.wait_for_selector("#feed-note >> text=Couldn't reach", timeout=20000)
+    check("unreachable note names the slow bank after settle",
+          "localhost:8201" in page.locator("#feed-note").inner_text(),
+          page.locator("#feed-note").inner_text()[:80])
 
     # THE test: vouchers screen with a 5s peer — own tiles must paint fast.
     t0 = time.time()
