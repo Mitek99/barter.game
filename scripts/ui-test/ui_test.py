@@ -151,6 +151,9 @@ with sync_playwright() as p:
     mp.fill("#u-handle", HANDLE)
     mp.fill("#u-pass", PASSWORD)
     mp.click("#u-form button[type=submit]")
+    btn = mp.locator("#u-form button[type=submit]")
+    check("login button shows progress", btn.inner_text() == "Working…" and btn.is_disabled(),
+          btn.inner_text())
     mp.wait_for_selector("text=Quick actions", timeout=15000)
     labels = [t.strip() for t in mp.locator(".bottomnav .bn-item").all_text_contents()]
     check("mobile bottom bar items", labels == ["Home", "Vouchers", "New", "Scan"], str(labels))

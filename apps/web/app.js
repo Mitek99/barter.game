@@ -1569,6 +1569,9 @@ window.doRegister = async function() {
   if (pass.length < MIN_PASSWORD) { err.textContent = `Password must be at least ${MIN_PASSWORD} characters`; return; }
   if (pass !== pass2) { err.textContent = 'Passwords do not match'; return; }
   if (!ack) { err.textContent = 'Please acknowledge there is no password recovery'; return; }
+  // Keypair + PBKDF2 encryption take a visible moment — the button must say
+  // the click landed.
+  const release = lockBtn(document.querySelector('#r-form button[type=submit]'));
   try {
     const { privateKey, pubkeyBase58 } = genKeyPair();
     const keystore = await encryptSeed(privateKey, pass);
@@ -1592,6 +1595,7 @@ window.doRegister = async function() {
     location.hash = '#/';
     route();
   } catch (e) {
+    release();
     err.textContent = e.message;
   }
 };
@@ -1688,6 +1692,9 @@ window.doUnlock = async function() {
   const pass = document.getElementById('u-pass').value;
   const err = document.getElementById('u-err');
   if (!handle || !pass) { err.textContent = 'Enter your handle and password'; return; }
+  // The keystore fetch + PBKDF2 decrypt take a visible moment — the button
+  // must say the click landed.
+  const release = lockBtn(document.querySelector('#u-form button[type=submit]'));
   try {
     const res = await fetch(`${state.basePath}/ui/keystore/${encodeURIComponent(handle)}`);
     const data = await res.json();
@@ -1697,14 +1704,15 @@ window.doUnlock = async function() {
         const wait = data.retry_after ? ` Try again in ${data.retry_after}s.` : ' Wait a minute and try again.';
         err.textContent = `Too many attempts.${wait}`;
       } else err.textContent = 'Could not log in — please try again';
+      release();
       return;
     }
     let seed;
     try {
       seed = await decryptSeed(data.keystore, pass);
-    } catch { err.textContent = 'Wrong password'; return; }
+    } catch { err.textContent = 'Wrong password'; release(); return; }
     const { pubkeyBase58 } = publicKeyOf(seed);
-    if (pubkeyBase58 !== data.pubkey) { err.textContent = 'Wrong password'; return; }
+    if (pubkeyBase58 !== data.pubkey) { err.textContent = 'Wrong password'; release(); return; }
     rememberHandle(handle);
     state.user = { handle, pubkey: pubkeyBase58, privateKey: seed };
     saveSession(handle, seed);
@@ -1713,6 +1721,7 @@ window.doUnlock = async function() {
     location.hash = '#/';
     route();
   } catch (e) {
+    release();
     err.textContent = 'Could not log in — network error';
   }
 };
