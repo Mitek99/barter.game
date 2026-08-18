@@ -1361,21 +1361,22 @@ function toast(msg, type = 'success') {
 }
 
 // ---------------- session persistence ----------------
-// The decrypted seed is mirrored into sessionStorage so a page refresh keeps
-// the session. sessionStorage is the right lifetime: it survives reloads but
-// dies with the tab, never crosses origins, and logout/auto-lock clears it.
-// (localStorage would outlive a browser restart — too long-lived for a raw
-// key.) The bank still only ever sees the PBKDF2+AES-GCM ciphertext.
+// The decrypted seed is mirrored into localStorage so the session survives
+// not just a page refresh but closing and reopening the tab or the installed
+// PWA (sessionStorage only covers F5 in the same tab — a PWA restart is a new
+// session context). It never leaves the browser and never crosses banks (the
+// key carries the bank name); logout and auto-lock clear it. The bank still
+// only ever sees the PBKDF2+AES-GCM ciphertext.
 const SESSION_KEY = `barter.session.${state.bankName}`;
 function saveSession(handle, seed) {
-  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ handle, seed: base58Encode(seed) })); } catch { /* ignore */ }
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ handle, seed: base58Encode(seed) })); } catch { /* ignore */ }
 }
 function clearSession() {
-  try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
+  try { localStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
 }
 function restoreSession() {
   try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
+    const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return false;
     const { handle, seed } = JSON.parse(raw);
     const privateKey = base58Decode(seed);
@@ -3592,8 +3593,9 @@ try {
 registerServiceWorker();
 
 fetchConfig().then(async () => {
-  // A refresh keeps the session: the seed is mirrored in sessionStorage (see
-  // saveSession). A missing/stale /state is tolerated exactly like doConnect.
+  // A refresh (or a PWA restart) keeps the session: the seed is mirrored in
+  // localStorage (see saveSession). A missing/stale /state is tolerated
+  // exactly like doConnect.
   if (restoreSession()) {
     state.uiState = await uiGet('/state').catch(() => null);
   }
