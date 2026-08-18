@@ -20,6 +20,12 @@ Parameters:
       Optional custom domain for CloudFront (requires AcmCertificateArn).
       www.<DomainName> is added as a second alias automatically and redirected
       to the apex. Leave empty to use the d123.cloudfront.net domain.
+  AltDomain:
+    Type: String
+    Default: ''
+    Description: >
+      Optional second domain (e.g. barter.games). It and www.<AltDomain> are
+      added as aliases and 301-redirected to DomainName. Requires DomainName.
   AcmCertificateArn:
     Type: String
     Default: ''
@@ -52,6 +58,7 @@ Parameters:
 
 Conditions:
   HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
+  HasAltDomain: !And [!Not [!Equals [!Ref DomainName, '']], !Not [!Equals [!Ref AltDomain, '']]]
   HasOriginSecret: !Not [!Equals [!Ref OriginSecret, '']]
   HasRoleBoundary: !Not [!Equals [!Ref RolePermissionsBoundary, '']]
 
@@ -236,11 +243,13 @@ Resources:
         function handler(event) {
           var request = event.request;
           var host = request.headers.host.value;
-          if (host === 'www.${DomainName}') {
+          var apex = '${DomainName}';
+          var alt = '${AltDomain}';
+          if (host === 'www.' + apex || (alt && (host === alt || host === 'www.' + alt))) {
             return {
               statusCode: 301,
               statusDescription: 'Moved Permanently',
-              headers: { location: { value: 'https://${DomainName}' + request.uri } }
+              headers: { location: { value: 'https://' + apex + request.uri } }
             };
           }
           var uri = request.uri;
@@ -277,7 +286,13 @@ Resources:
             ErrorCachingMinTTL: 0
           - ErrorCode: 404
             ErrorCachingMinTTL: 0
-        Aliases: !If [HasCustomDomain, [!Ref DomainName, !Sub 'www.${DomainName}'], !Ref 'AWS::NoValue']
+        Aliases: !If
+          - HasCustomDomain
+          - !If
+            - HasAltDomain
+            - [!Ref DomainName, !Sub 'www.${DomainName}', !Ref AltDomain, !Sub 'www.${AltDomain}']
+            - [!Ref DomainName, !Sub 'www.${DomainName}']
+          - !Ref 'AWS::NoValue'
         ViewerCertificate: !If
           - HasCustomDomain
           - AcmCertificateArn: !Ref AcmCertificateArn
