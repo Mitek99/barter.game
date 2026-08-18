@@ -334,7 +334,7 @@ Resources:
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
           # Carries over the security headers Netlify used to set (nosniff,
           # frame protection, referrer policy, HSTS).
-          ResponseHeadersPolicyId: 67cbb72e-38ab-4b2e-97e2-4f0e7f4b7b38 # Managed-SecurityHeadersPolicy
+          ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03 # Managed-SecurityHeadersPolicy
           Compress: true
           FunctionAssociations:
             - EventType: viewer-request
