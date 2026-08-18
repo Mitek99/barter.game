@@ -11,5 +11,7 @@ confirm_changeset = false
 fail_on_empty_changeset = false
 # The app-deployer user's IAM policy refuses role creation without this
 # permissions boundary (deployer-template.yaml). BankAdmins: operator pubkey(s)
-# allowed on /ui/admin/* (see README "admin access").
-parameter_overrides = "RolePermissionsBoundary=AppDeployerBoundary BankAdmins=D3Gh4oyipxyxkHfAVUFfwx9qAZkieH7C4Tc3RtsiMA6z"
+# allowed on /ui/admin/* (see README "admin access"). DomainName/AltDomain +
+# AcmCertificateArn serve the site and banks on barter.game (barter.games
+# redirects to the apex).
+parameter_overrides = "RolePermissionsBoundary=AppDeployerBoundary BankAdmins=D3Gh4oyipxyxkHfAVUFfwx9qAZkieH7C4Tc3RtsiMA6z DomainName=barter.game AltDomain=barter.games AcmCertificateArn=arn:aws:acm:us-east-1:164620743841:certificate/a71cf1bc-d536-4168-b2cf-f492f14ab048"
