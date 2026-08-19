@@ -6,7 +6,7 @@ AWS — Lambda + DynamoDB + S3 behind CloudFront. This is the only bank host in
 the repo; the live demo banks run on it:
 
 ```
-viewer ──> CloudFront ──┬── /alice/*, /bob/* ──> Lambda Function URL (the banks)
+viewer ──> CloudFront ──┬── /test1/*, /test2/* ──> Lambda Function URL (the banks)
                         │                           ├── DynamoDB single table  (ledger, docs, indexes)
                         │                           └── S3                     (media blobs, media/ prefix)
                         ├── */media/*   ──> Lambda (edge-cached: immutable blobs)
@@ -96,7 +96,7 @@ the federation).
 
 ```bash
 # once per account: bank keys into SSM
-aws ssm put-parameter --type SecureString --name /barter/banks/alice --value <base58-priv-key>
+aws ssm put-parameter --type SecureString --name /barter/banks/test1 --value <base58-priv-key>
 
 bun run build          # esbuild bundle -> dist/ (+ web client into dist/assets)
 sam deploy --guided    # first time; afterwards: ./deploy.sh

@@ -14,7 +14,7 @@ from playwright.sync_api import sync_playwright
 
 import slowbank
 
-BASE = "http://localhost:8100/alice/ui/"
+BASE = "http://localhost:8100/test1/ui/"
 HANDLE = "uitest" + str(int(time.time()))[-6:]
 PASSWORD = "testpassword123"
 VOUCHER = "1 test credit"

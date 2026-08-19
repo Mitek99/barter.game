@@ -10,9 +10,9 @@ Parameters:
     Type: String
     Default: /barter/banks
     Description: >
-      SSM path holding one SecureString per bank: parameter "<path>/alice"
-      (base58 ed25519 private key) becomes bank "alice". Create parameters
-      with: aws ssm put-parameter --type SecureString --name /barter/banks/alice --value <key>
+      SSM path holding one SecureString per bank: parameter "<path>/test1"
+      (base58 ed25519 private key) becomes bank "test1". Create parameters
+      with: aws ssm put-parameter --type SecureString --name /barter/banks/test1 --value <key>
   DomainName:
     Type: String
     Default: ''
@@ -369,7 +369,7 @@ Resources:
           # manifest, media upload. Never cached; all headers/query/cookies
           # pass through except Host (Lambda URLs need their own Host).
           # ADDING A BANK = adding one of these behaviors for its name.
-          - PathPattern: '/alice/*'
+          - PathPattern: '/test1/*'
             TargetOriginId: bank-lambda
             ViewerProtocolPolicy: redirect-to-https
             AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
@@ -379,7 +379,7 @@ Resources:
             FunctionAssociations:
               - EventType: viewer-request
                 FunctionARN: !GetAtt ForwardHostFunction.FunctionMetadata.FunctionARN
-          - PathPattern: '/bob/*'
+          - PathPattern: '/test2/*'
             TargetOriginId: bank-lambda
             ViewerProtocolPolicy: redirect-to-https
             AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]

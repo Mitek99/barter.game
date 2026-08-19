@@ -71,7 +71,7 @@ Every user and every bank is an **ed25519 keypair**. Voucher, Account, Order, Ma
 
 ## See it work
 
-Open the live demo banks — no install needed: [alice](https://barter.game/alice/ui) · [bob](https://barter.game/bob/ui) (AWS: Lambda + DynamoDB + CloudFront). Register with a handle and password; the key is generated and encrypted in your browser.
+Open the live demo banks — no install needed: [test1](https://barter.game/test1/ui) · [test2](https://barter.game/test2/ui) (AWS: Lambda + DynamoDB + CloudFront). Register with a handle and password; the key is generated and encrypted in your browser.
 
 Or run a bank locally:
 
@@ -79,10 +79,10 @@ Or run a bank locally:
 git clone https://github.com/Mitek99/barter.game.git
 cd barter.game/apps/bank-aws
 bun install
-bun run ../../scripts/genkey.ts   # prints BANK_PRIV_KEY=<base58> — rename it to BANK_ALICE_PRIV_KEY
-BANK_ALICE_PRIV_KEY=<base58> bun run local
+bun run ../../scripts/genkey.ts   # prints BANK_PRIV_KEY=<base58> — rename it to BANK_TEST1_PRIV_KEY
+BANK_TEST1_PRIV_KEY=<base58> bun run local
 ```
 
-Then open `http://localhost:8100/alice/ui`, register two users, issue personal currencies, and place matching orders. The banks settle on their own. Sum per Voucher = 0. The cryptographic version of "we're even."
+Then open `http://localhost:8100/test1/ui`, register two users, issue personal currencies, and place matching orders. The banks settle on their own. Sum per Voucher = 0. The cryptographic version of "we're even."
 
 </div>

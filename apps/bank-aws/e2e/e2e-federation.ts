@@ -10,7 +10,7 @@
 // Either bank may coordinate; run it both ways to prove the roles are not
 // baked into a runtime.
 //
-//   E2E_BANK_A_URL=https://…/alice E2E_BANK_B_URL=https://…/bob \
+//   E2E_BANK_A_URL=https://…/test1 E2E_BANK_B_URL=https://…/test2 \
 //     bankA run --allow-net --allow-env apps/bank/e2e-federation.ts
 import {
   base58Encode, canonicalizeWithoutSig, collectMediaRefs, genKeyPair,

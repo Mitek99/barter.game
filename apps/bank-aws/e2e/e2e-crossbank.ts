@@ -19,8 +19,8 @@ import {
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8100';
 // Federation mode: point the two banks at DIFFERENT deployments to exercise
 // the real HTTP bank-to-bank path (defaults keep the same-deployment test).
-const BANK_A_URL = process.env.E2E_BANK_A_URL ?? `${BASE_URL}/alice`;
-const BANK_B_URL = process.env.E2E_BANK_B_URL ?? `${BASE_URL}/bob`;
+const BANK_A_URL = process.env.E2E_BANK_A_URL ?? `${BASE_URL}/test1`;
+const BANK_B_URL = process.env.E2E_BANK_B_URL ?? `${BASE_URL}/test2`;
 
 type User = { privateKey: Uint8Array; pubkey: string };
 type BankRef = { name: string; url: string; pubkey: string };

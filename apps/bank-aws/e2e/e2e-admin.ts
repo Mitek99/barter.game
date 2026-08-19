@@ -1,7 +1,7 @@
 // Operator admin UI API end to end (/ui/admin/*).
 //
 // Admin access is env-config: the server must be booted with the well-known
-// TEST admin keypair below in BANK_ADMINS (or BANK_ALICE_ADMINS). The key is
+// TEST admin keypair below in BANK_ADMINS (or BANK_TEST1_ADMINS). The key is
 // committed on purpose — it grants admin only on banks whose operator lists
 // it, which should only ever be a throwaway local one:
 //
@@ -24,7 +24,7 @@ import {
 } from '@barter.game/protocol';
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8100';
-const BANK_URL = process.env.E2E_BANK_URL ?? `${BASE_URL}/alice`;
+const BANK_URL = process.env.E2E_BANK_URL ?? `${BASE_URL}/test1`;
 
 // Well-known TEST admin identity (see header). Never use on a real bank.
 const ADMIN_PRIV = base58Decode('5181kdeaJKNyDitNk25GB1sN5MAsbonzhpcU2fyorkS8');

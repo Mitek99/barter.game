@@ -20,7 +20,7 @@ import {
 } from '@barter.game/protocol';
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8100';
-const BANK_URL = process.env.E2E_BANK_URL ?? `${BASE_URL}/alice`;
+const BANK_URL = process.env.E2E_BANK_URL ?? `${BASE_URL}/test1`;
 
 type User = { privateKey: Uint8Array; pubkey: string };
 type BankRef = { name: string; url: string; pubkey: string };
@@ -479,7 +479,7 @@ let refPost: Record<string, unknown> = {};
 
 // --- 11. cross-bank repost requires copying the blobs over ----------------
 {
-  const bob = await discover(`${BASE_URL.replace(/\/$/, '')}/bob`);
+  const bob = await discover(`${BASE_URL.replace(/\/$/, '')}/test2`);
   const reposter = makeUser();
   // The reposter anchors to a voucher of their own at bob (§4 allows a
   // different anchor); the embedded original still drags its media refs in.

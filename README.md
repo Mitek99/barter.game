@@ -33,8 +33,8 @@ Demo banks run live on AWS (Lambda + DynamoDB behind CloudFront). Each bank
 serves a full web client:
 
 ```
-https://barter.game/alice/ui
-https://barter.game/bob/ui
+https://barter.game/test1/ui
+https://barter.game/test2/ui
 ```
 
 1. Open a bank's `/ui`, create an identity (handle + password — the ed25519
@@ -48,10 +48,10 @@ https://barter.game/bob/ui
 
 | Holder | Voucher | Bank | Balance |
 | --- | --- | --- | --- |
-| Alice | "1 logo" | bank-alice (issuer) | **−1** (she owes it) |
-| Bob   | "1 logo" | bank-alice | **+1** (he holds it) |
-| Bob   | "1 hour" | bank-bob (issuer)   | **−1** (he owes it) |
-| Alice | "1 hour" | bank-bob   | **+1** (she holds it) |
+| Alice | "1 logo" | bank-test1 (issuer) | **−1** (she owes it) |
+| Bob   | "1 logo" | bank-test1 | **+1** (he holds it) |
+| Bob   | "1 hour" | bank-test2 (issuer)   | **−1** (he owes it) |
+| Alice | "1 hour" | bank-test2   | **+1** (she holds it) |
 
 The demo client is also a small social layer: publish a post about your
 voucher (artwork rides along via the bank's media vault), follow people —
@@ -65,7 +65,7 @@ issuer and preloads the swap. The wire format is in
 Machine access works too — every bank publishes its identity document:
 
 ```bash
-curl https://barter.game/alice/barter-bank.json
+curl https://barter.game/test1/barter-bank.json
 ```
 
 To run everything locally and execute the test suite:
@@ -100,11 +100,11 @@ bun run scripts/genkey.ts         # prints BANK_PRIV_KEY= / BANK_PUB_KEY=
 
 # 2. Run locally (in-memory KV, KV-chunked media)
 cd apps/bank-aws && bun install
-BANK_ALICE_PRIV_KEY=<base58> bun run local
+BANK_TEST1_PRIV_KEY=<base58> bun run local
 
 # 3. Look at it
-curl http://localhost:8100/alice/barter-bank.json
-open http://localhost:8100/alice/ui
+curl http://localhost:8100/test1/barter-bank.json
+open http://localhost:8100/test1/ui
 ```
 
 Deploying to AWS is `AWS_PROFILE=app-deployer ./deploy.sh` from

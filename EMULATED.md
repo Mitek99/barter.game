@@ -14,8 +14,8 @@ posts, replies, reposts and cross-bank feeds.
 **Target:** the deployed banks, not localhost.
 
 ```
-https://barter.game/alice/ui
-https://barter.game/bob/ui
+https://barter.game/test1/ui
+https://barter.game/test2/ui
 ```
 
 **Password for every emulated user: `12345678`.**
@@ -28,14 +28,14 @@ real user's would be.
 
 | Bank | Pubkey |
 |---|---|
-| `alice` | `9Fv3kB8N1cp96opUrmvQRK7VNtw7N6jZFNdyqqs4hNCK` |
-| `bob` | `CP94rE9FJUV9wfMhKFg5t7cW8ybcAbHuznrkisC3s2kV` |
+| `test1` | `9Fv3kB8N1cp96opUrmvQRK7VNtw7N6jZFNdyqqs4hNCK` |
+| `test2` | `CP94rE9FJUV9wfMhKFg5t7cW8ybcAbHuznrkisC3s2kV` |
 
 ---
 
 ## The cast
 
-### Bank `alice`
+### Bank `test1`
 
 #### mira — Mira Okonkwo, graphic designer
 
@@ -50,13 +50,13 @@ real user's would be.
 identity created by hand, so she is the proof that the UI onboarding path
 works end to end. Minted her voucher through the UI too. Trusts tomas ("cuts
 my hair every six weeks"), priya ("sorted my residency paperwork in one
-sitting"), and kai across on bank bob ("wants a poster for his recital").
+sitting"), and kai across on bank test2 ("wants a poster for his recital").
 
 **Intentions.** Trade design work for the things she actually needs rather
 than invoicing for money. She has already paid for a haircut with a logo.
 
 **Next steps.**
-1. Deliver kai's recital poster and settle it cross-bank — she has bank bob
+1. Deliver kai's recital poster and settle it cross-bank — she has bank test2
    pinned and trusts him, but no order exists yet.
 2. Mint a second, cheaper voucher (`1 brand palette`) so she has something to
    offer below the price of a full logo.
@@ -75,8 +75,8 @@ than invoicing for money. She has already paid for a haircut with a logo.
 
 **Memory.** Registered and driven entirely from the CLI. Trusts mira
 ("designed the sign above my chair") and priya ("everyone on the street sends
-their visa questions to her"). His chair is the social hub of the alice bank —
-both other alice users trust him or are trusted by him.
+their visa questions to her"). His chair is the social hub of the test1 bank —
+both other test1 users trust him or are trusted by him.
 
 **Intentions.** Keep a small, steady float of haircuts outstanding. He is
 comfortable being negative; that is the credit he extends to his street.
@@ -85,7 +85,7 @@ comfortable being negative; that is the credit he extends to his street.
 1. Publish a standing cheque for 3 haircuts so newcomers can claim one without
    negotiating.
 2. Redeem the logo concept from mira — he holds +1 but has not called it in.
-3. Meet the bob-bank users; he has pinned no foreign bank yet and so cannot
+3. Meet the test2-bank users; he has pinned no foreign bank yet and so cannot
    trade across.
 
 #### priya — Priya Raman, immigration lawyer
@@ -94,10 +94,10 @@ comfortable being negative; that is the credit he extends to his street.
 - **issues** `1 hour of legal advice` — `9Bz2mvoK3MkzeizXfKBrWcFaj3q5e2D5HtbGXxuvBqWy`
   - *One hour of immigration law consultation — visa routes, appeals, paperwork review. Remote or in person.*
   - issuer account `GjAaAu9a4igbr5nsTrNcSsQC2bJbf16yT7mxQYAfXxWY`
-- **holds** `HV74dWEZfN2FRvozWjjWdMumNxxh22bYiG5PAMmt85sh` **at bank bob** — +1 `1 sourdough loaf`
-- **balances** `1 hour of legal advice` **−1** (alice) · `1 sourdough loaf` **+1** (bob)
+- **holds** `HV74dWEZfN2FRvozWjjWdMumNxxh22bYiG5PAMmt85sh` **at bank test2** — +1 `1 sourdough loaf`
+- **balances** `1 hour of legal advice` **−1** (test1) · `1 sourdough loaf` **+1** (test2)
 
-**Memory.** The federation's first cross-bank trader. Pinned bank bob, trusted
+**Memory.** The federation's first cross-bank trader. Pinned bank test2, trusted
 yusuf, opened an account on his voucher *at his bank*, and settled a genuine
 bilateral swap: one hour of legal advice for one sourdough loaf. That deal —
 `01KYC7T4ZNZW93AJ7643W4CCHE` — settled on the first poll.
@@ -106,14 +106,14 @@ bilateral swap: one hour of legal advice for one sourdough loaf. That deal —
 the whole federated premise.
 
 **Next steps.**
-1. Her sourdough holding is **invisible in the alice UI** — `/portfolio` only
+1. Her sourdough holding is **invisible in the test1 UI** — `/portfolio` only
    reports local accounts ([gap 4](#4-portfolio-is-local-only--cross-bank-holdings-are-invisible)).
    Until that is fixed she has to be told her own balance.
 2. Offer a second hour to tomas, who has visa questions from the street.
 3. Set a supply `limit` on her voucher — she cannot actually deliver unbounded
    legal hours, and nothing currently stops her issuing them.
 
-### Bank `bob`
+### Bank `test2`
 
 #### yusuf — Yusuf Demir, sourdough baker
 
@@ -121,10 +121,10 @@ the whole federated premise.
 - **issues** `1 sourdough loaf` — `6URaUWGHHSLrdRoSmjbiaTkE8spGAjzdsXoMT1YNdD7S`
   - *A 1kg naturally leavened sourdough, baked the morning you redeem it. 48-hour cold ferment.*
   - issuer account `7SYa3VqTKht3zqvoWax6qB7Z6eRXxMmeoqmnxgkkhnfm`
-- **holds** `EZL6VXXnDHv3cKQoN3Cv3cuJ9iMWHcQ7gLUMohYQZVKB` **at bank alice** — +1 `1 hour of legal advice`
-- **balances** `1 sourdough loaf` **−1** (bob) · `1 hour of legal advice` **+1** (alice)
+- **holds** `EZL6VXXnDHv3cKQoN3Cv3cuJ9iMWHcQ7gLUMohYQZVKB` **at bank test1** — +1 `1 hour of legal advice`
+- **balances** `1 sourdough loaf` **−1** (test2) · `1 hour of legal advice` **+1** (test1)
 
-**Memory.** Priya's counterparty in the cross-bank swap. Pinned bank alice,
+**Memory.** Priya's counterparty in the cross-bank swap. Pinned bank test1,
 trusts priya ("handling my sister's visa — straight answers, no padding") and
 lena ("keeps the delivery bike running through winter").
 
@@ -132,10 +132,10 @@ lena ("keeps the delivery bike running through winter").
 cash. His sister's visa is the reason he crossed banks at all.
 
 **Next steps.**
-1. Redeem the legal hour — he holds +1 at alice and has a real question.
+1. Redeem the legal hour — he holds +1 at test1 and has a real question.
 2. Publish a weekly standing offer (Friday loaves) rather than one-off orders.
-3. Same invisibility problem as priya: his alice holding does not show in the
-   bob UI ([gap 4](#4-portfolio-is-local-only--cross-bank-holdings-are-invisible)).
+3. Same invisibility problem as priya: his test1 holding does not show in the
+   test2 UI ([gap 4](#4-portfolio-is-local-only--cross-bank-holdings-are-invisible)).
 
 #### lena — Lena Vogt, bike mechanic
 
@@ -169,7 +169,7 @@ things her daughter needs.
 - **holds** `CESHAi7GYx8963M3vSQtME2aqTADZp2Ti4YbqRCceZzq` — +1 `1 bike tune-up`
 - **balances** `1 piano lesson` **−1** · `1 bike tune-up` **+1**
 
-**Memory.** The only bob user who has pinned bank alice *and* trusts someone
+**Memory.** The only test2 user who has pinned bank test1 *and* trusts someone
 there (mira, for the recital poster) without yet trading with them. Trusts lena
 ("rebuilt my rear hub for the price of a lesson") and yusuf.
 
@@ -186,7 +186,7 @@ there (mira, for the recital poster) without yet trading with them. Trusts lena
 ## The trust graph
 
 ```
-bank alice                                   bank bob
+bank test1                                   bank test2
 ──────────                                   ────────
 mira ──trusts──▶ tomas                       lena ──trusts──▶ kai
 mira ──trusts──▶ priya                       kai  ──trusts──▶ lena
@@ -199,7 +199,7 @@ priya ─trusts──▶ mira                        kai  ──trusts──▶ 
         mira  ◀──trusts──▶ kai       (not yet traded)
 ```
 
-Banks pinned: `priya`, `mira` → bob · `yusuf`, `kai` → alice.
+Banks pinned: `priya`, `mira` → test2 · `yusuf`, `kai` → test1.
 `tomas` and `lena` are bank-local only.
 
 Contacts (a separate list from trust) were populated for `mira` (tomas, priya,
@@ -212,13 +212,13 @@ them ([gap 5](#5-contacts-are-readable-and-removable-in-the-ui-but-cannot-be-add
 
 | Deal | What | Banks | State |
 |---|---|---|---|
-| `01KYC7T4ZNZW93AJ7643W4CCHE` | priya's legal hour ⇄ yusuf's loaf | alice + bob | **settled** |
-| `01KYCK7CNZ2QP0N2BBY76DQG2Q` | tomas → mira, 1 haircut | alice | **settled** |
-| `01KYCK854HPYBFYP8752T34K1Y` | mira → tomas, 1 logo concept | alice | **settled** |
-| `01KYCK9TYZF4VKJKEWDS4GAAE9` | lena → kai, 1 bike tune-up | bob | **settled** |
-| `01KYCKA5MBCTZJTZWDKGQNNZ9G` | kai → lena, 1 piano lesson | bob | **settled** |
-| `01KYC7PDD1FT1BY67C9BWK66KF` | mira ⇄ tomas atomic swap | alice | **rejected — [gap 2](#2-critical-a-two-sided-swap-inside-one-bank-can-never-settle--fixed)** |
-| `01KYC7VWRZRQV2E3QSMW5QFN41` | lena ⇄ kai atomic swap | bob | **rejected — [gap 2](#2-critical-a-two-sided-swap-inside-one-bank-can-never-settle--fixed)** |
+| `01KYC7T4ZNZW93AJ7643W4CCHE` | priya's legal hour ⇄ yusuf's loaf | test1 + test2 | **settled** |
+| `01KYCK7CNZ2QP0N2BBY76DQG2Q` | tomas → mira, 1 haircut | test1 | **settled** |
+| `01KYCK854HPYBFYP8752T34K1Y` | mira → tomas, 1 logo concept | test1 | **settled** |
+| `01KYCK9TYZF4VKJKEWDS4GAAE9` | lena → kai, 1 bike tune-up | test2 | **settled** |
+| `01KYCKA5MBCTZJTZWDKGQNNZ9G` | kai → lena, 1 piano lesson | test2 | **settled** |
+| `01KYC7PDD1FT1BY67C9BWK66KF` | mira ⇄ tomas atomic swap | test1 | **rejected — [gap 2](#2-critical-a-two-sided-swap-inside-one-bank-can-never-settle--fixed)** |
+| `01KYC7VWRZRQV2E3QSMW5QFN41` | lena ⇄ kai atomic swap | test2 | **rejected — [gap 2](#2-critical-a-two-sided-swap-inside-one-bank-can-never-settle--fixed)** |
 
 Every voucher sums to zero across its accounts. The two rejected deals are the
 bug, not a scenario: the same-bank pairs had to be re-run as two one-sided
@@ -232,7 +232,7 @@ the first leg settles.
 Both interfaces, deliberately.
 
 **UI** — `mira` was registered by hand at
-`https://barter.game/alice/ui`, minted `1 logo concept`
+`https://barter.game/test1/ui`, minted `1 logo concept`
 through the New-voucher form, logged back in with handle + password after a
 reload, and her Network screen was used to verify trust and contact rendering.
 
@@ -244,15 +244,15 @@ CLI-registered user can log into the browser, and a browser-registered user
 can be driven from the CLI.
 
 ```bash
-./scripts/emu register mira@alice          # or log in at /alice/ui — same account
-./scripts/emu mint     tomas@alice "1 haircut" --desc "..."
-./scripts/emu open     priya@alice <voucher> bob
-./scripts/emu cheque   lena@bob <voucher> bob <account> 1
-./scripts/emu invoice  kai@bob  <voucher> bob <account> 1
-./scripts/emu propose  priya@alice <order1> <order2> 1 alice,bob
-./scripts/emu deal     priya@alice <dealId>
-./scripts/emu discover priya@alice <voucher,...> alice,bob
-./scripts/emu portfolio yusuf@bob
+./scripts/emu register mira@test1          # or log in at /test1/ui — same account
+./scripts/emu mint     tomas@test1 "1 haircut" --desc "..."
+./scripts/emu open     priya@test1 <voucher> test2
+./scripts/emu cheque   lena@test2 <voucher> test2 <account> 1
+./scripts/emu invoice  kai@test2  <voucher> test2 <account> 1
+./scripts/emu propose  priya@test1 <order1> <order2> 1 test1,test2
+./scripts/emu deal     priya@test1 <dealId>
+./scripts/emu discover priya@test1 <voucher,...> test1,test2
+./scripts/emu portfolio yusuf@test2
 ```
 
 `./scripts/emu` with no arguments prints the full command list. Target another
@@ -270,18 +270,18 @@ Each user announced their voucher, then the conversation crossed banks.
 
 | Author | Bank | Post |
 |---|---|---|
-| mira | alice | *"Two logo slots open in August. I'd rather trade than invoice — haircuts, legal hours, bread, all welcome."* |
-| tomas | alice | *"Chair is free Thursday afternoons. First cut of the month goes to whoever brings the most interesting swap."* |
-| priya | alice | *"Visa season. I have four consultation hours to give this month — appeals and paperwork review included."* |
-| yusuf | bob | *"Friday bake is up: 1kg naturally leavened, 48-hour cold ferment. Reserve one and collect it warm."* |
-| lena | bob | *"Winter is coming for your drivetrain. Booking tune-ups now — I take lessons, bread and legal advice."* |
-| kai | bob | *"Two lesson slots free on Tuesdays. Beginners very welcome; jazz voicings if you'd rather."* |
+| mira | test1 | *"Two logo slots open in August. I'd rather trade than invoice — haircuts, legal hours, bread, all welcome."* |
+| tomas | test1 | *"Chair is free Thursday afternoons. First cut of the month goes to whoever brings the most interesting swap."* |
+| priya | test1 | *"Visa season. I have four consultation hours to give this month — appeals and paperwork review included."* |
+| yusuf | test2 | *"Friday bake is up: 1kg naturally leavened, 48-hour cold ferment. Reserve one and collect it warm."* |
+| lena | test2 | *"Winter is coming for your drivetrain. Booking tune-ups now — I take lessons, bread and legal advice."* |
+| kai | test2 | *"Two lesson slots free on Tuesdays. Beginners very welcome; jazz voicings if you'd rather."* |
 
 Then the threads:
 
 - **mira → tomas** (reply, same bank): *"Bringing sketches Thursday — swapping you a logo concept for the chair."*
 - **kai → lena** (repost, same bank): *"Can vouch — she rebuilt my rear hub for the price of a lesson."* — an issuer amplifying a neighbour's post to his own followers.
-- **yusuf → priya** (reply, **cross-bank**): *"She sorted my sister's visa and took a loaf for it. Worth crossing banks for."* — yusuf banks at bob, but posted into the feed alice carries, which §2 allows for any bank that knows the voucher.
+- **yusuf → priya** (reply, **cross-bank**): *"She sorted my sister's visa and took a loaf for it. Worth crossing banks for."* — yusuf banks at test2, but posted into the feed test1 carries, which §2 allows for any bank that knows the voucher.
 
 ### Voucher meta releases
 
@@ -289,8 +289,8 @@ Each of the six released an icon and a description for their currency, as a
 post with `voucher_meta: true` (`scripts/emulated-svg/*.svg`):
 
 ```bash
-./scripts/emu post mira@alice <voucher> "One original logo concept…" --icon scripts/emulated-svg/logo.svg
-./scripts/emu meta mira@alice <voucher>          # read the cached result back
+./scripts/emu post mira@test1 <voucher> "One original logo concept…" --icon scripts/emulated-svg/logo.svg
+./scripts/emu meta mira@test1 <voucher>          # read the cached result back
 ```
 
 A Voucher doc is content-addressed and immutable — restyling it directly would
@@ -309,7 +309,7 @@ uploads the file to the bank's vault and the post carries `"<hash>.<ext>"`;
 `/:bank/media/<hash>.svg` with immutable caching — CDN-ready:
 
 ```bash
-./scripts/emu post mira@alice <voucher> "One original logo concept…" \
+./scripts/emu post mira@test1 <voucher> "One original logo concept…" \
     --icon scripts/emulated-svg/logo.svg --square scripts/emulated-svg/square-logo.svg
 ```
 
@@ -317,23 +317,23 @@ mira and yusuf released icon + square card art; the other four refreshed
 their icons. All six live on production, verified serving `image/svg+xml`
 with `nosniff` and a sandboxing CSP from both banks.
 
-Then the cross-bank moment the design exists for: **lena (bob) reposted
-mira's release (alice)**. A bank refuses a post whose embedded tree
+Then the cross-bank moment the design exists for: **lena (test2) reposted
+mira's release (test1)**. A bank refuses a post whose embedded tree
 references blobs it does not hold, so the CLI downloaded mira's icon and
-card from alice and uploaded them to bob before submitting — content
+card from test1 and uploaded them to test2 before submitting — content
 addressing means the copied bytes land on the *same refs*, so the embedded
 signatures stayed valid:
 
 ```bash
-./scripts/emu post lena@bob <lena-voucher> "Mira rebranded my shop last spring…" \
-    --repost <mira-release-hash> --from alice
-#   copied H6d6hKdxvEwqcEat… alice → bob
-#   copied G61YTkFVYBhaFmVe… alice → bob
+./scripts/emu post lena@test2 <lena-voucher> "Mira rebranded my shop last spring…" \
+    --repost <mira-release-hash> --from test1
+#   copied H6d6hKdxvEwqcEat… test1 → test2
+#   copied G61YTkFVYBhaFmVe… test1 → test2
 ```
 
 Both refs now serve from **both** banks. Discover (which now reads the
 follows feed and renders vouchers as image cards) shows kai's piano keys
-served from bob next to priya's scales served from alice, in one gallery.
+served from test2 next to priya's scales served from test1, in one gallery.
 
 ### Nothing here is free
 
@@ -375,28 +375,28 @@ the bank **reposts every user post it accepts** as a bank-signed Post, so a
 newcomer sees their bank's whole output from day one:
 
 ```
-feed for mira@alice  — 4 post(s) from 4 author(s) across 2 bank(s)
-feed for priya@alice — 5 post(s) from 3 author(s) across 2 bank(s)
-feed for kai@bob     — 7 post(s) from 4 author(s) across 2 bank(s)
-feed for lena@bob    — 4 post(s) from 3 author(s) across 1 bank
+feed for mira@test1  — 4 post(s) from 4 author(s) across 2 bank(s)
+feed for priya@test1 — 5 post(s) from 3 author(s) across 2 bank(s)
+feed for kai@test2     — 7 post(s) from 4 author(s) across 2 bank(s)
+feed for lena@test2    — 4 post(s) from 3 author(s) across 1 bank
 ```
 
-Mira sees kai's piano-lesson post *because she follows him and pinned bank bob* —
+Mira sees kai's piano-lesson post *because she follows him and pinned bank test2* —
 she discovered a voucher on another bank purely through the feed. Lena sees only
-one bank's worth, because she never pinned alice.
+one bank's worth, because she never pinned test1.
 
 Drive it with `./scripts/emu`:
 
 ```bash
-./scripts/emu post  mira@alice <voucher> "Two logo slots open in August."
-./scripts/emu post  mira@alice <voucher> "Bringing sketches Thursday." --reply <postHash>
-./scripts/emu post  kai@bob    <voucher> "Can vouch."                   --repost <postHash>
-./scripts/emu post  yusuf@bob  <voucher> "Worth crossing banks for." --reply <hash> --at alice
-./scripts/emu follow mira@alice <authorPubkey>
-./scripts/emu unfollow mira@alice <authorPubkey>
-./scripts/emu follows mira@alice
-./scripts/emu feed  priya@alice
-./scripts/emu posts mira@alice <authorPubkey> all
+./scripts/emu post  mira@test1 <voucher> "Two logo slots open in August."
+./scripts/emu post  mira@test1 <voucher> "Bringing sketches Thursday." --reply <postHash>
+./scripts/emu post  kai@test2    <voucher> "Can vouch."                   --repost <postHash>
+./scripts/emu post  yusuf@test2  <voucher> "Worth crossing banks for." --reply <hash> --at test1
+./scripts/emu follow mira@test1 <authorPubkey>
+./scripts/emu unfollow mira@test1 <authorPubkey>
+./scripts/emu follows mira@test1
+./scripts/emu feed  priya@test1
+./scripts/emu posts mira@test1 <authorPubkey> all
 ```
 
 Or in the browser: **Posts** in the nav (it was previously an unlinked route).
@@ -451,8 +451,8 @@ The Orders screen shared a two-sided order as `showShare('o', o.order, …)`, bu
 an Order doc. Every swap QR and copied link was dead:
 
 ```
-GET /alice/o/<order hash>?format=json -> 404 {"code":-32005,"message":"not found"}
-GET /alice/o/<offer hash>?format=json -> 200 {"v":1,…,"kind":"offer",…}
+GET /test1/o/<order hash>?format=json -> 404 {"code":-32005,"message":"not found"}
+GET /test1/o/<offer hash>?format=json -> 200 {"v":1,…,"kind":"offer",…}
 ```
 
 `/ui/orders` already returns the derived Offer hashes. Invoice (`v`) and cheque
@@ -465,10 +465,10 @@ GET /alice/o/<offer hash>?format=json -> 200 {"v":1,…,"kind":"offer",…}
 `get_account_balance` never looked at the envelope sender — it resolved the
 account hash and returned the balance to whoever asked. Account hashes are not
 secrets: they sit inside every Order side a counterparty signs. Verified live
-with `kai@bob` reading an unrelated alice account:
+with `kai@test2` reading an unrelated test1 account:
 
 ```
-balance GjAaAu9a4igb… @alice: {"current":-1,"pending":0}
+balance GjAaAu9a4igb… @test1: {"current":-1,"pending":0}
 ```
 
 `bank-schema.md` §1.2 says accounts are private by default; `Account.public`
@@ -478,7 +478,7 @@ does not exist in v1, so holder + voucher-issuer is the whole allow-list.
 
 **Not fixed; needs a design call.** `handlePortfolio` lists only
 `listAccounts(bank, pubkey)` and hardcodes `unreachable: []`. Priya really does
-hold +1 sourdough at bank bob, but the alice UI shows her only the legal-advice
+hold +1 sourdough at bank test2, but the test1 UI shows her only the legal-advice
 leg — so a cross-bank trader sees half their position and the Home "Balances"
 card silently understates what they own.
 
@@ -511,8 +511,8 @@ Reproduced from scratch on a **local** bank — register two users, mint, settle
 one cheque/invoice deal, then query as each party:
 
 ```
-rhx29835@alice -> { "events": [], "next_cursor": null }
-ghx29835@alice -> { "events": [], "next_cursor": null }
+rhx29835@test1 -> { "events": [], "next_cursor": null }
+ghx29835@test1 -> { "events": [], "next_cursor": null }
 ```
 
 So it is not a production data artifact. `handleHistory` scans
@@ -573,7 +573,7 @@ substitute for this scenario, not a replacement for the removed CLI.
 
 ### 9. Pre-existing debris on the demo banks
 
-The alice and bob registries carry leftovers from earlier e2e runs
+The test1 and test2 registries carry leftovers from earlier e2e runs
 (`FGX-…`, `FGY-…`) plus two `PROBE-…` vouchers from diagnosing gap 2. There is
 no delete path and `list_vouchers` returns everything, so the Registry screen
 shows test junk beside the emulated users' real vouchers. Per the v1 migration

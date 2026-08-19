@@ -201,7 +201,7 @@ AWS_PROFILE=app-deployer ./deploy.sh   # build + sam deploy + web client sync + 
 
 The `app-deployer` IAM user and its least-privilege policy + permissions boundary are defined in `apps/bank-aws/deployer-template.yaml` — see the "Deploying as app-deployer" section of `apps/bank-aws/README.md`. On AWS, bank keys live in SSM SecureString parameters under `/barter/banks/<name>`.
 
-The live demo banks are `https://barter.game/alice/ui` and `https://barter.game/bob/ui`.
+The live demo banks are `https://barter.game/test1/ui` and `https://barter.game/test2/ui`.
 
 ### Running a bank locally
 
@@ -210,8 +210,8 @@ The live demo banks are `https://barter.game/alice/ui` and `https://barter.game/
 bun run scripts/genkey.ts           # prints BANK_PRIV_KEY= / BANK_PUB_KEY=
 # 2. Run the local Node server (in-memory KV, KV-chunked media, port 8100)
 cd apps/bank-aws && bun install
-BANK_ALICE_PRIV_KEY=<base58> bun run local
-# 3. Web UI at http://localhost:8100/alice/ui
+BANK_TEST1_PRIV_KEY=<base58> bun run local
+# 3. Web UI at http://localhost:8100/test1/ui
 ```
 
 ### Syncing protocol changes
@@ -220,7 +220,7 @@ BANK_ALICE_PRIV_KEY=<base58> bun run local
 
 ### Website
 
-The Hugo site deploys to the bank stack's S3/CloudFront (`bun run deploy:website` → `apps/bank-aws/deploy-website.sh`: hugo build, sync to `s3://<assets>/site/`, CloudFront invalidation). The same distribution serves site and banks: default behavior → `site/`, `/alice/*` + `/bob/*` → the bank Lambda. Netlify is retired.
+The Hugo site deploys to the bank stack's S3/CloudFront (`bun run deploy:website` → `apps/bank-aws/deploy-website.sh`: hugo build, sync to `s3://<assets>/site/`, CloudFront invalidation). The same distribution serves site and banks: default behavior → `site/`, `/test1/*` + `/test2/*` → the bank Lambda. Netlify is retired.
 
 ## Development conventions
 

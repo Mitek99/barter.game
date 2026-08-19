@@ -22,7 +22,7 @@ import {
 } from '@barter.game/protocol';
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8100';
-const BANK_URL = process.env.E2E_BANK_URL ?? `${BASE_URL}/alice`;
+const BANK_URL = process.env.E2E_BANK_URL ?? `${BASE_URL}/test1`;
 
 type User = { privateKey: Uint8Array; pubkey: string };
 type BankRef = { name: string; url: string; pubkey: string };
