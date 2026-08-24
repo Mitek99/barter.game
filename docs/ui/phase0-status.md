@@ -38,7 +38,7 @@ Screens already implemented: Welcome, Register, Connect, Unlock, Dashboard, Vouc
 
 2. **Build/test tooling validation**
    - `bun install` passes.
-   - `bun --filter '@barter.game/web' typecheck` and `build` pass (placeholder scripts until TS migration).
+   - `bun --filter '@barter.game/web-client' typecheck` and `build` pass (placeholder scripts until TS migration).
    - `deno check apps/bank/main.ts` passes.
    - `deno check apps/bank/**/*.ts` passes for all backend files.
    - `deno test apps/bank/` runs and passes.

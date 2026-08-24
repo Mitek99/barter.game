@@ -28,9 +28,25 @@ incoming `Request` to `route(request, banks)`:
 | `AssetReader` ([`src/types.ts`](./src/types.ts)) | Read-only access to the bundled [`apps/web`](../../apps/web/) client | filesystem (`fsAssets`) | bundled files / S3 |
 
 `MemoryKv` (in [`src/kv.ts`](./src/kv.ts)) is a faithful in-memory `KvStore`
-for tests and local runs; `apps/bank-aws/test/kv-contract.test.ts` holds the
-contract suite every implementation must pass — including the 64 KiB value
-cap that keeps every backend accepting the same writes.
+for tests and local runs. The contract suite every implementation must pass —
+including the 64 KiB value cap that keeps every backend accepting the same
+writes — is exported as a **runner-agnostic testkit** from
+[`src/testkit.ts`](./src/testkit.ts), so any host can verify its own backend
+against the exact semantics the ledger depends on:
+
+```ts
+import { test, describe } from 'node:test';
+import { kvContractTests } from '@barter.game/bank-core/testkit';
+
+describe('MyKv', () => {
+  for (const t of kvContractTests(() => new MyKv())) test(t.name, t.run);
+});
+```
+
+The suite returns named async tests that throw on failure — wrap them in
+whatever runner you use. [`apps/bank-aws/test/kv-contract.test.ts`](../../apps/bank-aws/test/kv-contract.test.ts)
+runs it against `MemoryKv` always and against DynamoDB Local when
+`DDB_ENDPOINT` is set.
 
 Storage-semantics rules an implementation must honor (the ledger depends on
 them): versionstamp checks are the only concurrency control; all ops in one

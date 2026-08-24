@@ -1,9 +1,42 @@
 {
-  "name": "@barter.game/web",
+  "name": "@barter.game/web-client",
   "version": "0.0.1",
-  "private": true,
   "type": "module",
   "license": "MIT",
+  "description": "Browser SPA (installable PWA) served by a barter.game bank at /:bank/ui. Plain static assets, no build step — a bank host serves them through the AssetReader seam of @barter.game/bank-core.",
+  "keywords": [
+    "mutual-credit",
+    "federated",
+    "ledger",
+    "pwa",
+    "spa",
+    "barter"
+  ],
+  "homepage": "https://docs.barter.game",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ai-1st/barter.game.git",
+    "directory": "apps/web"
+  },
+  "bugs": "https://github.com/ai-1st/barter.game/issues",
+  "files": [
+    "index.html",
+    "app.js",
+    "protocol.js",
+    "qr.js",
+    "styles.css",
+    "sw.js",
+    "icon.svg",
+    "favicon.ico",
+    "icon-192.png",
+    "icon-512.png",
+    "icon-maskable-512.png",
+    "apple-touch-icon.png",
+    "vendor"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "python3 -m http.server 5173 --directory .",
     "build": "echo 'No build step yet — static SPA served directly by the bank'",

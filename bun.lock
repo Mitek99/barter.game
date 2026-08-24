@@ -28,7 +28,7 @@
       },
     },
     "apps/web": {
-      "name": "@barter.game/web",
+      "name": "@barter.game/web-client",
       "version": "0.0.1",
       "devDependencies": {
         "@noble/ed25519": "^3.1.0",
@@ -39,7 +39,7 @@
     },
     "packages/bank-core": {
       "name": "@barter.game/bank-core",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "dependencies": {
         "@barter.game/protocol": "workspace:*",
       },
@@ -114,7 +114,7 @@
 
     "@barter.game/protocol": ["@barter.game/protocol@workspace:packages/protocol"],
 
-    "@barter.game/web": ["@barter.game/web@workspace:apps/web"],
+    "@barter.game/web-client": ["@barter.game/web-client@workspace:apps/web"],
 
     "@esbuild/aix-ppc64": ["@esbuild/aix-ppc64@0.24.2", "", { "os": "aix", "cpu": "ppc64" }, "sha512-thpVCb/rhxE/BnMLQ7GReQLLN8q9qbHmI55F4489/ByVg2aQaQ6kbcLb6FHkocZzQhxc4gx0sCk0tJkKBFzDhA=="],
 
