@@ -339,6 +339,20 @@ Resources:
               - iam:ListPolicyVersions
               - iam:SimulatePrincipalPolicy
             Resource: '*'
+          # Read-only ACM: the deployer must be able to confirm the
+          # CloudFront ViewerCertificate covers every alias it attaches
+          # (certs live in us-east-1 for CloudFront).
+          - Sid: AcmRead
+            Effect: Allow
+            Action:
+              - acm:DescribeCertificate
+              - acm:GetCertificate
+            Resource: !Sub 'arn:aws:acm:*:${AWS::AccountId}:certificate/*'
+          - Sid: AcmList
+            Effect: Allow
+            Action:
+              - acm:ListCertificates
+            Resource: '*'
           # Belt-and-braces: even if a future policy grant opens one of these
           # doors, the deployer must never mint users/keys, edit account-level
           # settings, or author standalone policies (which would bypass the

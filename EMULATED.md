@@ -14,8 +14,8 @@ posts, replies, reposts and cross-bank feeds.
 **Target:** the deployed banks, not localhost.
 
 ```
-https://barter.game/test1/ui
-https://barter.game/test2/ui
+https://docs.barter.game/test1/ui
+https://docs.barter.game/test2/ui
 ```
 
 **Password for every emulated user: `12345678`.**
@@ -232,7 +232,7 @@ the first leg settles.
 Both interfaces, deliberately.
 
 **UI** — `mira` was registered by hand at
-`https://barter.game/test1/ui`, minted `1 logo concept`
+`https://docs.barter.game/test1/ui`, minted `1 logo concept`
 through the New-voucher form, logged back in with handle + password after a
 reload, and her Network screen was used to verify trust and contact rendering.
 

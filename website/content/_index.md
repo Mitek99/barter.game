@@ -71,7 +71,7 @@ Every user and every bank is an **ed25519 keypair**. Voucher, Account, Order, Ma
 
 ## See it work
 
-Open the live demo banks — no install needed: [test1](https://barter.game/test1/ui) · [test2](https://barter.game/test2/ui) (AWS: Lambda + DynamoDB + CloudFront). Register with a handle and password; the key is generated and encrypted in your browser.
+Open the live demo banks — no install needed: [test1](https://docs.barter.game/test1/ui) · [test2](https://docs.barter.game/test2/ui) (AWS: Lambda + DynamoDB + CloudFront). Register with a handle and password; the key is generated and encrypted in your browser.
 
 Or run a bank locally:
 

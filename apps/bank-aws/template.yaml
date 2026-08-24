@@ -18,8 +18,8 @@ Parameters:
     Default: ''
     Description: >
       Optional custom domain for CloudFront (requires AcmCertificateArn).
-      www.<DomainName> is added as a second alias automatically and redirected
-      to the apex. Leave empty to use the d123.cloudfront.net domain.
+      Only the bare domain is aliased (no www). Leave empty to use the
+      d123.cloudfront.net domain.
   AltDomain:
     Type: String
     Default: ''
@@ -290,8 +290,8 @@ Resources:
           - HasCustomDomain
           - !If
             - HasAltDomain
-            - [!Ref DomainName, !Sub 'www.${DomainName}', !Ref AltDomain, !Sub 'www.${AltDomain}']
-            - [!Ref DomainName, !Sub 'www.${DomainName}']
+            - [!Ref DomainName, !Ref AltDomain, !Sub 'www.${AltDomain}']
+            - [!Ref DomainName]
           - !Ref 'AWS::NoValue'
         ViewerCertificate: !If
           - HasCustomDomain

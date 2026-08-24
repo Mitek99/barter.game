@@ -45,3 +45,22 @@ html.dark pre[style*="background-color:#fff"] span[style*="color:"],
 html.dark pre[style*="background-color: #fff"] span[style*="color:"] {
   filter: brightness(1.4);
 }
+
+/* Brand palette (brand exploration page): purple #7239d6, light purple
+   #8f60de, orange #ff8c39, ink #1a1325. Hextra drives links, nav highlights,
+   search accents and buttons from these three primary-color variables. The
+   hue/saturation are the purple's HSL; lightness shifts per mode so dark mode
+   gets the lighter #8f60de for contrast. */
+:root {
+  --primary-hue: 262deg;
+  --primary-saturation: 66%;
+  --primary-lightness: 53%;
+}
+
+.dark {
+  --primary-hue: 262deg;
+  --primary-saturation: 66%;
+  --primary-lightness: 62%;
+  /* Ink-tinted dark background instead of neutral #111. */
+  --hx-color-dark: #1a1325;
+}

@@ -1,12 +1,14 @@
-<!-- barter.game app mark — the SPA's .logo-mark (styles.css) as a standalone
-     icon: an accent squircle badge holding a white rounded-diamond outline.
-     Proportions mirror the CSS mark (badge radius 26.8%, diamond side 36%);
-     the stroke is heavier and the diamond corners tighter than the CSS mark so
-     the silhouette still reads at 16px. -->
+<!-- barter.game app mark — brand variant 4 "ledger coin" (brand exploration
+     page): a coin outline carrying the swap arrows, on an ink squircle badge
+     so the mark reads on any browser chrome. Identical artwork to the navbar
+     logo (website/static/images/logo.svg); the raster icons in this directory
+     are rendered from this file. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="barter.game">
   <title>barter.game</title>
-  <rect width="512" height="512" rx="137" ry="137" fill="#3D34D6"/>
-  <rect x="163" y="163" width="186" height="186" rx="32" ry="32"
-        fill="none" stroke="#FFFFFF" stroke-width="44"
-        transform="rotate(45 256 256)"/>
+  <rect width="512" height="512" rx="137" ry="137" fill="#1a1325"/>
+  <circle cx="256" cy="256" r="192" fill="none" stroke="#8f60de" stroke-width="32"/>
+  <path d="M164 213 H 320" stroke="#ffffff" stroke-width="28" stroke-linecap="round" fill="none"/>
+  <path d="M284 171 L 334 213 L 284 256" stroke="#ffffff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M348 306 H 192" stroke="#ff8c39" stroke-width="28" stroke-linecap="round" fill="none"/>
+  <path d="M228 263 L 178 306 L 228 348" stroke="#ff8c39" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 </svg>

@@ -25,7 +25,7 @@ trade here safely — what the protocol declines to do is tell you whether a
 promise is any good. Discovery surfaces (registries, offers, QR profiles,
 voucher feeds) distribute *facts*; deciding whom to trust stays human.
 
-See [the Ethos](https://barter.game/docs/ethos/) for the full set of beliefs (source: [`website/content/docs/ethos.md`](./website/content/docs/ethos.md)).
+See [the Ethos](https://docs.barter.game/docs/ethos/) for the full set of beliefs (source: [`website/content/docs/ethos.md`](./website/content/docs/ethos.md)).
 
 ## Just test it — here's how
 
@@ -33,8 +33,8 @@ Demo banks run live on AWS (Lambda + DynamoDB behind CloudFront). Each bank
 serves a full web client:
 
 ```
-https://barter.game/test1/ui
-https://barter.game/test2/ui
+https://docs.barter.game/test1/ui
+https://docs.barter.game/test2/ui
 ```
 
 1. Open a bank's `/ui`, create an identity (handle + password — the ed25519
@@ -65,7 +65,7 @@ issuer and preloads the swap. The wire format is in
 Machine access works too — every bank publishes its identity document:
 
 ```bash
-curl https://barter.game/test1/barter-bank.json
+curl https://docs.barter.game/test1/barter-bank.json
 ```
 
 To run everything locally and execute the test suite:
@@ -147,7 +147,7 @@ port its canonicalizer and validate against the golden vectors),
 ```
 barter.game/
 ├── README.md             ← you are here
-├── website/content/docs/ethos.md  ← the beliefs driving the design (published at barter.game/docs/ethos)
+├── website/content/docs/ethos.md  ← the beliefs driving the design (published at docs.barter.game/docs/ethos)
 ├── AGENTS.md             ← orientation for AI coding agents
 ├── TODOS.md              ← roadmap and deferred work
 ├── WORKAROUNDS.md        ← in-effect implementation compromises
@@ -159,7 +159,7 @@ barter.game/
 ├── apps/web/             ← the browser SPA the bank serves at /:bank/ui
 ├── docs/                 ← design notes, reviews, legacy material
 ├── scripts/              ← utilities (emu CLI, genkey, emulated-svg)
-└── website/              ← Hugo/Hextra static site (barter.game)
+└── website/              ← Hugo/Hextra static site (docs.barter.game)
 ```
 
 > `scripts/emu` (`scripts/emulate.ts`) is a working CLI client — it speaks
@@ -185,7 +185,7 @@ bank. Details in
 
 - **No protocol-level rollback.** After a lead bank settles, an abandoning
   follower means the lead is out. Recourse is social — see
-  [the Ethos](https://barter.game/docs/ethos/) §8.
+  [the Ethos](https://docs.barter.game/docs/ethos/) §8.
 - **No key recovery, no key rotation.** Lose the key and the password,
   lose the account.
 - **No reputation, no dispute resolution.** The protocol records; humans

@@ -16,8 +16,8 @@ viewer ──> CloudFront ──┬── /test1/*, /test2/* ──> Lambda Func
 ```
 
 With the `DomainName` + `AcmCertificateArn` parameters set (see samconfig.toml)
-the same distribution serves `https://barter.game/` (website) and
-`https://barter.game/<bank>/…` (banks); `www.<domain>` redirects to the apex.
+the same distribution serves `https://docs.barter.game/` (website) and
+`https://docs.barter.game/<bank>/…` (banks); only the bare domain is aliased.
 Adding a bank means adding its `/<name>/*` behavior in template.yaml.
 
 - **One Lambda serves every configured bank** (path-scoped by bank name), so
