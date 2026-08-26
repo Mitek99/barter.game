@@ -1,5 +1,7 @@
 ---
 title: What is barter.game?
+aliases:
+  - /what-is-barter-game
 ---
 
 For 40+ years, every "alternative currency" attempt — LETS, time banks, mutual credit cooperatives — has run into the same wall: **bootstrap**. They needed strangers to trust each other before the system was useful, and strangers don't.

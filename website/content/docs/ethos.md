@@ -1,5 +1,7 @@
 ---
 title: Ethos
+aliases:
+  - /ethos
 ---
 
 The beliefs driving barter.game. These are not requirements written into the

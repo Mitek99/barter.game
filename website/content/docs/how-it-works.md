@@ -1,5 +1,7 @@
 ---
 title: How it works
+aliases:
+  - /how-it-works
 ---
 
 A barter.game trade is a cascade of signed documents across independent banks. Here's a bilateral swap — the simplest case — step by step.
