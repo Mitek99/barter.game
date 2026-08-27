@@ -15,7 +15,7 @@ The best networking happens when people trade real value, not just business card
 
 ## How it works at an event
 
-1. **You deploy a bank** (or we do it for you). It takes 10 minutes. See the [self-hoster guide](../for-self-hosters).
+1. **You deploy a bank** (or we do it for you). It takes 10 minutes. See the [self-hoster guide](/docs/for-self-hosters).
 2. **Attendees open your bank's web UI** (`<your-bank-url>/ui`) and register with a handle and password. They now have a wallet.
 3. **They mint vouchers** — whatever they can deliver. "1 design review." "1 investor intro." "1 yoga class." Vouchers can carry icons and artwork, so they look like something worth trading.
 4. **They post them.** Every attendee follows the event bank by default, and the bank rebroadcasts every post it accepts — so one post puts a voucher in front of the whole event. The marketplace is automatic; no setup, no announcements channel.
@@ -41,8 +41,8 @@ Attendees leave holding signed vouchers. They can redeem them later — a coffee
 
 ## Get started
 
-- [Deploy a bank →](../for-self-hosters)
-- [Read the developer docs →](../for-developers)
+- [Deploy a bank →](/docs/for-self-hosters)
+- [Read the developer docs →](/docs/for-developers)
 - [See the full protocol →](https://github.com/ai-1st/barter.game/blob/main/protocol/README.md)
 
 Want help running this at your event? Open an issue on GitHub and we'll figure it out together.

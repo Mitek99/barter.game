@@ -1,5 +1,6 @@
 ---
 title: Ethos
+weight: 7
 aliases:
   - /ethos
 ---

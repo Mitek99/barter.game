@@ -1,5 +1,8 @@
 ---
 title: For Contributors
+weight: 4
+aliases:
+  - /for-contributors
 ---
 
 ## Shape the protocol

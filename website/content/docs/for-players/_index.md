@@ -1,5 +1,8 @@
 ---
 title: For Players
+weight: 1
+aliases:
+  - /for-players
 ---
 
 ## Master the barter play

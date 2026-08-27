@@ -1,5 +1,6 @@
 ---
 title: How it works
+weight: 6
 aliases:
   - /how-it-works
 ---

@@ -16,47 +16,6 @@ layout: hextra-home
 
 </div>
 
-<div class="hx:mt-20 hx:mb-20">
-{{< hextra/feature-grid >}}
-  {{< hextra/feature-card
-    title="For Event Managers"
-    subtitle="Add a voucher marketplace so attendees network better. Turn business-card exchanges into real value trades."
-    link="for-event-managers"
-    icon="calendar"
-  >}}
-  {{< hextra/feature-card
-    title="For Developers"
-    subtitle="Build your own implementation. The protocol is small, invariant, and language-agnostic."
-    link="for-developers"
-    icon="code"
-  >}}
-  {{< hextra/feature-card
-    title="For Self-Hosters"
-    subtitle="Deploy a bank in 10 minutes. Run your own tiny central bank in a federation of peers."
-    link="for-self-hosters"
-    icon="server"
-  >}}
-  {{< hextra/feature-card
-    title="For Players"
-    subtitle="Master the barter play. Learn lead vs. follow, trust dynamics, and portfolio strategy."
-    link="for-players"
-    icon="star"
-  >}}
-  {{< hextra/feature-card
-    title="For AI Enthusiasts"
-    subtitle="Let AI agents trade with each other. Agents can be holders, issuers, even banks."
-    link="for-ai-enthusiasts"
-    icon="cube"
-  >}}
-  {{< hextra/feature-card
-    title="For Contributors"
-    subtitle="Shape the protocol. The spec is small enough to keep in your head."
-    link="for-contributors"
-    icon="users"
-  >}}
-{{< /hextra/feature-grid >}}
-</div>
-
 <div class="content hx:mt-20 hx:mb-20">
 
 ## How it works in one paragraph

@@ -27,6 +27,7 @@ title = 'barter.game'
     # one file (no logo.dark override needed).
     [params.navbar.logo]
       path = 'images/logo.svg'
+      link = 'https://barter.game'
       width = 24
       height = 24
 
@@ -41,36 +42,6 @@ title = 'barter.game'
 
 [menu]
   [[menu.main]]
-    name = 'Docs'
-    pageRef = '/docs'
+    name = 'Docs Home'
+    pageRef = '/'
     weight = 1
-  [[menu.main]]
-    name = 'Event Managers'
-    pageRef = '/for-event-managers'
-    weight = 2
-  [[menu.main]]
-    name = 'Developers'
-    pageRef = '/for-developers'
-    weight = 3
-  [[menu.main]]
-    name = 'Self-Hosters'
-    pageRef = '/for-self-hosters'
-    weight = 4
-  [[menu.main]]
-    name = 'Players'
-    pageRef = '/for-players'
-    weight = 5
-  [[menu.main]]
-    name = 'AI Enthusiasts'
-    pageRef = '/for-ai-enthusiasts'
-    weight = 6
-  [[menu.main]]
-    name = 'Contributors'
-    pageRef = '/for-contributors'
-    weight = 7
-  [[menu.main]]
-    name = 'GitHub'
-    url = 'https://github.com/ai-1st/barter.game'
-    weight = 8
-    [menu.main.params]
-      icon = 'github'

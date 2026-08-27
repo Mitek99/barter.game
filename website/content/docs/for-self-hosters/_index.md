@@ -1,5 +1,8 @@
 ---
 title: For Self-Hosters
+weight: 2
+aliases:
+  - /for-self-hosters
 ---
 
 ## Run your own bank in 10 minutes

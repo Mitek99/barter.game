@@ -1,5 +1,6 @@
 ---
 title: What is barter.game?
+weight: 5
 aliases:
   - /what-is-barter-game
 ---
