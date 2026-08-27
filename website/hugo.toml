@@ -17,7 +17,7 @@ title = 'barter.game'
   description = 'A federated mutual-credit ledger. Be your own bank.'
   [params.editURL]
     enable = true
-    base = 'https://github.com/ai-1st/barter.game/edit/main/website/content/'
+    base = 'https://github.com/Mitek99/barter.game/edit/main/website/content/'
 
   [params.navbar]
     displayTitle = true
