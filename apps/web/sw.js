@@ -42,7 +42,7 @@ const OFFLINE_PAGE = `<!doctype html>
   }
 </style></head>
 <body><div>
-  <div class="mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" aria-hidden="true"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8f60de"/><stop offset="1" stop-color="#533afd"/></linearGradient></defs><circle cx="36" cy="36" r="34" fill="url(#bg)"/><path d="M20 29 H 46" stroke="#ffffff" stroke-width="5" stroke-linecap="round" fill="none"/><path d="M40 22.5 L 48.5 29 L 40 35.5" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M52 43 H 26" stroke="#ff8c39" stroke-width="5" stroke-linecap="round" fill="none"/><path d="M32 36.5 L 23.5 43 L 32 49.5" stroke="#ff8c39" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></div>
+  <div class="mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="137" ry="137" fill="#1a1325"/><circle cx="256" cy="256" r="192" fill="none" stroke="#8f60de" stroke-width="32"/><path d="M164 213 H 320" stroke="#ffffff" stroke-width="28" stroke-linecap="round" fill="none"/><path d="M284 171 L 334 213 L 284 256" stroke="#ffffff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M348 306 H 192" stroke="#ff8c39" stroke-width="28" stroke-linecap="round" fill="none"/><path d="M228 263 L 178 306 L 228 348" stroke="#ff8c39" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></div>
   <h1>You're offline</h1>
   <p>barter.game needs a connection to reach your bank — balances, vouchers and
      deals all live there. Your keys are untouched; reconnect and log in again.</p>
