@@ -1,6 +1,6 @@
 ---
 title: For Developers
-weight: 3
+weight: 5
 aliases:
   - /for-developers
   - /for-developers/building-a-bank

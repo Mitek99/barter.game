@@ -1,6 +1,6 @@
 ---
 title: For Self-Hosters
-weight: 2
+weight: 4
 aliases:
   - /for-self-hosters
 ---

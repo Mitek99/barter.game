@@ -1,6 +1,6 @@
 ---
 title: For Contributors
-weight: 4
+weight: 6
 aliases:
   - /for-contributors
 ---

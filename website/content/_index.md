@@ -8,12 +8,53 @@ layout: hextra-home
   {{< hextra/hero-subtitle >}}A federated mutual-credit ledger. Mint personal currencies, hold them at any bank you trust — your own or somebody else's — and settle cryptographically. No central authority, no middleman.{{< /hextra/hero-subtitle >}}
 {{< /hextra/hero-container >}}
 
-<div class="content hx:mt-10">
+<div class="content hx:mt-10 hx:mb-16">
 
 {{< callout type="info" >}}
 **Why "game"?** barter.game is designed as a game first. We suggest treating it as a practice environment for trading skills — a safe space to experiment with personal currencies, negotiation, and settlement. Only use it for real economic transactions if your local laws and circumstances permit. The "game" framing keeps the stakes appropriate while the protocol itself is serious cryptography.
 {{< /callout >}}
 
+</div>
+
+<div class="hx:mt-20 hx:mb-20">
+{{< hextra/feature-grid >}}
+  {{< hextra/feature-card
+    title="Ethos"
+    subtitle="The beliefs behind every design decision — and what we deliberately refuse to build."
+    link="docs/ethos"
+    icon="heart"
+  >}}
+  {{< hextra/feature-card
+    title="How it works?"
+    subtitle="The big idea, then a bilateral swap traced step by step across two banks."
+    link="docs/how-it-works"
+    icon="cog"
+  >}}
+  {{< hextra/feature-card
+    title="For Players"
+    subtitle="Master the barter play. Learn lead vs. follow, trust dynamics, and portfolio strategy."
+    link="docs/for-players"
+    icon="star"
+  >}}
+  {{< hextra/feature-card
+    title="For Self-Hosters"
+    subtitle="Deploy a bank in 10 minutes. Run your own tiny central bank in a federation of peers."
+    link="docs/for-self-hosters"
+    icon="server"
+  >}}
+  {{< hextra/feature-card
+    title="For Developers"
+    subtitle="Build your own implementation. The protocol is small, invariant, and language-agnostic."
+    link="docs/for-developers"
+    icon="code"
+  >}}
+  {{< hextra/feature-card
+    title="For Contributors"
+    subtitle="Shape the protocol. The spec is small enough to keep in your head."
+    link="docs/for-contributors"
+    icon="users"
+  >}}
+{{< /hextra/feature-grid >}}
 </div>
 
 <div class="content hx:mt-20 hx:mb-20">
