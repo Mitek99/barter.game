@@ -1520,8 +1520,8 @@ function webManifest(bank: Bank, basePath: string): Record<string, unknown> {
     display_override: ['standalone', 'minimal-ui'],
     // Matches <meta name="theme-color"> and the page background in
     // apps/web/styles.css, so the splash screen and status bar are seamless.
-    theme_color: '#F3F1EC',
-    background_color: '#F3F1EC',
+    theme_color: '#f7f6fb',
+    background_color: '#f7f6fb',
     lang: 'en',
     dir: 'ltr',
     categories: ['finance'],

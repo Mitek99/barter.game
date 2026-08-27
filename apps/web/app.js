@@ -1207,7 +1207,7 @@ function header(title) {
   <h1 class="sr-only">${escapeHtml(title || 'barter.game')}</h1>
   <div class="header">
     <div class="brand">
-      <div class="logo-mark"><span></span></div>
+      <img class="logo-mark" src="app/icon.svg" alt="">
       <div><strong>${escapeHtml(state.bankName)}</strong> <span class="mono small">${escapeHtml(state.user?.pubkey.slice(0, 12) || '')}…</span></div>
     </div>
     <nav class="nav" id="mainnav" aria-label="Primary">
@@ -1413,7 +1413,7 @@ async function renderWelcome(app) {
     <div class="card" style="margin-top:1.2rem">
       <div class="flex" style="justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
         <div class="flex" style="align-items:center;gap:.7rem;min-width:0">
-          <div class="logo-mark"><span></span></div>
+          <img class="logo-mark" src="app/icon.svg" alt="">
           <div style="min-width:0">
             <div style="font-weight:700">Mint your own currency.</div>
             <div class="small">A currency only you can issue — settled with people who already trust you.</div>
@@ -3468,7 +3468,7 @@ const IOS_STEPS = `<ol class="install-steps">
 // nothing to offer) or 'settings' (always states where you stand).
 function installCardHtml(variant) {
   const offer = installOffer();
-  const mark = '<div class="logo-mark"><span></span></div>';
+  const mark = '<img class="logo-mark" src="app/icon.svg" alt="">';
   if (variant === 'banner') {
     if (installSnoozed() || (offer !== 'prompt' && offer !== 'ios')) return '';
     const action = offer === 'prompt'

@@ -1,45 +1,46 @@
-/* barter.game — clean-neobank skin
-   Space Grotesk (display) / Hanken Grotesk (body) / JetBrains Mono (data) */
+/* barter.game — barter.game landing-site skin
+   Nunito Sans (display) / Inter (body) / JetBrains Mono (data) */
 
 :root {
-  --bg: #F3F1EC;
-  --fg: #1A1712;
+  --bg: #f7f6fb;
+  --fg: #2d3748;
   /* --muted/--faint darkened for WCAG AA contrast on the page background */
-  --muted: #6B665D;
-  --faint: #6E685E;
-  --accent: #3D34D6;
-  --accent-soft: #ECEBFB;
+  --muted: #64748d;
+  --faint: #687593;
+  --accent: #7239d6;
+  --accent-soft: #f0eafc;
   /* border that reads as "accent-tinted" on --accent-soft fills */
-  --accent-line: #D8D5F5;
-  --accent2: #1C7C54;
-  --green-soft: #E6F1EA;
-  --danger: #C0492E;
-  --danger-soft: #F7E9E3;
-  --amber: #A9761A;
-  --amber-soft: #F5EDDB;
-  --card: #FFFFFF;
-  --border: #EAE7DF;
-  --hair: #F1EEE7;
+  --accent-line: #ddd0f7;
+  --accent2: #157a4e;
+  --green-soft: #e4f2eb;
+  --danger: #c2402e;
+  --danger-soft: #fbecea;
+  --amber: #996d16;
+  --amber-soft: #f7efdc;
+  --card: #ffffff;
+  --border: #e2e8f0;
+  --hair: #f0edf7;
   --header-bg: rgba(255, 255, 255, 0.86);
-  --display: 'Space Grotesk', sans-serif;
+  --display: 'Nunito Sans', sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  font-family: 'Hanken Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: radial-gradient(120% 100% at 50% -10%, #F6F4EF 0%, #F3F1EC 55%, #EDEAE2 100%) fixed;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: radial-gradient(120% 100% at 50% -10%, #fbfaff 0%, #f7f6fb 55%, #efeaf8 100%) fixed;
   color: var(--fg);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
-::selection { background: #d7d4f7; }
+::selection { background: #ddd0f7; }
 #app { min-height: 100vh; }
 .container { max-width: 900px; margin: 0 auto; padding: 1.25rem 1rem; }
 h1, h2, h3, h4 {
   font-family: var(--display);
+  font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--fg);
 }
@@ -53,37 +54,37 @@ a:hover { text-decoration: underline; }
   border-radius: 16px;
   padding: 1rem 1.1rem;
   margin-bottom: 1rem;
-  box-shadow: 0 1px 2px rgba(20, 18, 12, 0.04);
+  box-shadow: 0 1px 2px rgba(26, 19, 37, 0.05);
 }
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.65rem 1rem;
+  padding: 0.65rem 1.25rem;
   border: none;
-  border-radius: 12px;
+  border-radius: 999px;
   background: var(--accent);
   color: #fff;
-  font: inherit;
+  font-family: var(--display);
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   text-decoration: none;
-  box-shadow: 0 12px 26px -12px rgba(61, 52, 214, 0.8);
-  transition: background 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 8px 20px rgba(114, 57, 214, 0.28);
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
-.btn:hover { background: #332BB8; text-decoration: none; }
+.btn:hover { background: #533afd; text-decoration: none; transform: translateY(-1px); }
 .btn.secondary {
   background: var(--card);
   color: var(--fg);
   border: 1px solid var(--border);
-  box-shadow: 0 1px 2px rgba(20, 18, 12, 0.04);
+  box-shadow: 0 1px 2px rgba(26, 19, 37, 0.05);
 }
-.btn.secondary:hover { background: #FAF9F6; }
+.btn.secondary:hover { background: #f4f2fa; transform: translateY(-1px); }
 .btn.danger { background: var(--danger-soft); color: var(--danger); box-shadow: none; }
-.btn.danger:hover { background: #F2DDD4; }
-.btn:disabled { background: #CFCBF3; color: #fff; cursor: not-allowed; box-shadow: none; }
+.btn.danger:hover { background: #f7e0db; transform: translateY(-1px); }
+.btn:disabled { background: #cfc4ec; color: #fff; cursor: not-allowed; box-shadow: none; transform: none; }
 input, textarea, select {
   width: 100%;
   padding: 0.7rem 0.85rem;
@@ -134,20 +135,14 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) {
 }
 .brand { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
 .brand strong { font-family: var(--display); font-size: 1rem; letter-spacing: -0.02em; }
+/* The logo is the gradient swap-arrows badge (app/icon.svg) rendered as an
+   <img> — self-contained background, so it reads on light and dark chrome. */
 .logo-mark {
   width: 30px; height: 30px; flex-shrink: 0;
-  border-radius: 8px;
-  background: var(--accent);
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 4px 14px -4px rgba(61, 52, 214, 0.6);
+  display: block;
+  filter: drop-shadow(0 4px 10px rgba(114, 57, 214, 0.35));
 }
-.logo-mark span {
-  width: 11px; height: 11px;
-  border: 2.2px solid #fff; border-radius: 3px;
-  transform: rotate(45deg); display: block;
-}
-.logo-mark.large { width: 60px; height: 60px; border-radius: 17px; box-shadow: 0 14px 30px -10px rgba(61, 52, 214, 0.6); }
-.logo-mark.large span { width: 22px; height: 22px; border-width: 3.4px; border-radius: 6px; }
+.logo-mark.large { width: 60px; height: 60px; filter: drop-shadow(0 10px 22px rgba(114, 57, 214, 0.4)); }
 .brand { flex: 1; }
 .header-actions { display: flex; gap: 0.5rem; align-items: center; }
 .nav-toggle { display: none; }
@@ -203,7 +198,7 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(14, 13, 11, 0.4);
+  background: rgba(26, 19, 37, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -218,7 +213,7 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) {
   max-width: 420px;
   width: 100%;
   text-align: center;
-  box-shadow: 0 40px 80px -40px rgba(20, 18, 12, 0.4);
+  box-shadow: 0 40px 80px -40px rgba(26, 19, 37, 0.4);
 }
 .modal .qr {
   width: 100%;
@@ -240,7 +235,7 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) {
   display: flex; align-items: center; gap: 0.7rem;
   padding: 0.85rem 1rem; margin-top: 1.5rem;
   background: var(--card); border: 1px solid var(--border);
-  border-radius: 15px; box-shadow: 0 1px 2px rgba(20, 18, 12, 0.04);
+  border-radius: 15px; box-shadow: 0 1px 2px rgba(26, 19, 37, 0.05);
   text-align: left;
 }
 .bank-pill .ic {
@@ -250,7 +245,7 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) {
   color: var(--accent); font-weight: 700; font-family: var(--display);
 }
 .stack { display: flex; flex-direction: column; gap: 0.7rem; margin-top: 1.6rem; }
-.stack .btn { width: 100%; padding: 0.95rem; font-size: 1rem; border-radius: 14px; }
+.stack .btn { width: 100%; padding: 0.95rem; font-size: 1rem; }
 .footnote { font-family: var(--mono); font-size: 0.75rem; color: var(--faint); line-height: 1.5; }
 
 /* install ("add to home screen") offer — a tinted card, dismissible */
@@ -306,7 +301,7 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) {
     padding: 0.5rem;
     background: var(--card);
     border-bottom: 1px solid var(--border);
-    box-shadow: 0 24px 40px -22px rgba(20, 18, 12, 0.4);
+    box-shadow: 0 24px 40px -22px rgba(26, 19, 37, 0.4);
     max-height: 72vh;
     overflow-y: auto;
   }
@@ -348,24 +343,24 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) {
   .bn-new svg {
     width: 38px; height: 38px; padding: 7px;
     background: var(--accent); color: #fff;
-    border-radius: 13px;
-    box-shadow: 0 10px 20px -8px rgba(61, 52, 214, 0.85);
+    border-radius: 999px;
+    box-shadow: 0 8px 20px rgba(114, 57, 214, 0.45);
     margin-top: -14px; /* lift above the bar */
   }
   /* clear the fixed bar so it never covers page content */
   #app { padding-bottom: 74px; }
 
   /* "New" bottom sheet */
-  .sheet-overlay { position: fixed; inset: 0; z-index: 45; background: rgba(14, 13, 11, 0.45); }
+  .sheet-overlay { position: fixed; inset: 0; z-index: 45; background: rgba(26, 19, 37, 0.45); }
   .sheet-overlay.open { display: block; }
   .sheet {
     position: absolute; bottom: 0; left: 0; right: 0;
     background: var(--bg);
     border-top-left-radius: 20px; border-top-right-radius: 20px;
     padding: 0.75rem 0.75rem calc(0.9rem + env(safe-area-inset-bottom));
-    box-shadow: 0 -24px 48px -24px rgba(20, 18, 12, 0.5);
+    box-shadow: 0 -24px 48px -24px rgba(26, 19, 37, 0.5);
   }
-  .sheet-title { font-family: var(--display); font-weight: 600; font-size: 0.95rem; margin: 0.2rem 0.3rem 0.6rem; }
+  .sheet-title { font-family: var(--display); font-weight: 700; font-size: 0.95rem; margin: 0.2rem 0.3rem 0.6rem; }
   .sheet-item {
     display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem;
     width: 100%; margin-bottom: 0.5rem;
@@ -411,7 +406,7 @@ label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) {
   background: var(--accent);
   color: #fff;
   padding: 0.5rem 0.85rem;
-  border-radius: 10px;
+  border-radius: 999px;
   font-size: 0.85rem;
   transition: top 0.15s ease;
 }
@@ -458,7 +453,7 @@ h1:focus, h2:focus, h3:focus { outline: none; }
   gap: 0.35rem;
   padding: 0.3rem 0.5rem;
   border-radius: 999px;
-  background: rgba(20, 18, 12, 0.45);
+  background: rgba(26, 19, 37, 0.45);
   pointer-events: none;
 }
 .post-dots i {
@@ -496,30 +491,43 @@ h1:focus, h2:focus, h3:focus { outline: none; }
 
 /* Dark theme — follows the OS setting; placed last so its body-background
    override wins over the base rule. QR/scan surfaces stay light on purpose
-   (a QR must be dark-on-light to scan). */
+   (a QR must be dark-on-light to scan). The landing site is light-only, so
+   these tokens extend the brand into the ink/navy register: --accent is
+   brightened to #a97fe8 so links and chips keep AA contrast on the dark
+   background, while buttons stay on the primary purple with white text. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #15130E;
-    --fg: #ECE9E1;
-    --muted: #A8A399;
-    --faint: #928C7F;
-    --accent: #9089F0;
-    --accent-soft: #262349;
-    --accent-line: #383464;
-    --accent2: #6FCF97;
-    --green-soft: #1C3025;
-    --danger: #E58A72;
-    --danger-soft: #38231C;
-    --amber: #D8AA5A;
-    --amber-soft: #342A17;
-    --card: #201D17;
-    --border: #322E25;
-    --hair: #262219;
-    --header-bg: rgba(28, 25, 19, 0.86);
+    --bg: #1a1325;
+    --fg: #ece7f7;
+    --muted: #aba1c4;
+    --faint: #8d84a8;
+    --accent: #a97fe8;
+    --accent-soft: #2e2347;
+    --accent-line: #463466;
+    --accent2: #6fcf97;
+    --green-soft: #1d2f27;
+    --danger: #e58a72;
+    --danger-soft: #3a2420;
+    --amber: #d8aa5a;
+    --amber-soft: #322818;
+    --card: #241b34;
+    --border: #3a2d52;
+    --hair: #2c2140;
+    --header-bg: rgba(26, 19, 37, 0.86);
   }
   body {
-    background: radial-gradient(120% 100% at 50% -10%, #1D1A13 0%, #15130E 55%, #100E0A 100%) fixed;
+    background: linear-gradient(165deg, #1a1325, #061b31) fixed;
   }
-  ::selection { background: #3a356b; }
-  .btn.secondary:hover { background: #2A2620; }
+  ::selection { background: #463466; }
+  /* Primary buttons keep the landing-site purple: white on #7239d6 is ~6.3:1,
+     while the brightened link accent would not carry white text. */
+  .btn { background: #7239d6; color: #fff; }
+  .btn:hover { background: #533afd; }
+  .btn.secondary { background: var(--card); color: var(--fg); }
+  .btn.secondary:hover { background: #2c2140; }
+  .btn.danger { background: var(--danger-soft); color: var(--danger); }
+  .btn.danger:hover { background: #462b25; }
+  .btn:disabled { background: #4a3f6b; color: #b6add1; }
+  .logo-mark { filter: drop-shadow(0 4px 12px rgba(143, 96, 222, 0.45)); }
+  .logo-mark.large { filter: drop-shadow(0 10px 24px rgba(143, 96, 222, 0.5)); }
 }

@@ -26,24 +26,23 @@ const OFFLINE_PAGE = `<!doctype html>
 <style>
   :root { color-scheme: light dark }
   body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
-         background:#F3F1EC; color:#1A1712; text-align:center;
+         background:#f7f6fb; color:#2d3748; text-align:center;
          font-family:system-ui,-apple-system,'Segoe UI',sans-serif; padding:1.5rem }
-  .mark { width:60px; height:60px; border-radius:17px; background:#3D34D6; margin:0 auto 1.25rem;
-          display:flex; align-items:center; justify-content:center }
-  .mark span { width:22px; height:22px; border:3.4px solid #fff; border-radius:4px;
-               transform:rotate(45deg); display:block }
+  .mark { width:60px; height:60px; margin:0 auto 1.25rem }
+  .mark svg { display:block; width:100%; height:100% }
   h1 { font-size:1.4rem; margin:0 0 0.5rem }
-  p { color:#6B665D; max-width:26rem; margin:0 auto 1.25rem }
-  button { padding:0.65rem 1rem; border:none; border-radius:12px; background:#3D34D6; color:#fff;
-           font:inherit; font-weight:600; cursor:pointer }
+  p { color:#64748d; max-width:26rem; margin:0 auto 1.25rem }
+  button { padding:0.65rem 1.25rem; border:none; border-radius:999px; background:#7239d6; color:#fff;
+           font:inherit; font-weight:700; cursor:pointer;
+           box-shadow:0 8px 20px rgba(114,57,214,.28) }
   @media (prefers-color-scheme: dark) {
-    body { background:#15130E; color:#ECE9E1 }
-    p { color:#A8A399 }
-    button { background:#9089F0; color:#15130E }
+    body { background:#1a1325; color:#ece7f7 }
+    p { color:#aba1c4 }
+    button { background:#8f60de; color:#1a1325 }
   }
 </style></head>
 <body><div>
-  <div class="mark"><span></span></div>
+  <div class="mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" aria-hidden="true"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8f60de"/><stop offset="1" stop-color="#533afd"/></linearGradient></defs><circle cx="36" cy="36" r="34" fill="url(#bg)"/><path d="M20 29 H 46" stroke="#ffffff" stroke-width="5" stroke-linecap="round" fill="none"/><path d="M40 22.5 L 48.5 29 L 40 35.5" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M52 43 H 26" stroke="#ff8c39" stroke-width="5" stroke-linecap="round" fill="none"/><path d="M32 36.5 L 23.5 43 L 32 49.5" stroke="#ff8c39" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></div>
   <h1>You're offline</h1>
   <p>barter.game needs a connection to reach your bank — balances, vouchers and
      deals all live there. Your keys are untouched; reconnect and log in again.</p>

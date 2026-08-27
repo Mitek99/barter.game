@@ -106,9 +106,10 @@ sensitive responses (or a stale client that verifies them) would trade a clear
 offline message for silently wrong balances. Offline re-unlock from a cached
 keystore blob is a separate, unbuilt feature (`docs/REVIEW.md` §18).
 
-Icons: `icon.svg` is the source of truth (it mirrors the `.logo-mark` in
-`styles.css`); the PNGs and `favicon.ico` are rendered from it, and the
-full-bleed variants exist because Android masks icons and iOS rounds them.
+Icons: `icon.svg` is the source of truth — the gradient swap-arrows badge that
+the in-app `.logo-mark` renders directly as an `<img>`; the PNGs and
+`favicon.ico` are rendered from it, and the full-bleed variants exist because
+Android masks icons and iOS rounds them.
 
 ## Key handling & security model
 
