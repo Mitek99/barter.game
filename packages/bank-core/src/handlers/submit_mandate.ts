@@ -109,7 +109,15 @@ export async function submitMandate(
   }
 
   await storeMandate(bank, mandate);
-  await advanceDeal(bank, mandate.deal_id);
+  try {
+    await advanceDeal(bank, mandate.deal_id);
+  } catch (e) {
+    // The mandate is durably stored and advance is event-driven (re-runs on
+    // every notify_signatures), so a failed pass here must not surface as
+    // -32603 — the coordinator would retry into a duplicate-mandate no-op
+    // while the ledger already moved.
+    console.error(`advance after submit_mandate failed for deal ${mandate.deal_id}:`, e);
+  }
 
   return {
     mandated: true,

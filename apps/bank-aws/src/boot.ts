@@ -28,12 +28,21 @@ export async function bootBanks(
   const banks = new Map<string, Bank>();
   const placeholderPort = env.PORT ?? '8000';
   const baseUrl = env.BANK_BASE_URL?.replace(/\/+$/, '');
+  // Optional advance-engine stall-timeout override (ms); default 1h in
+  // bank-core. Invalid values are ignored with a warning.
+  const rawStall = env.BANK_STALL_TIMEOUT_MS;
+  let stallTimeoutMs: number | undefined;
+  if (rawStall !== undefined) {
+    const n = Number(rawStall);
+    if (Number.isFinite(n) && n > 0) stallTimeoutMs = n;
+    else console.error(`Ignoring invalid BANK_STALL_TIMEOUT_MS: ${rawStall}`);
+  }
   for (const l of loaded) {
     const envUrl = env[`BANK_${l.name.toUpperCase().replace(/-/g, '_')}_URL`]
       ?? (baseUrl ? `${baseUrl}/${l.name}` : undefined);
     // The placeholder is only used until the first request resolves the real
     // origin (x-forwarded-host aware).
-    const bank = createBank(l, deps, envUrl ?? `http://localhost:${placeholderPort}/${l.name}`);
+    const bank = createBank(l, deps, envUrl ?? `http://localhost:${placeholderPort}/${l.name}`, { stallTimeoutMs });
     bank.urlPinned = !!envUrl;
     banks.set(l.name, bank);
     registerLocalBank(bank);

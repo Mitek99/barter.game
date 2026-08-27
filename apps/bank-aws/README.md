@@ -37,6 +37,10 @@ Adding a bank means adding its `/<name>/*` behavior in template.yaml.
   the `BANK_ADMINS` env var (comma-separated base58 pubkeys, every bank in the
   process) or per bank via `BANK_<NAME>_ADMINS`. On AWS set the `BankAdmins`
   template parameter; locally export the env var next to the bank keys.
+- The advance engine's **stall timeout** (a mandated deal with no visible
+  progress past it is rejected, freeing its holds; never fires once a settle
+  signature is observed) defaults to 1 hour and can be overridden with the
+  `BANK_STALL_TIMEOUT_MS` env var (milliseconds).
 - The Function URL uses `AuthType: NONE` because the protocol authenticates
   every write itself (signed envelopes / `X-Barter-Auth`) and CloudFront
   OAC-signed POSTs would force clients to send `x-amz-content-sha256`.

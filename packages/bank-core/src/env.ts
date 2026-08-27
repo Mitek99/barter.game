@@ -73,6 +73,7 @@ export function createBank(
   loaded: LoadedBank,
   deps: BankDeps,
   url: string,
+  opts?: { stallTimeoutMs?: number },
 ): Bank {
-  return { ...loaded, ...deps, url };
+  return { ...loaded, ...deps, url, stallTimeoutMs: opts?.stallTimeoutMs };
 }

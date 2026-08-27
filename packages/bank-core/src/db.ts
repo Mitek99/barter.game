@@ -193,20 +193,61 @@ export async function getAccountBalance(
   return { current: a.row.balance, pending };
 }
 
-export async function updateAccountBalance(
+/**
+ * Commit a record's settlement in ONE atomic batch: apply the balance delta,
+ * release the deal's hold on the account, and store the `settle` Signature
+ * doc plus its record_sig index entry. Signing happens before the call — only
+ * the writes are transactional.
+ *
+ * Idempotency: a debit settle commits only while its hold row still exists.
+ * The settled marker the advance engine reads (the Signature under
+ * record_sig) commits in the SAME batch as the balance write, so a crash
+ * mid-settle can no longer leave the delta applied without the marker, and a
+ * re-driven settle fails the hold-row check and returns false WITHOUT
+ * re-applying the delta. Credit records hold nothing; their marker commits
+ * atomically with the balance write, so they cannot double-apply either.
+ */
+export async function applySettlement(
   bank: Bank,
   accountHash: Base58SHA256,
+  dealId: ULID,
   delta: number,
-): Promise<void> {
-  const key = k(bank, 'account', accountHash);
-  const r = await bank.kv.get<AccountRow>(key);
-  if (!r.value) throw new Error('account not found');
-  const ok = await bank.kv
-    .atomic()
-    .check(r)
-    .set(key, { ...r.value, balance: r.value.balance + delta })
-    .commit();
-  if (!ok.ok) throw new Error('account balance conflict');
+  sig: Signature,
+): Promise<boolean> {
+  // A settle signature is always anchored to its record.
+  if (!sig.hash) throw new Error('settle signature without target hash');
+  const accountKey = k(bank, 'account', accountHash);
+  const activeKey = k(bank, 'active_hold', accountHash);
+  const holdKey = k(bank, 'hold', accountHash, dealId);
+  const sigHash = hashDoc(sig);
+  // A concurrent settle of ANOTHER deal on the same account moves the balance
+  // between read and commit; re-read and retry a few times before giving up
+  // (the caller treats false as "retry on the next advance event").
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const acct = await bank.kv.get<AccountRow>(accountKey);
+    if (!acct.value) throw new Error('account not found');
+    const atomic = bank.kv
+      .atomic()
+      .check(acct)
+      .set(accountKey, { ...acct.value, balance: acct.value.balance + delta })
+      .set(k(bank, 'doc', sigHash), sig)
+      .set(k(bank, 'record_sig', sig.hash, sigHash), true);
+    if (delta < 0) {
+      const hold = await bank.kv.get<number>(holdKey);
+      // Already settled (or the hold was released by a reject): never apply.
+      if (hold.value === null) return false;
+      const active = await bank.kv.get<Hold>(activeKey);
+      atomic.check(hold).delete(holdKey);
+      // Same discipline as releaseHold: the active_hold delete commits only
+      // if the row is unchanged since the read and belongs to this deal.
+      if (active.value && active.value.deal_id === dealId) {
+        atomic.check(active).delete(activeKey);
+      }
+    }
+    const ok = await atomic.commit();
+    if (ok.ok) return true;
+  }
+  return false;
 }
 
 // --- orders ---------------------------------------------------------------
@@ -382,6 +423,37 @@ export async function storeDealPair(
   await bank.kv.set(k(bank, 'deal_pair', dealId, giver, receiver), row);
 }
 
+/**
+ * Mint a create_records pair and its idempotency marker in ONE atomic batch:
+ * the deal_pair row is check-and-set (the key must still be absent), so two
+ * concurrent calls with the same (deal_id, giver, receiver) can no longer
+ * both mint pairs. Returns false when the marker already existed — the caller
+ * re-reads it and applies the repeated-call rule (same terms return the
+ * winner's pair; different terms are an error).
+ */
+export async function storeRecordPairIfAbsent(
+  bank: Bank,
+  dealId: ULID,
+  giver: Base58SHA256,
+  receiver: Base58SHA256,
+  pairRow: DealPairRow,
+  records: { record: BankRecord; details: RecordRow['details']; hash: Base58SHA256 }[],
+): Promise<boolean> {
+  const pairKey = k(bank, 'deal_pair', dealId, giver, receiver);
+  const existing = await bank.kv.get<DealPairRow>(pairKey);
+  if (existing.value) return false;
+  const atomic = bank.kv.atomic().check(existing).set(pairKey, pairRow);
+  for (const { record, details, hash } of records) {
+    atomic
+      .set(k(bank, 'doc', hash), record)
+      .set(k(bank, 'record', hash), { doc: record, details })
+      .set(k(bank, 'deal_record', details.deal_id, hash), true)
+      .set(k(bank, 'account_record', details.account, hash), true);
+  }
+  const ok = await atomic.commit();
+  return ok.ok === true;
+}
+
 export async function storeRecord(
   bank: Bank,
   record: BankRecord,
@@ -488,24 +560,44 @@ export async function getActiveHold(
 }
 
 /**
- * Acquire an aggregated hold for a single account+deal. Rejects if the
- * account is already held by a different external deal.
+ * Acquire an aggregated hold for a single account+deal, checking solvency at
+ * HOLD time inside the same atomic: the debit account must keep `floor`
+ * headroom net of OTHER deals' holds on it (bank-schema.md §3.1 — the
+ * ready-time check alone goes stale the moment a concurrent deal settles).
+ * `floor` may be -Infinity (issuer debits may drive the account negative;
+ * the voucher limit gates them at ready time). Fails closed — exactly like a
+ * contention loss — when the account is held by a different deal, the balance
+ * moved since the read, or the headroom check fails.
  */
 export async function acquireHold(
   bank: Bank,
   accountHash: Base58SHA256,
   dealId: ULID,
   amount: number,
+  floor: number,
 ): Promise<boolean> {
   const activeKey = k(bank, 'active_hold', accountHash);
   const holdKey = k(bank, 'hold', accountHash, dealId);
+  const accountKey = k(bank, 'account', accountHash);
   const r = await bank.kv.get<Hold>(activeKey);
   if (r.value && r.value.deal_id !== dealId) {
     return false;
   }
+  const acct = await bank.kv.get<AccountRow>(accountKey);
+  if (!acct.value) return false;
+  // Net of other deals' holds. Exclusivity (active_hold) means there is
+  // normally at most one hold on the account — this deal's — but stale rows
+  // from a crashed release still count against headroom.
+  const holds = await listHoldsForAccount(bank, accountHash);
+  const heldByOthers = holds.reduce(
+    (sum, h) => sum + (h.deal_id === dealId ? 0 : h.amount),
+    0,
+  );
+  if (acct.value.balance - heldByOthers - amount < floor) return false;
   const ok = await bank.kv
     .atomic()
     .check(r)
+    .check(acct)
     .set(activeKey, { account: accountHash, deal_id: dealId, amount })
     .set(holdKey, amount)
     .commit();
@@ -520,7 +612,11 @@ export async function releaseHold(
   const activeKey = k(bank, 'active_hold', accountHash);
   const holdKey = k(bank, 'hold', accountHash, dealId);
   const r = await bank.kv.get<Hold>(activeKey);
-  const atomic = bank.kv.atomic().delete(holdKey);
+  // check(r) folds the fresh-read guard into the atomic: the deletes commit
+  // only if the active_hold row is unchanged since the read, so a concurrent
+  // acquire by another deal can never have its fresh hold deleted here. A
+  // lost CAS skips the release; the next advance event retries it.
+  const atomic = bank.kv.atomic().check(r).delete(holdKey);
   if (r.value && r.value.deal_id === dealId) {
     atomic.delete(activeKey);
   }

@@ -1,4 +1,6 @@
 import {
+  applySettlement,
+  acquireHold,
   getAccount,
   getAccountBalance,
   getAddress,
@@ -8,10 +10,10 @@ import {
   getOrder,
   getRecord,
   getSignaturesForRecord,
+  getVoucher,
   listRecordsByDeal,
   releaseHold,
   storeSignature,
-  updateAccountBalance,
   type RecordRow,
 } from './db.ts';
 import {
@@ -23,11 +25,31 @@ import {
   type Order,
   type BankRecord,
   type Signature,
+  type ULID,
 } from '@barter.game/protocol';
 import { bankRpcCall } from './peer.ts';
 import type { Bank } from './types.ts';
 
 const EPS = 1e-9;
+
+// Default stall timeout: a mandated deal with no visible progress for an hour
+// is rejected and its holds released (bank-schema.md §2 "Reject semantics" —
+// the threshold is bank policy, the protocol fixes none). Hosts override via
+// createBank's options / BANK_STALL_TIMEOUT_MS.
+const DEFAULT_STALL_TIMEOUT_MS = 1000 * 60 * 60;
+
+// Milliseconds encoded in a ULID's first 10 Crockford-base32 characters.
+// Returns 0 for malformed input, which simply doesn't count as activity.
+function ulidTime(u: ULID): number {
+  const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+  let t = 0;
+  for (let i = 0; i < 10; i++) {
+    const v = ALPHABET.indexOf((u[i] ?? '').toUpperCase());
+    if (v < 0) return 0;
+    t = t * 32 + v;
+  }
+  return t;
+}
 
 // Per-record view: the record, its Order, whether the coordinator has mandated
 // it, and this bank's OWN ready/hold/settle/reject signatures on it. Cross-bank
@@ -54,7 +76,24 @@ function seenContains(seen: Base58SHA256[] | undefined, needed: Base58SHA256[]):
   return needed.every((n) => s.has(n));
 }
 
+// --- per-deal serialization -------------------------------------------------
+// Concurrent advance passes over the SAME deal race on the account/hold rows
+// (hold acquisition, settle CAS). Chain passes per deal_id so a deal is
+// advanced by one pass at a time; a failed pass never wedges the chain.
+const dealChains = new Map<string, Promise<void>>();
+
 export async function advanceDeal(bank: Bank, dealId: string): Promise<void> {
+  const prev = dealChains.get(dealId) ?? Promise.resolve();
+  const run = prev.catch(() => {}).then(() => advanceDealInner(bank, dealId));
+  dealChains.set(dealId, run);
+  try {
+    await run;
+  } finally {
+    if (dealChains.get(dealId) === run) dealChains.delete(dealId);
+  }
+}
+
+async function advanceDealInner(bank: Bank, dealId: string): Promise<void> {
   const ownRows = await listRecordsByDeal(bank, dealId);
   if (ownRows.length === 0) return;
 
@@ -142,6 +181,37 @@ export async function advanceDeal(bank: Bank, dealId: string): Promise<void> {
     return;
   }
 
+  // 0. STALL TIMEOUT — liveness recovery (bank-schema.md §2): a mandated deal
+  //    that has shown no progress for stallTimeoutMs is rejected, freeing its
+  //    holds so locked accounts can serve other deals. Progress = the newest
+  //    record, mandate, or signature timestamp this bank can see; the check is
+  //    lazy (evaluated when the deal is advanced, there is no cron). It MUST
+  //    NOT fire once any settle signature for the deal has been observed — a
+  //    partly-settled deal completes, it does not unwind; there is no
+  //    rollback.
+  const settleObserved = own.some((o) => o.settled) ||
+    [...foreignHashes].some((h) => foreignAction(h, 'settle').length > 0);
+  if (!settleObserved) {
+    const stallMs = bank.stallTimeoutMs ?? DEFAULT_STALL_TIMEOUT_MS;
+    let lastActivity = 0;
+    for (const o of own) {
+      lastActivity = Math.max(lastActivity, ulidTime(o.row.doc.ulid));
+      for (const s of [o.ownReady, o.ownHold, o.ownSettle]) {
+        if (s) lastActivity = Math.max(lastActivity, ulidTime(s.ulid));
+      }
+      const m = await getMandate(bank, dealId, o.row.doc.order);
+      if (m) lastActivity = Math.max(lastActivity, m.at);
+    }
+    for (const sigs of foreignSigs.values()) {
+      for (const s of sigs) lastActivity = Math.max(lastActivity, ulidTime(s.ulid));
+    }
+    if (lastActivity > 0 && Date.now() - lastActivity > stallMs) {
+      const sigs = await rejectDeal(bank, own, 'stall timeout');
+      if (sigs.length > 0) await fanOutSigs(bank, sigs, resolvedOwn);
+      return;
+    }
+  }
+
   // The deal must be strictly bilateral for the v1 seen-handshake (one lead
   // transfer, one follow transfer). ≥3-bank DAGs need a predecessor graph
   // (docs/design/mandate-validation.md §5.4) — fail closed past `ready`.
@@ -155,17 +225,23 @@ export async function advanceDeal(bank: Bank, dealId: string): Promise<void> {
   //    just waits.
   for (const st of own) {
     if (st.ready || st.held || st.settled || !st.mandated) continue;
-    const verdict = await readyCheck(bank, st.row, st.order, own);
-    if (verdict.ok) {
-      const sig = await signAndStore(bank, st.hash, 'ready');
-      st.ownReady = sig;
-      st.ready = true;
-      issued.push(sig);
-    } else if (verdict.permanent) {
-      const sigs = await rejectDeal(bank, own, verdict.reason);
-      const all = [...sigs, ...issued];
-      if (all.length > 0) await fanOutSigs(bank, all, resolvedOwn);
-      return;
+    try {
+      const verdict = await readyCheck(bank, st.row, st.order, own);
+      if (verdict.ok) {
+        const sig = await signAndStore(bank, st.hash, 'ready');
+        st.ownReady = sig;
+        st.ready = true;
+        issued.push(sig);
+      } else if (verdict.permanent) {
+        const sigs = await rejectDeal(bank, own, verdict.reason);
+        const all = [...sigs, ...issued];
+        if (all.length > 0) await fanOutSigs(bank, all, resolvedOwn);
+        return;
+      }
+    } catch (e) {
+      // One record's failure must not abort the rest of the pass; the next
+      // advance event re-drives this record.
+      console.error(`advance deal ${dealId}: ready phase failed for record ${st.hash}:`, e);
     }
   }
 
@@ -210,18 +286,23 @@ export async function advanceDeal(bank: Bank, dealId: string): Promise<void> {
       }
     }
     if (toHold.length > 0) {
-      const holdOk = await acquireHoldsForDeal(bank, dealId, toHold);
-      if (holdOk) {
-        const foreignHoldHashes = [...foreignHashes].flatMap((h) => foreignAction(h, 'hold')).map(hashDoc);
-        for (const st of toHold) {
-          const seen = transferIsLead(st)
-            ? allReadyHashes
-            : [...allReadyHashes, ...foreignHoldHashes];
-          const sig = await signAndStore(bank, st.hash, 'hold', seen);
-          st.ownHold = sig;
-          st.held = true;
-          issued.push(sig);
+      try {
+        const holdOk = await acquireHoldsForDeal(bank, dealId, toHold);
+        if (holdOk) {
+          const foreignHoldHashes = [...foreignHashes].flatMap((h) => foreignAction(h, 'hold')).map(hashDoc);
+          for (const st of toHold) {
+            const seen = transferIsLead(st)
+              ? allReadyHashes
+              : [...allReadyHashes, ...foreignHoldHashes];
+            const sig = await signAndStore(bank, st.hash, 'hold', seen);
+            st.ownHold = sig;
+            st.held = true;
+            issued.push(sig);
+          }
         }
+      } catch (e) {
+        // A failed hold pass leaves no signatures; later events re-attempt.
+        console.error(`advance deal ${dealId}: hold phase failed:`, e);
       }
     }
   }
@@ -265,11 +346,17 @@ export async function advanceDeal(bank: Bank, dealId: string): Promise<void> {
       ];
       const foreignSettleHashes = [...foreignHashes].flatMap((h) => foreignAction(h, 'settle')).map(hashDoc);
       for (const st of toSettle) {
-        const seen = transferIsLead(st)
-          ? allHoldHashes
-          : [...allHoldHashes, ...foreignSettleHashes];
-        const sig = await applySettle(bank, st, seen);
-        issued.push(sig);
+        try {
+          const seen = transferIsLead(st)
+            ? allHoldHashes
+            : [...allHoldHashes, ...foreignSettleHashes];
+          const sig = await applySettle(bank, st, seen);
+          if (sig) issued.push(sig);
+        } catch (e) {
+          // One record's failed settle must not abort the rest of the pass;
+          // the next advance event re-drives it.
+          console.error(`advance deal ${dealId}: settle failed for record ${st.hash}:`, e);
+        }
       }
     }
   }
@@ -428,37 +515,89 @@ async function aggregateRateCheck(
   return debitAmount / creditAmount <= order.rate + EPS ? 'ok' : 'violation';
 }
 
+// Acquire the per-account aggregated holds for a deal's debit records. The
+// solvency floor per account is the strictest over its records: issuer debits
+// may go negative (-Infinity; the voucher limit gates them at ready time),
+// non-issuer holder-authorized debits floor at max(0, debit_account_limit)
+// (bank-schema.md §3.2). On any failed acquire the holds taken earlier in
+// THIS pass are released again — a partial pass must not strand holds and
+// lock accounts until the stall timeout.
 async function acquireHoldsForDeal(
   bank: Bank,
   dealId: string,
   states: OwnState[],
 ): Promise<boolean> {
-  const { acquireHold } = await import('./db.ts');
-  const byAccount = new Map<Base58SHA256, number>();
+  const byAccount = new Map<Base58SHA256, { amount: number; floor: number }>();
   for (const st of states) {
     if (st.row.doc.type !== 'debit') continue;
-    const sum = byAccount.get(st.row.details.account) ?? 0;
-    byAccount.set(st.row.details.account, sum + st.row.doc.amount);
+    const voucher = await getVoucher(bank, st.order.debit!.voucher);
+    const isIssuer = voucher ? voucher.pubkey === st.row.details.holder : false;
+    const floor = isIssuer
+      ? Number.NEGATIVE_INFINITY
+      : Math.max(0, st.order.debit_account_limit ?? 0);
+    const cur = byAccount.get(st.row.details.account);
+    byAccount.set(st.row.details.account, {
+      amount: (cur?.amount ?? 0) + st.row.doc.amount,
+      floor: Math.max(cur?.floor ?? Number.NEGATIVE_INFINITY, floor),
+    });
   }
-  for (const [account, amount] of byAccount) {
-    const ok = await acquireHold(bank, account, dealId, amount);
-    if (!ok) return false;
+  const acquired: Base58SHA256[] = [];
+  for (const [account, { amount, floor }] of byAccount) {
+    const ok = await acquireHold(bank, account, dealId, amount, floor);
+    if (!ok) {
+      for (const a of acquired) await releaseHold(bank, a, dealId);
+      return false;
+    }
+    acquired.push(account);
   }
   return true;
 }
 
-// Apply a settled record's delta, release its hold, and issue the `settle`
-// signature. Both halves of a transfer are settled in the same advance pass
-// (their gate is identical), so the per-bank sum invariant is preserved.
+// Apply a settled record's delta, release its hold, and commit the `settle`
+// signature in ONE atomic batch (db.applySettlement) — the signature is the
+// settled marker the engine reads, so committing it with the balance write
+// makes a crash mid-settle unable to double-apply the delta. Both halves of a
+// transfer are settled in the same advance pass (their gate is identical), so
+// the per-bank sum invariant is preserved. Returns null when the record turns
+// out to be settled already (no new signature to fan out).
 async function applySettle(
   bank: Bank,
   st: OwnState,
   seen: Base58SHA256[],
-): Promise<Signature> {
+): Promise<Signature | null> {
   const delta = st.row.doc.type === 'credit' ? st.row.doc.amount : -st.row.doc.amount;
-  await updateAccountBalance(bank, st.row.details.account, delta);
-  await releaseHold(bank, st.row.details.account, st.row.details.deal_id);
-  const sig = await signAndStore(bank, st.hash, 'settle', seen);
+  const sig: Signature = {
+    type: 'signature',
+    pubkey: bank.pubkey,
+    ulid: newUlid(),
+    hash: st.hash,
+    action: 'settle',
+    seen,
+    sig: '',
+  };
+  sig.sig = signDoc(sig, bank.privateKey);
+  const ok = await applySettlement(
+    bank,
+    st.row.details.account,
+    st.row.details.deal_id,
+    delta,
+    sig,
+  );
+  if (!ok) {
+    // The CAS refused. If a settle signature for this record exists, the
+    // balance was applied in the same batch as that signature — this is the
+    // idempotent no-op path; never re-apply. Otherwise the account row kept
+    // contending: throw so the pass logs it and a later event retries.
+    const existing = (await getSignaturesForRecord(bank, st.hash)).find(
+      (s) => s.action === 'settle' && s.pubkey === bank.pubkey,
+    );
+    if (existing) {
+      st.ownSettle = existing;
+      st.settled = true;
+      return null;
+    }
+    throw new Error(`settle of record ${st.hash} lost the balance CAS`);
+  }
   st.ownSettle = sig;
   st.settled = true;
   return sig;
@@ -488,7 +627,9 @@ async function signAndStore(
 
 // Abort the deal at this bank: issue a reject Signature on every pre-settled
 // record that doesn't have one, releasing any holds. Settled records stay
-// settled — there is no rollback. Returns the newly issued reject signatures.
+// settled — there is no rollback (a reject landing on a settled record is a
+// no-op: settle-first wins per record). Returns the newly issued reject
+// signatures.
 async function rejectDeal(
   bank: Bank,
   states: OwnState[],
@@ -502,9 +643,11 @@ async function rejectDeal(
       (s) => s.action === 'reject' && s.pubkey === bank.pubkey,
     );
     if (existing) continue;
-    if (st.held) {
-      await releaseHold(bank, st.row.details.account, st.row.details.deal_id);
-    }
+    // Release by the hold INDEX, not by signature state: a hold acquired just
+    // before a crash (no hold Signature ever stored, so `st.held` reads
+    // false) still locks the account. releaseHold is a no-op when no hold
+    // row exists for this deal.
+    await releaseHold(bank, st.row.details.account, st.row.details.deal_id);
     const sig = await signAndStore(bank, st.hash, 'reject', undefined, reason);
     st.rejected = true;
     out.push(sig);
@@ -531,13 +674,19 @@ async function fanOutSigs(
   for (const target of peers) {
     const addr = await getAddress(bank, target);
     if (!addr) continue;
-    try {
-      await bankRpcCall(bank, addr.url, target, 'notify_signatures', {
-        signatures: sigs,
-      });
-    } catch {
-      // Fire-and-forget; client relay is the recovery path.
-    }
+    // Fire-and-forget — do NOT await the delivery. The in-process dispatch
+    // path for co-located banks (peer.ts, local.ts) re-enters advanceDeal for
+    // this same deal from inside notify_signatures; awaiting that here would
+    // deadlock against the per-deal serialization chain (the peer's pass
+    // queues behind THIS still-running pass). Client relay
+    // (get_record_signatures + notify_signatures) is the recovery path.
+    void bankRpcCall(bank, addr.url, target, 'notify_signatures', {
+      signatures: sigs,
+    }).catch((e) => {
+      // Logged so a silently unreachable peer no longer stalls deals
+      // invisibly.
+      console.error(`fan-out notify_signatures to ${target} failed:`, e);
+    });
   }
 }
 

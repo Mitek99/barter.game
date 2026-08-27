@@ -27,6 +27,11 @@ export type Bank = {
   urlPinned?: boolean;
   // True once url has been resolved from an incoming request origin.
   urlResolved?: boolean;
+  // Stall timeout for the advance engine: a mandated deal with no visible
+  // progress for this long is rejected and its holds released
+  // (bank-schema.md §2 "Reject semantics"). Injected via createBank options
+  // (BANK_STALL_TIMEOUT_MS on the AWS host); defaults to 1 hour in advance.ts.
+  stallTimeoutMs?: number;
 };
 
 export type RpcContext = {

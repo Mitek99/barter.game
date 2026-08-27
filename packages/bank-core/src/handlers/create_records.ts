@@ -5,8 +5,7 @@ import {
   getOrder,
   getRecord,
   getVoucher,
-  storeDealPair,
-  storeRecord,
+  storeRecordPairIfAbsent,
 } from '../db.ts';
 import {
   hashDoc,
@@ -195,13 +194,39 @@ export async function createRecords(
   };
   creditRecord.sig = signDoc(creditRecord, bank.privateKey);
 
-  const debitHash = await storeRecord(bank, debitRecord, debitDetails);
-  const creditHash = await storeRecord(bank, creditRecord, creditDetails);
-  await storeDealPair(bank, dealId, giverHash, receiverHash, {
-    records: [debitHash, creditHash],
-    amount,
-    counter_amount: counterAmount,
-  });
+  const debitHash = hashDoc(debitRecord);
+  const creditHash = hashDoc(creditRecord);
+
+  // The pair rows, their indexes, and the idempotency marker commit in ONE
+  // atomic batch: the deal_pair key is check-and-set, so a concurrent
+  // create_records for the same (deal_id, giver, receiver) can no longer mint
+  // a second pair behind the read-then-write gap.
+  const created = await storeRecordPairIfAbsent(
+    bank,
+    dealId,
+    giverHash,
+    receiverHash,
+    { records: [debitHash, creditHash], amount, counter_amount: counterAmount },
+    [
+      { record: debitRecord, details: debitDetails, hash: debitHash },
+      { record: creditRecord, details: creditDetails, hash: creditHash },
+    ],
+  );
+  if (!created) {
+    // Lost the race (or the marker appeared between the read above and the
+    // atomic): apply the same repeated-call rule as the fast path — same
+    // terms return the winner's pair, different terms are an error.
+    const cur = await getDealPair(bank, dealId, giverHash, receiverHash);
+    if (!cur || cur.amount !== amount || cur.counter_amount !== counterAmount) {
+      throw new RpcError(-32000, 'create_records repeated with different terms for this (deal, giver, receiver)');
+    }
+    const records = [];
+    for (const h of cur.records) {
+      const row = await getRecord(bank, h);
+      if (row) records.push(row.doc);
+    }
+    return { records };
+  }
 
   await addOrderUsage(bank, giver.orderHash, amount, 0);
   await addOrderUsage(bank, receiver.orderHash, 0, amount);
