@@ -1,6 +1,6 @@
 {
   "name": "@barter.game/bank-core",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "license": "MIT",
   "type": "module",
   "description": "Runtime-agnostic bank engine for the barter.game federated mutual-credit ledger (routing, RPC, advance engine, storage seams). Consumed as TypeScript source; no build step (same policy as @barter.game/protocol). Web-standard APIs only; the host injects storage.",
