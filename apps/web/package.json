@@ -1,6 +1,6 @@
 {
   "name": "@barter.game/web-client",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "type": "module",
   "license": "MIT",
   "description": "Browser SPA (installable PWA) served by a barter.game bank at /:bank/ui. Plain static assets, no build step — a bank host serves them through the AssetReader seam of @barter.game/bank-core.",
