@@ -8,12 +8,15 @@ export type LoadedBank = {
   pubkey: Base58PubKey;
   privateKey: Uint8Array;
   admins: Base58PubKey[];
+  posthogKey?: string;
 };
 
 const BANK_ENV_RE = /^BANK_([A-Z0-9_]+)_PRIV_KEY$/;
 // Per-bank admin list; the global BANK_ADMINS does not match (nothing before
 // the "_ADMINS" suffix).
 const BANK_ADMINS_RE = /^BANK_([A-Z0-9_]+)_ADMINS$/;
+// Per-bank PostHog key; the global BANK_POSTHOG_KEY does not match.
+const BANK_POSTHOG_RE = /^BANK_([A-Z0-9_]+)_POSTHOG_KEY$/;
 
 /** Comma/space-separated base58 ed25519 pubkeys; invalid entries are skipped. */
 function parseAdminPubkeys(raw: string | undefined): Base58PubKey[] {
@@ -36,10 +39,15 @@ export function loadBankKeys(
 ): LoadedBank[] {
   const globalAdmins = parseAdminPubkeys(env.BANK_ADMINS);
   const perBankAdmins = new Map<string, Base58PubKey[]>();
+  const perBankPosthog = new Map<string, string>();
   for (const [key, value] of Object.entries(env)) {
     const m = key.match(BANK_ADMINS_RE);
     if (m && value) {
       perBankAdmins.set(m[1]!.toLowerCase().replace(/_/g, '-'), parseAdminPubkeys(value));
+    }
+    const p = key.match(BANK_POSTHOG_RE);
+    if (p && value) {
+      perBankPosthog.set(p[1]!.toLowerCase().replace(/_/g, '-'), value.trim());
     }
   }
   const banks: LoadedBank[] = [];
@@ -55,7 +63,8 @@ export function loadBankKeys(
       }
       const { pubkeyBase58 } = publicKeyOf(privateKey);
       const admins = [...new Set([...globalAdmins, ...(perBankAdmins.get(name) ?? [])])];
-      banks.push({ name, pubkey: pubkeyBase58, privateKey, admins });
+      const posthogKey = perBankPosthog.get(name) ?? env.BANK_POSTHOG_KEY?.trim();
+      banks.push({ name, pubkey: pubkeyBase58, privateKey, admins, ...(posthogKey ? { posthogKey } : {}) });
     } catch (e) {
       console.error(`Bank ${name}: failed to load key: ${e}`);
     }

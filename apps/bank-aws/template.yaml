@@ -47,6 +47,13 @@ Parameters:
       Comma-separated base58 pubkeys allowed to use the operator-only
       /ui/admin/* routes on every bank in this stack (BANK_ADMINS env var).
       Pubkeys only — no secrets.
+  PosthogKey:
+    Type: String
+    Default: ''
+    Description: >
+      Optional PostHog project key for web-client analytics, injected into
+      the SPA as window.__POSTHOG_KEY__ (BANK_POSTHOG_KEY env var). Empty
+      leaves the client fully analytics-inert.
   RolePermissionsBoundary:
     Type: String
     Default: ''
@@ -160,6 +167,7 @@ Resources:
           BANK_MEDIA_BUCKET: !Ref AssetsBucket
           BANK_KEYS_SSM_PATH: !Ref BankKeysSsmPath
           BANK_ADMINS: !Ref BankAdmins
+          BANK_POSTHOG_KEY: !Ref PosthogKey
           ORIGIN_SECRET: !If
             - HasOriginSecret
             - !Ref OriginSecret

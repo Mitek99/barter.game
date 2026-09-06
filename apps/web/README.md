@@ -36,6 +36,29 @@ from esm.sh (`@noble/ed25519` 3.1.0, `@noble/hashes` 2.2.0, `@scure/base`
 2.2.0, `ulid` 2.3.0); fonts come from Google Fonts. Nothing is bundled, and the
 app is **not offline-capable**.
 
+## Analytics (PostHog)
+
+Optional and host-injected. When the serving bank puts a PostHog project key
+in the page as `window.__POSTHOG_KEY__` (bank-core's `serveSpa` does this from
+`BANK_POSTHOG_KEY` / `BANK_<NAME>_POSTHOG_KEY` env config), `app.js` lazy-loads
+`posthog-js` (pinned in the import map) and initializes it with
+`person_profiles: 'identified_only'` and session recording with
+`maskAllInputs: true`. **Without the key the client is fully inert — the
+library is never fetched and no analytics network calls happen**, which is what
+keeps this package safe to reuse in other deployments.
+
+- Users are identified by **pubkey only** (public, safe as `distinct_id`) —
+  never seed, keystore, or password — and `bank_id` is registered as a super
+  property on every event.
+- Funnel events: `bank_ui_loaded`, `account_created`, `login_completed`,
+  `transaction_initiated` / `transaction_confirmed` / `transaction_failed`
+  (properties: `asset`, `tx_type`, and numeric `error_code` only — no amounts,
+  memos, or free-text errors), `invite_created` / `invite_accepted`.
+- The credential screens (register / log in / restore) carry the
+  `ph-no-capture` class so autocapture and session recording skip them.
+- If the client is ever served with a Content-Security-Policy, it must allow
+  `connect-src https://us.i.posthog.com`.
+
 ## Consuming as an npm package
 
 These assets are published as `@barter.game/web-client` so a bank host can

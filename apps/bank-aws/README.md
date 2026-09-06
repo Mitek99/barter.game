@@ -41,6 +41,10 @@ Adding a bank means adding its `/<name>/*` behavior in template.yaml.
   progress past it is rejected, freeing its holds; never fires once a settle
   signature is observed) defaults to 1 hour and can be overridden with the
   `BANK_STALL_TIMEOUT_MS` env var (milliseconds).
+- Optional **PostHog analytics** for the web client: set `BANK_POSTHOG_KEY`
+  (or per bank `BANK_<NAME>_POSTHOG_KEY`; on AWS the `PosthogKey` template
+  parameter) and the bank injects it into the SPA as `window.__POSTHOG_KEY__`.
+  Unset, the client stays fully analytics-inert — see `apps/web/README.md`.
 - The Function URL uses `AuthType: NONE` because the protocol authenticates
   every write itself (signed envelopes / `X-Barter-Auth`) and CloudFront
   OAC-signed POSTs would force clients to send `x-amz-content-sha256`.

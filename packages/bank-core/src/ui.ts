@@ -1552,10 +1552,17 @@ async function serveSpa(bank: Bank, basePath: string): Promise<Response> {
   // `/alice/ui/` must load `/alice/ui/app/app.js`. app.js itself uses
   // root-absolute API paths, so it is unaffected by <base>.
   const baseTag = `<base href="${basePath}/">`;
+  // Optional analytics hand-off: the web client reads window.__POSTHOG_KEY__
+  // before app.js runs and stays fully inert without it. A classic head script
+  // executes before the deferred module script, so plain head injection is
+  // enough. JSON.stringify keeps the value a safe JS string literal.
+  const posthogTag = bank.posthogKey
+    ? `\n  <script>window.__POSTHOG_KEY__=${JSON.stringify(bank.posthogKey)};</script>`
+    : '';
   const file = await bank.assets.read('index.html');
   if (file) {
     const html = new TextDecoder().decode(file);
-    return new Response(html.replace('<head>', `<head>\n  ${baseTag}`), {
+    return new Response(html.replace('<head>', `<head>\n  ${baseTag}${posthogTag}`), {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
   }

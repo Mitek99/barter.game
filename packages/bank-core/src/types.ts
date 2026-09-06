@@ -32,6 +32,10 @@ export type Bank = {
   // (bank-schema.md §2 "Reject semantics"). Injected via createBank options
   // (BANK_STALL_TIMEOUT_MS on the AWS host); defaults to 1 hour in advance.ts.
   stallTimeoutMs?: number;
+  // Optional PostHog project key, injected into the SPA page as
+  // window.__POSTHOG_KEY__ (serveSpa). Unset means the web client stays
+  // analytics-inert. From BANK_POSTHOG_KEY / BANK_<NAME>_POSTHOG_KEY env.
+  posthogKey?: string;
 };
 
 export type RpcContext = {

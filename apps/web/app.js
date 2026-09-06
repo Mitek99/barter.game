@@ -89,6 +89,49 @@ function parsePath() {
 }
 parsePath();
 
+// ---------------- analytics (PostHog) ----------------
+// Optional and host-injected: the serving bank sets window.__POSTHOG_KEY__
+// before app.js runs (serveSpa). Without a key this stays fully inert — the
+// library is never even fetched — so other deployments of this client see
+// zero analytics traffic. posthog-js itself lazy-loads via the import map.
+let posthog = null;
+async function initAnalytics() {
+  const key = window.__POSTHOG_KEY__;
+  if (!key) return;
+  try {
+    const mod = await import('posthog-js');
+    posthog = mod.default;
+    posthog.init(key, {
+      api_host: 'https://us.i.posthog.com',
+      person_profiles: 'identified_only',
+      autocapture: true,
+      capture_pageview: true,
+      session_recording: { maskAllInputs: true },
+    });
+  } catch { posthog = null; /* analytics must never break the app */ }
+}
+// Kick off the lazy load immediately so it races fetchConfig, not the user.
+const analyticsReady = initAnalytics();
+
+// Keep property values low-cardinality and non-sensitive: no amounts, memos,
+// seeds, keystores, or free-text error messages (error_code is the bank's
+// numeric code only).
+function track(event, props) {
+  if (!posthog) return;
+  try { posthog.capture(event, props); } catch { /* ignore */ }
+}
+// Identify by pubkey only — it is public and safe as a distinct_id. Never the
+// seed, keystore, or password.
+function identifyUser() {
+  if (!posthog || !state.user) return;
+  try {
+    posthog.identify(state.user.pubkey);
+    posthog.register({ bank_id: state.bankName }); // super property on every event
+  } catch { /* ignore */ }
+}
+// state.isAdmin is probed lazily; until the probe lands everyone reads member.
+function userRole() { return state.isAdmin ? 'admin' : 'member'; }
+
 // ---------------- API ----------------
 
 async function fetchConfig() {
@@ -1395,6 +1438,9 @@ window.logout = function() {
   state.uiState = null;
   state.isAdmin = undefined;
   clearSession();
+  // Forget the analytics identity too: the next login on this browser may be
+  // a different person, and idle events must not accrue to the old one.
+  if (posthog) { try { posthog.reset(); } catch { /* ignore */ } }
   location.hash = '#/unlock';
   route();
 };
@@ -1538,7 +1584,7 @@ async function loadPublicFeed() {
 const MIN_PASSWORD = 8;
 
 function renderRegister(app) {
-  app.innerHTML = `<div class="container" style="max-width:420px;padding-top:8vh">
+  app.innerHTML = `<div class="container ph-no-capture" style="max-width:420px;padding-top:8vh">
     ${card('Create account', `
       <form id="r-form" onsubmit="doRegister();return false">
       <label for="r-handle">Handle <span class="small">(2–32 chars: a–z, 0–9, _ or -)</span></label>
@@ -1590,6 +1636,14 @@ window.doRegister = async function() {
     // back to a register error (a retry would hit "handle taken"). Fall back to
     // a default state, exactly like doUnlock.
     state.uiState = await uiGet('/state').catch(() => ({ pubkey: pubkeyBase58, trusted: [], contacts: [], banks: [], catalog: [], drafts: [], prefs: {}, rev: 0 }));
+    identifyUser();
+    track('account_created', { role: userRole() });
+    // Growth loop: a Barter Link invite landing marks the session; the account
+    // it produces is the acceptance.
+    if (sessionStorage.getItem('barter_invited')) {
+      sessionStorage.removeItem('barter_invited');
+      track('invite_accepted', { bank_id: state.bankName });
+    }
     toast(`Welcome, ${handle}`);
     if (resumePendingAction()) return;
     location.hash = '#/';
@@ -1601,7 +1655,7 @@ window.doRegister = async function() {
 };
 
 function renderConnect(app) {
-  app.innerHTML = `<div class="container" style="max-width:420px;padding-top:8vh">
+  app.innerHTML = `<div class="container ph-no-capture" style="max-width:420px;padding-top:8vh">
     ${card('Restore from recovery kit', `
       <p class="small">Have the <b>recovery kit</b> file you downloaded from Settings? Load it and enter its password to restore your account — no bank lookup needed.</p>
       <label for="c-kit">Recovery kit (.json)</label><input id="c-kit" type="file" accept="application/json,.json">
@@ -1643,6 +1697,8 @@ window.restoreFromKit = async function(btn) {
     state.user = { handle, pubkey: pubkeyBase58, privateKey: seed };
     saveSession(handle, seed);
     state.uiState = await uiGet('/state').catch(() => ({ pubkey: pubkeyBase58, trusted: [], contacts: [], banks: [], catalog: [], drafts: [], prefs: {}, rev: 0 }));
+    identifyUser();
+    track('login_completed', { role: userRole() });
     toast(`Welcome back, ${handle}`);
     location.hash = '#/';
     route();
@@ -1662,6 +1718,8 @@ window.doConnect = async function() {
     state.user = { pubkey: pubkeyBase58, privateKey, handle: pubkeyBase58.slice(0, 8) };
     saveSession(state.user.handle, privateKey);
     state.uiState = await uiGet('/state').catch(() => null);
+    identifyUser();
+    track('login_completed', { role: userRole() });
     location.hash = '#/';
     route();
   } catch (e) {
@@ -1671,7 +1729,7 @@ window.doConnect = async function() {
 
 function renderUnlock(app) {
   const last = rememberedHandle();
-  app.innerHTML = `<div class="container" style="max-width:420px;padding-top:8vh">
+  app.innerHTML = `<div class="container ph-no-capture" style="max-width:420px;padding-top:8vh">
     ${card('Log in', `
       <form id="u-form" onsubmit="doUnlock();return false">
       <label for="u-handle">Handle</label><input id="u-handle" name="username" placeholder="alice" autocomplete="username" value="${escapeHtml(last)}">
@@ -1717,6 +1775,8 @@ window.doUnlock = async function() {
     state.user = { handle, pubkey: pubkeyBase58, privateKey: seed };
     saveSession(handle, seed);
     state.uiState = await uiGet('/state').catch(() => ({ pubkey: pubkeyBase58, trusted: [], contacts: [], banks: [], catalog: [], drafts: [], prefs: {}, rev: 0 }));
+    identifyUser();
+    track('login_completed', { role: userRole() });
     if (resumePendingAction()) return;
     location.hash = '#/';
     route();
@@ -2280,6 +2340,8 @@ window.doCreateInvoice = async function(btn) {
   if (badAmount(amount)) { err.textContent = 'Enter an amount greater than zero'; return; }
   if (chooserIsInteger('i-voucher') && !Number.isInteger(amount)) { err.textContent = 'This voucher is issued in whole units only — enter a whole number'; return; }
   const release = lockBtn(btn);
+  const txProps = { asset: voucherNameOf('i-voucher'), tx_type: 'invoice' };
+  track('transaction_initiated', txProps);
   try {
     const account = { type: 'account', pubkey: state.user.pubkey, ulid: newUlid(), name: acctName, voucher: voucherHash };
     account.sig = signDoc(account, state.user.privateKey);
@@ -2290,6 +2352,7 @@ window.doCreateInvoice = async function(btn) {
     order.sig = signDoc(order, state.user.privateKey);
     const orderHash = hashDoc(order);
     await rpcCall('submit_docs', { docs: [order, account], publish_offers: [orderHash] });
+    track('transaction_confirmed', txProps);
     location.hash = '#/invoices';
     route();
     toast('Invoice created — share its QR so someone can pay it');
@@ -2297,6 +2360,7 @@ window.doCreateInvoice = async function(btn) {
     showShare('v', orderHash, 'Invoice — scan to pay');
   } catch (e) {
     release();
+    track('transaction_failed', { ...txProps, error_code: e.code || 'client' });
     err.textContent = e.message;
   }
 };
@@ -2345,6 +2409,8 @@ window.doCreateCheque = async function(btn) {
   if (badAmount(amount)) { err.textContent = 'Enter an amount greater than zero'; return; }
   if (chooserIsInteger('q-voucher') && !Number.isInteger(amount)) { err.textContent = 'This voucher is issued in whole units only — enter a whole number'; return; }
   const release = lockBtn(btn);
+  const txProps = { asset: voucherNameOf('q-voucher'), tx_type: 'cheque' };
+  track('transaction_initiated', txProps);
   try {
     const account = { type: 'account', pubkey: state.user.pubkey, ulid: newUlid(), name: acctName, voucher: voucherHash };
     account.sig = signDoc(account, state.user.privateKey);
@@ -2355,6 +2421,7 @@ window.doCreateCheque = async function(btn) {
     order.sig = signDoc(order, state.user.privateKey);
     const orderHash = hashDoc(order);
     await rpcCall('submit_docs', { docs: [order, account], publish_offers: [orderHash] });
+    track('transaction_confirmed', txProps);
     location.hash = '#/cheques';
     route();
     toast('Cheque created — share its QR to let someone claim it');
@@ -2362,6 +2429,7 @@ window.doCreateCheque = async function(btn) {
     showShare('q', orderHash, 'Cheque — scan to claim');
   } catch (e) {
     release();
+    track('transaction_failed', { ...txProps, error_code: e.code || 'client' });
     err.textContent = e.message;
   }
 };
@@ -2473,6 +2541,8 @@ window.doCreateOrder = async function(btn) {
   // Rate is derived from the two amounts, not hand-typed — they can never disagree.
   const rate = dmax / cmax;
   const release = lockBtn(btn);
+  const txProps = { asset: `${voucherNameOf('o-dv')}→${voucherNameOf('o-cv')}`, tx_type: 'swap' };
+  track('transaction_initiated', txProps);
   try {
     const dAccount = { type: 'account', pubkey: state.user.pubkey, ulid: newUlid(), name: 'giving', voucher: dv };
     dAccount.sig = signDoc(dAccount, state.user.privateKey);
@@ -2487,11 +2557,13 @@ window.doCreateOrder = async function(btn) {
     const oHash = hashDoc(order);
     const docs = [order, dAccount, cAccount];
     await rpcCall('submit_docs', { docs, publish_offers: pub ? [oHash] : [] });
+    track('transaction_confirmed', txProps);
     location.hash = '#/orders';
     route();
     toast(pub ? 'Order created and listed publicly' : 'Order created');
   } catch (e) {
     release();
+    track('transaction_failed', { ...txProps, error_code: e.code || 'client' });
     err.textContent = e.message;
   }
 };
@@ -2696,6 +2768,8 @@ window.acceptSwap = async function acceptSwap(o, btn) {
   if (!window.confirm(`Accept this swap?\n\nYou give ${theyWant.max} ${nameOf(theyWant.voucher)}\nYou receive ${theyGive.max} ${nameOf(theyGive.voucher)}`)) return;
   const label = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Working…'; }
+  const txProps = { asset: `${nameOf(theyWant.voucher)}→${nameOf(theyGive.voucher)}`, tx_type: 'swap' };
+  track('transaction_initiated', txProps);
   try {
     const vbank = await resolveVoucherBank(theyGive, { bank: o.bank, bank_url: o.bank_url });
     if (vbank.pubkey !== state.bankPubkey) {
@@ -2734,10 +2808,12 @@ window.acceptSwap = async function acceptSwap(o, btn) {
       banks: [{ pubkey: vbank.pubkey, url: vbank.url }],
     });
     rememberDealBank(res.deal_id, vbank);
+    track('transaction_confirmed', txProps);
     location.hash = `#/deal/${res.deal_id}`;
     route();
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = label; }
+    track('transaction_failed', { ...txProps, error_code: e.code || 'client' });
     toast(e.message, 'error');
   }
 }
@@ -2859,6 +2935,8 @@ window.showShare = function(kind, value, title, baseUrl) {
   // elsewhere) point at THEIR bank, where it actually resolves — not ours.
   const base = (baseUrl || state.bankUrl).replace(/\/+$/, '');
   const link = `${base}/${kind}/${value}`;
+  // The issuer-profile link (/i/<pubkey>) doubles as the product's invite.
+  if (kind === 'i') track('invite_created', { bank_id: state.bankName });
   let dataUrl = '';
   try { dataUrl = qrDataUrl(link); } catch (e) { toast(e.message, 'error'); return; }
   const opener = document.activeElement; // return focus here on close
@@ -3087,6 +3165,8 @@ async function renderLanding(app, kind, value) {
   }
 
   if (env.kind === 'invite') {
+    // Mark the session so doRegister can attribute the signup to this invite.
+    if (!state.user) { try { sessionStorage.setItem('barter_invited', '1'); } catch { /* ignore */ } }
     app.innerHTML = `<div class="container" style="max-width:420px;padding-top:6vh">${card('You\'re invited', `
       ${verified}
       <p class="small">Someone invited you to barter on ${escapeHtml(state.bankName || 'this bank')}.</p>
@@ -3156,6 +3236,7 @@ window.actOnOrder = async function(kind) {
   const step = (t) => { if (statusEl) statusEl.textContent = t; };
   if (btn) { btn.disabled = true; btn.textContent = 'Working…'; }
   if (err) err.textContent = '';
+  const txProps = { asset: 'unknown', tx_type: kind === 'invoice' ? 'payment' : 'claim' };
   try {
     step('Verifying the signed documents…');
     const pending = JSON.parse(sessionStorage.getItem('barter_pending') || '{}');
@@ -3164,6 +3245,9 @@ window.actOnOrder = async function(kind) {
     const theirOrder = env.docs.find(d => d.type === 'order');
     const theirHash = hashDoc(theirOrder);
     const side = kind === 'invoice' ? theirOrder.credit : theirOrder.debit;
+    const sideVoucher = env.docs.find(d => d.type === 'voucher' && hashDoc(d) === side.voucher);
+    if (sideVoucher) txProps.asset = sideVoucher.name;
+    track('transaction_initiated', txProps);
     // Validate against the order's min–max instead of silently coercing a blank
     // or out-of-range value to the max.
     const raw = document.getElementById('act-amount').value.trim();
@@ -3236,11 +3320,13 @@ window.actOnOrder = async function(kind) {
     });
     sessionStorage.removeItem('barter_pending');
     rememberDealBank(res.deal_id, vbank);
+    track('transaction_confirmed', txProps);
     step('');
     location.hash = `#/deal/${res.deal_id}`;
     route();
   } catch (e) {
     step('');
+    track('transaction_failed', { ...txProps, error_code: e.code || 'client' });
     if (btn) { btn.disabled = false; btn.textContent = original; }
     if (err) err.textContent = e.message; else toast(e.message, 'error');
   }
@@ -3609,6 +3695,9 @@ fetchConfig().then(async () => {
     state.uiState = await uiGet('/state').catch(() => null);
   }
   route();
+  await analyticsReady;
+  if (state.user) identifyUser(); // a restored session is still the same person
+  track('bank_ui_loaded', { bank_id: state.bankName });
 }).catch(e => {
   document.getElementById('app').innerHTML = `<div class="container"><p class="error">Failed to load bank config: ${e.message}</p></div>`;
 });
