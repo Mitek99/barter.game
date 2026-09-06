@@ -51,7 +51,7 @@ safely trade here (they can), but because ranking issuers and vouching for
 their promises is precisely the judgment we refuse to centralize. There is no
 reputation score, no arbitration, no dispute resolution. The protocol ships
 discovery surfaces — registries, offers, QR profiles, voucher feeds
-([`protocol/discovery.md`](https://github.com/ai-1st/barter.game/blob/main/protocol/discovery.md)) — but they distribute
+([`protocol/discovery.md`](https://github.com/Mitek99/barter.game/blob/main/protocol/discovery.md)) — but they distribute
 *facts*, not trust. Deciding whether a promise is good stays human.
 
 ## 3. Who trusts whom — and for what
@@ -124,7 +124,7 @@ the most recent backup.
 
 The protocol makes that recovery real, not aspirational: a bank MUST let an
 issuer fetch every record, detail, and signature for the vouchers they
-issue (`list_voucher_records`, [`protocol/bank-rpc.md`](https://github.com/ai-1st/barter.game/blob/main/protocol/bank-rpc.md) §2.4),
+issue (`list_voucher_records`, [`protocol/bank-rpc.md`](https://github.com/Mitek99/barter.game/blob/main/protocol/bank-rpc.md) §2.4),
 so a diligent issuer always holds enough signed evidence to reconstruct
 holder positions elsewhere.
 
@@ -157,7 +157,7 @@ requires synchronized clocks across participants.
 doc lives forever in the content-addressed graph. There is no revocation
 mechanism, no "cancel this signature" operation, and no TTL.
 - **Standing orders are forever — and they are the authorization.** An
-`Order` (see [`protocol/bank-schema.md`](https://github.com/ai-1st/barter.game/blob/main/protocol/bank-schema.md) §1.4) is a signed
+`Order` (see [`protocol/bank-schema.md`](https://github.com/Mitek99/barter.game/blob/main/protocol/bank-schema.md) §1.4) is a signed
 instruction that authorizes the bank to process matching records on the
 holder's behalf. Having placed it, the holder can go offline: **banks settle
 autonomously**, advancing deals as signatures arrive, with no holder
@@ -220,14 +220,14 @@ everything that IS content-addressed.
 
 Staying out of the matchmaking business doesn't mean staying mute. The
 protocol supports exactly the discovery a trust-local network needs
-([`protocol/discovery.md`](https://github.com/ai-1st/barter.game/blob/main/protocol/discovery.md)):
+([`protocol/discovery.md`](https://github.com/Mitek99/barter.game/blob/main/protocol/discovery.md)):
 
 - Check a bank's public registry of vouchers, optionally filtered by issuer.
 - Scan an issuer's QR and get their key plus the vouchers — registry-listed
   or not — they chose to bundle into it.
 - Read posts from issuers you trust; when they recommend other issuers or
   vouchers, decide for yourself whether to extend trust
-  ([`protocol/post-feed.md`](https://github.com/ai-1st/barter.game/blob/main/protocol/post-feed.md)).
+  ([`protocol/post-feed.md`](https://github.com/Mitek99/barter.game/blob/main/protocol/post-feed.md)).
 - Learn from a scanned QR that X holds Y vouchers from Z — backed by
   bank-signed Balance docs on accounts X chose to make public — and decide
   to get a few yourself. *(Specified, not yet implemented: the reference

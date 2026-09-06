@@ -71,7 +71,7 @@ curl https://docs.barter.game/test1/barter-bank.json
 To run everything locally and execute the test suite:
 
 ```bash
-git clone https://github.com/ai-1st/barter.game.git && cd barter.game
+git clone https://github.com/Mitek99/barter.game.git && cd barter.game
 bun install
 bun run test:all     # Bun protocol suite + the bank-aws KvStore contract suite
 ```

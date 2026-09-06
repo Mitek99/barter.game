@@ -15,10 +15,10 @@
   "homepage": "https://docs.barter.game",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ai-1st/barter.game.git",
+    "url": "git+https://github.com/Mitek99/barter.game.git",
     "directory": "apps/web"
   },
-  "bugs": "https://github.com/ai-1st/barter.game/issues",
+  "bugs": "https://github.com/Mitek99/barter.game/issues",
   "files": [
     "index.html",
     "app.js",

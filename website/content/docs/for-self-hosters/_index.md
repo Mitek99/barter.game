@@ -102,7 +102,7 @@ In v1.5 we may add a federated directory. For now, word of mouth is the discover
 
 ## Read more
 
-- [Protocol contract →](https://github.com/ai-1st/barter.game/blob/main/protocol/README.md)
+- [Protocol contract →](https://github.com/Mitek99/barter.game/blob/main/protocol/README.md)
 - [Reference bank server →](https://github.com/Mitek99/barter.game/blob/main/apps/bank-aws/README.md)
-- [Reference web client →](https://github.com/ai-1st/barter.game/blob/main/apps/web/README.md)
+- [Reference web client →](https://github.com/Mitek99/barter.game/blob/main/apps/web/README.md)
 - [Developer guide →](../for-developers)

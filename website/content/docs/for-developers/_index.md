@@ -13,9 +13,9 @@ The barter.game protocol is intentionally small. You can read the full contract 
 
 ## The invariant contract
 
-**Read [the `protocol/` spec](https://github.com/ai-1st/barter.game/blob/main/protocol/README.md) first.** It defines:
+**Read [the `protocol/` spec](https://github.com/Mitek99/barter.game/blob/main/protocol/README.md) first.** It defines:
 
-- The document types: Voucher, Account, Order, Mandate, Record, Offer, Signature, Address, Post — Records are bank-minted and identified by ULID; posts, reposts, and media refs are specified in [`protocol/post-feed.md`](https://github.com/ai-1st/barter.game/blob/main/protocol/post-feed.md)
+- The document types: Voucher, Account, Order, Mandate, Record, Offer, Signature, Address, Post — Records are bank-minted and identified by ULID; posts, reposts, and media refs are specified in [`protocol/post-feed.md`](https://github.com/Mitek99/barter.game/blob/main/protocol/post-feed.md)
 - RFC 8785 canonical JSON (cross-runtime parity is load-bearing)
 - ed25519 signatures over SHA-256 hashes
 - The JSON-RPC envelope and replay protection
@@ -195,7 +195,7 @@ Address docs map a pubkey to a human-readable name and a callable URL; peer bank
 
 ## 9. Serve the media vault and carry posts
 
-Voucher artwork and post media travel as content-addressed refs of the form `<hash>.<ext>`, stored in a per-bank media vault ([`protocol/bank-rpc.md`](https://github.com/ai-1st/barter.game/blob/main/protocol/bank-rpc.md), [`protocol/post-feed.md`](https://github.com/ai-1st/barter.game/blob/main/protocol/post-feed.md)). Two REST endpoints carry it:
+Voucher artwork and post media travel as content-addressed refs of the form `<hash>.<ext>`, stored in a per-bank media vault ([`protocol/bank-rpc.md`](https://github.com/Mitek99/barter.game/blob/main/protocol/bank-rpc.md), [`protocol/post-feed.md`](https://github.com/Mitek99/barter.game/blob/main/protocol/post-feed.md)). Two REST endpoints carry it:
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -239,7 +239,7 @@ Test against the reference banks (the browser SPA each bank serves at `/:bank/ui
 
 ## Read more
 
-- [Invariant protocol contract →](https://github.com/ai-1st/barter.game/blob/main/protocol/README.md)
+- [Invariant protocol contract →](https://github.com/Mitek99/barter.game/blob/main/protocol/README.md)
 - [Reference bank server →](https://github.com/Mitek99/barter.game/blob/main/apps/bank-aws/README.md)
-- [Reference web client →](https://github.com/ai-1st/barter.game/blob/main/apps/web/README.md)
-- [Source code →](https://github.com/ai-1st/barter.game/tree/main/packages/protocol)
+- [Reference web client →](https://github.com/Mitek99/barter.game/blob/main/apps/web/README.md)
+- [Source code →](https://github.com/Mitek99/barter.game/tree/main/packages/protocol)

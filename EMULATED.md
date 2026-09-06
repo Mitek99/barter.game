@@ -8,7 +8,7 @@ missing feature (post feeds) has since been built; see
 
 Current as of `main` **`a0afd41`+**. Everything below is live on the deployed
 banks: the six users have vouchers, trust links, settled deals, and — since
-post feeds shipped ([#28](https://github.com/ai-1st/barter.game/pull/28)) —
+post feeds shipped ([#28](https://github.com/Mitek99/barter.game/pull/28)) —
 posts, replies, reposts and cross-bank feeds.
 
 **Target:** the deployed banks, not localhost.
@@ -60,7 +60,7 @@ than invoicing for money. She has already paid for a haircut with a logo.
    pinned and trusts him, but no order exists yet.
 2. Mint a second, cheaper voucher (`1 brand palette`) so she has something to
    offer below the price of a full logo.
-3. [PR #24](https://github.com/ai-1st/barter.game/pull/24) has shipped — redo
+3. [PR #24](https://github.com/Mitek99/barter.game/pull/24) has shipped — redo
    the tomas trade as a single atomic swap instead of the two one-sided deals
    it took today. The retry has not happened yet.
 
@@ -158,7 +158,7 @@ things her daughter needs.
 **Next steps.**
 1. Trade with yusuf — she trusts him and they share a bank, but no order exists.
 2. Advertise winter servicing before the season.
-3. Retry the kai swap atomically — [PR #24](https://github.com/ai-1st/barter.game/pull/24) has shipped, so a same-bank swap settles now. Not yet re-run.
+3. Retry the kai swap atomically — [PR #24](https://github.com/Mitek99/barter.game/pull/24) has shipped, so a same-bank swap settles now. Not yet re-run.
 
 #### kai — Kai Nakamura, piano teacher
 
@@ -368,7 +368,7 @@ fact, and the correction is itself part of the record):
 ### Discovery through posts
 
 There is no global timeline. Each reader's feed is their **follows list** — a
-separate list from trusted issuers, since [#35](https://github.com/ai-1st/barter.game/pull/35) —
+separate list from trusted issuers, since [#35](https://github.com/Mitek99/barter.game/pull/35) —
 merged across every bank they have pinned, so **every user sees a different
 feed**. A user with no follows record follows their host bank by default, and
 the bank **reposts every user post it accepts** as a bank-signed Post, so a
@@ -415,8 +415,8 @@ When these users were first driven, post feeds were the one part of the brief
 that could not be done: no `Post` type, no handler, no KV namespace, and a
 "Posts — coming soon" card in the UI. The spec existed; nothing implemented it.
 
-**Now implemented** ([#28](https://github.com/ai-1st/barter.game/pull/28),
-plus label polish in [#29](https://github.com/ai-1st/barter.game/pull/29)) and
+**Now implemented** ([#28](https://github.com/Mitek99/barter.game/pull/28),
+plus label polish in [#29](https://github.com/Mitek99/barter.game/pull/29)) and
 deployed. The six users now announce their vouchers with real posts, reply to
 each other, repost, and discover each other **through those posts** — see
 [Posts and feeds](#posts-and-feeds) below.
@@ -427,7 +427,7 @@ deliberately bank-specific.
 
 ### 2. ~~CRITICAL: a two-sided swap inside one bank can never settle~~ — FIXED
 
-→ **[PR #24](https://github.com/ai-1st/barter.game/pull/24)** (fix + `e2e-sameswap.ts`), merged and deployed: the bank now mints one record pair **per transfer**, so a same-bank swap mints two pairs at the same bank and settles.
+→ **[PR #24](https://github.com/Mitek99/barter.game/pull/24)** (fix + `e2e-sameswap.ts`), merged and deployed: the bank now mints one record pair **per transfer**, so a same-bank swap mints two pairs at the same bank and settles.
 
 The bug: `handleProposeDeal` minted one record pair **per participating bank**. A
 two-sided swap moves two vouchers and needs two pairs; when both vouchers are
@@ -444,7 +444,7 @@ cell was exactly *two transfers, one bank*.
 
 ### 3. `/o/` share links for swaps always 404
 
-→ **[PR #25](https://github.com/ai-1st/barter.game/pull/25)**
+→ **[PR #25](https://github.com/Mitek99/barter.game/pull/25)**
 
 The Orders screen shared a two-sided order as `showShare('o', o.order, …)`, but
 `/o/<value>` resolves an **Offer** hash via `getOffer`, which returns null for
@@ -460,7 +460,7 @@ GET /test1/o/<offer hash>?format=json -> 200 {"v":1,…,"kind":"offer",…}
 
 ### 4. Account balances were readable by anyone
 
-→ **[PR #26](https://github.com/ai-1st/barter.game/pull/26)**
+→ **[PR #26](https://github.com/Mitek99/barter.game/pull/26)**
 
 `get_account_balance` never looked at the envelope sender — it resolved the
 account hash and returned the balance to whoever asked. Account hashes are not

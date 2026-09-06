@@ -43,6 +43,6 @@ Attendees leave holding signed vouchers. They can redeem them later — a coffee
 
 - [Deploy a bank →](/docs/for-self-hosters)
 - [Read the developer docs →](/docs/for-developers)
-- [See the full protocol →](https://github.com/ai-1st/barter.game/blob/main/protocol/README.md)
+- [See the full protocol →](https://github.com/Mitek99/barter.game/blob/main/protocol/README.md)
 
 Want help running this at your event? Open an issue on GitHub and we'll figure it out together.

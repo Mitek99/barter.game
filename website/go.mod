@@ -1,4 +1,4 @@
-module github.com/ai-1st/barter.game/website
+module github.com/Mitek99/barter.game/website
 
 go 1.24.2
 

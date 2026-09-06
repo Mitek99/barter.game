@@ -45,11 +45,11 @@ The `TODOS.md` AI agents section is a brainstorm, not a roadmap. If you build on
 ## Reading order for contributors
 
 1. [The Ethos](/docs/ethos/) — what we believe (10 minutes)
-2. [the `protocol/` spec](https://github.com/ai-1st/barter.game/blob/main/protocol/README.md) — the invariant contract (45 minutes)
+2. [the `protocol/` spec](https://github.com/Mitek99/barter.game/blob/main/protocol/README.md) — the invariant contract (45 minutes)
 3. [the reference implementation notes](https://github.com/Mitek99/barter.game/blob/main/apps/bank-aws/README.md) — how we built it (30 minutes)
 4. `packages/protocol/src/` — the code (an afternoon)
 5. `packages/bank-core/src/handlers/` and `packages/bank-core/src/advance.ts` — the server-side state machine
-6. [`TODOS.md`](https://github.com/ai-1st/barter.game/blob/main/TODOS.md) — what's next
+6. [`TODOS.md`](https://github.com/Mitek99/barter.game/blob/main/TODOS.md) — what's next
 
 ## Code of conduct
 
@@ -60,4 +60,4 @@ The `TODOS.md` AI agents section is a brainstorm, not a roadmap. If you build on
 
 ## License
 
-MIT — see the [`LICENSE`](https://github.com/ai-1st/barter.game/blob/main/LICENSE) file.
+MIT — see the [`LICENSE`](https://github.com/Mitek99/barter.game/blob/main/LICENSE) file.
