@@ -45,6 +45,12 @@ Adding a bank means adding its `/<name>/*` behavior in template.yaml.
   (or per bank `BANK_<NAME>_POSTHOG_KEY`; on AWS the `PosthogKey` template
   parameter) and the bank injects it into the SPA as `window.__POSTHOG_KEY__`.
   Unset, the client stays fully analytics-inert — see `apps/web/README.md`.
+- **Path-prefixed mounts**: when a gateway hosts banks at
+  `/bank/{name}/…` and strips the prefix before `route()`, set
+  `BANK_MOUNT_PREFIX=/bank` so the browser-visible outputs (`<base href>`,
+  manifest `start_url`/`scope`, `Service-Worker-Allowed`, the `/ui` → `/ui/`
+  308) carry the prefix. Signed authdocs stay prefix-free: clients sign the
+  `sign_base` from `/ui/config`, which is the router-visible `/{name}`.
 - The Function URL uses `AuthType: NONE` because the protocol authenticates
   every write itself (signed envelopes / `X-Barter-Auth`) and CloudFront
   OAC-signed POSTs would force clients to send `x-amz-content-sha256`.

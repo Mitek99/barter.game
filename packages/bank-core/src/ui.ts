@@ -73,6 +73,17 @@ class UiError extends RpcError {
 const HANDLE_RE = /^[a-z0-9_-]{2,32}$/;
 const HANDLE_RULE = 'handle must be 2-32 chars: lowercase letters, digits, _ or -';
 
+/**
+ * Browser-visible base path. basePath is router-visible ("/{name}/ui") — under
+ * a path-prefixed mount (bank.mountPrefix, e.g. a gateway serving
+ * /bank/{name}/… and stripping "/bank" before route()) the browser-visible
+ * paths differ, and anything a browser resolves or displays (the <base> tag,
+ * manifest URLs, Service-Worker-Allowed, redirects) must use the mounted form.
+ */
+function mountBase(bank: Bank, basePath: string): string {
+  return (bank.mountPrefix ?? '') + basePath;
+}
+
 type TrustedIssuer = { pubkey: Base58PubKey; note?: string; at?: number };
 
 // Trusted-issuer entries may be legacy bare pubkey strings or {pubkey,note,at}
@@ -107,7 +118,7 @@ export async function handleUiRequest(
     if (uiPath === '') {
       return new Response(null, {
         status: 308,
-        headers: { Location: `${basePath}/${url.search}` },
+        headers: { Location: `${mountBase(bank, basePath)}/${url.search}` },
       });
     }
     if (uiPath === '/' || uiPath.startsWith('/app/')) {
@@ -327,13 +338,17 @@ export async function handlePublicUiRoute(
 
   // Public bank config — the SPA fetches this during bootstrap, before any
   // user is unlocked, to learn the bank's pubkey/url. Same data as
-  // /barter-bank.json; no auth required.
+  // /barter-bank.json; no auth required. sign_base is the path base clients
+  // must put in signed authdocs: the router-visible "/{name}", which differs
+  // from the fetch path when the bank is hosted under a mount prefix the
+  // gateway strips (see mountBase).
   if (uiPath === '/config' && request.method === 'GET') {
     return json(200, {
       pubkey: bank.pubkey,
       url: bank.url,
       name: bank.name,
       protocol_version: 'barter.game/v1',
+      sign_base: `/${bank.name}`,
     });
   }
 
@@ -342,7 +357,7 @@ export async function handlePublicUiRoute(
   // start_url/scope/id must carry this bank's path prefix: two banks served by
   // one process install as two distinct apps, each confined to its own UI.
   if (uiPath === '/manifest.webmanifest' && request.method === 'GET') {
-    return new Response(JSON.stringify(webManifest(bank, basePath), null, 2), {
+    return new Response(JSON.stringify(webManifest(bank, mountBase(bank, basePath)), null, 2), {
       headers: {
         'Content-Type': 'application/manifest+json; charset=utf-8',
         'Cache-Control': 'public, max-age=300',
@@ -362,7 +377,7 @@ export async function handlePublicUiRoute(
         // Never serve a stale worker: it is the one script that can outlive
         // a deploy and keep controlling clients.
         'Cache-Control': 'no-cache',
-        'Service-Worker-Allowed': `${basePath}/`,
+        'Service-Worker-Allowed': `${mountBase(bank, basePath)}/`,
       },
     });
   }
@@ -1550,8 +1565,10 @@ async function serveSpa(bank: Bank, basePath: string): Promise<Response> {
   // Inject a <base> so the SPA's relative `app/…` asset refs resolve correctly
   // whether the URL has a trailing slash or not: both `/alice/ui` and
   // `/alice/ui/` must load `/alice/ui/app/app.js`. app.js itself uses
-  // root-absolute API paths, so it is unaffected by <base>.
-  const baseTag = `<base href="${basePath}/">`;
+  // root-absolute API paths, so it is unaffected by <base> — but parsePath()
+  // reads document.baseURI, so under a mount prefix this tag is also what
+  // tells the client its browser-visible basePath.
+  const baseTag = `<base href="${mountBase(bank, basePath)}/">`;
   // Optional analytics hand-off: the web client reads window.__POSTHOG_KEY__
   // before app.js runs and stays fully inert without it. A classic head script
   // executes before the deferred module script, so plain head injection is

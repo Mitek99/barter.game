@@ -9,7 +9,16 @@ export type LoadedBank = {
   privateKey: Uint8Array;
   admins: Base58PubKey[];
   posthogKey?: string;
+  mountPrefix?: string;
 };
+
+// Normalize a mount prefix to "/bank" shape: leading slash, no trailing
+// slash, '' (absent) for the root mount.
+function normMountPrefix(raw: string | undefined): string | undefined {
+  const p = (raw ?? '').trim().replace(/\/+$/, '');
+  if (!p) return undefined;
+  return p.startsWith('/') ? p : `/${p}`;
+}
 
 const BANK_ENV_RE = /^BANK_([A-Z0-9_]+)_PRIV_KEY$/;
 // Per-bank admin list; the global BANK_ADMINS does not match (nothing before
@@ -64,7 +73,12 @@ export function loadBankKeys(
       const { pubkeyBase58 } = publicKeyOf(privateKey);
       const admins = [...new Set([...globalAdmins, ...(perBankAdmins.get(name) ?? [])])];
       const posthogKey = perBankPosthog.get(name) ?? env.BANK_POSTHOG_KEY?.trim();
-      banks.push({ name, pubkey: pubkeyBase58, privateKey, admins, ...(posthogKey ? { posthogKey } : {}) });
+      const mountPrefix = normMountPrefix(env.BANK_MOUNT_PREFIX);
+      banks.push({
+        name, pubkey: pubkeyBase58, privateKey, admins,
+        ...(posthogKey ? { posthogKey } : {}),
+        ...(mountPrefix ? { mountPrefix } : {}),
+      });
     } catch (e) {
       console.error(`Bank ${name}: failed to load key: ${e}`);
     }

@@ -76,6 +76,12 @@ const state = {
   bankPubkey: '',
   bankUrl: '',
   basePath: '',
+  // The path base that goes INTO signed authdocs. Usually identical to
+  // basePath; under a path-prefixed mount (a gateway serving /bank/{name} and
+  // stripping the prefix before the bank router sees the request) the bank
+  // verifies against the stripped path, so we sign what the ROUTER sees —
+  // learned from sign_base in /ui/config (fetchConfig).
+  signBase: '',
   user: null, // { handle, pubkey, privateKey }
   uiState: null,
   // undefined = not probed yet; true/false after the /admin/overview probe.
@@ -83,9 +89,23 @@ const state = {
 };
 
 function parsePath() {
+  // serveSpa injects <base href="/[mount/]{name}/ui/"> — prefer it over
+  // location.pathname: under a path-prefixed mount the first pathname segment
+  // is the mount ("bank"), not the bank name. basePath stays browser-visible
+  // (prefix included) since it is used for fetching.
+  try {
+    const segs = new URL(document.baseURI).pathname.split('/').filter(Boolean);
+    if (segs.length >= 2 && segs[segs.length - 1] === 'ui') {
+      state.bankName = segs[segs.length - 2];
+      state.basePath = '/' + segs.slice(0, -1).join('/');
+      state.signBase = state.basePath; // until /ui/config says otherwise
+      return;
+    }
+  } catch { /* fall through to the single-segment shape */ }
   const parts = location.pathname.split('/').filter(Boolean);
   state.bankName = parts[0] || 'bank';
   state.basePath = `/${state.bankName}`;
+  state.signBase = state.basePath;
 }
 parsePath();
 
@@ -139,6 +159,11 @@ async function fetchConfig() {
   const cfg = await res.json();
   state.bankPubkey = cfg.pubkey;
   state.bankUrl = cfg.url;
+  // The router-visible signing base ("/{name}"). Absent on older banks: they
+  // are not prefix-hosted, so the fetch path is what their router sees.
+  if (typeof cfg.sign_base === 'string' && cfg.sign_base) {
+    state.signBase = cfg.sign_base.replace(/\/+$/, '');
+  }
   return cfg;
 }
 
@@ -174,7 +199,9 @@ async function signedRequest(method, path, body) {
   const authdoc = {
     pubkey: state.user.pubkey,
     method,
-    path: `${state.basePath}/ui${path}`,
+    // Sign what the bank's router sees (sign_base), fetch at the
+    // browser-visible path (basePath) — the two differ under a mount prefix.
+    path: `${state.signBase}/ui${path}`,
     id: newUlid(),
     ts: Date.now(),
     body_sha256: body ? sha256Base58(JSON.stringify(body)) : null
@@ -238,12 +265,32 @@ async function rpcCallAt(base, toPubkey, method, params) {
   return data.result;
 }
 
+// Cross-bank signed calls must sign the path the TARGET bank's router sees.
+// A prefix-hosted bank (gateway strips /bank/{name} → /{name}) publishes that
+// base as sign_base in its public /ui/config; fetch it once per bank and
+// cache. Older banks have no sign_base — they are not prefix-hosted, so the
+// fetched path is the signed path.
+const signBaseCache = new Map();
+async function signBaseAt(clean) {
+  const cached = signBaseCache.get(clean);
+  if (cached) return cached;
+  let sb = new URL(`${clean}/`, location.origin).pathname.replace(/\/+$/, '');
+  try {
+    const cfg = await fetchWithTimeout(`${clean}/ui/config`).then(r => r.json());
+    if (cfg && typeof cfg.sign_base === 'string' && cfg.sign_base) {
+      sb = cfg.sign_base.replace(/\/+$/, '');
+    }
+  } catch { /* unreachable config — sign the path as fetched */ }
+  signBaseCache.set(clean, sb);
+  return sb;
+}
+
 async function signedRequestAt(base, method, path, body) {
   const clean = base.replace(/\/$/, '');
-  // The auth doc signs the request's real pathname (+ query) at the target bank.
-  const u = new URL(`${clean}/ui${path}`, location.origin);
+  // The auth doc signs the path the target bank's router sees (+ query so
+  // query params are tamper-proof too), which a mount prefix rewrites.
   const authdoc = {
-    pubkey: state.user.pubkey, method, path: u.pathname + u.search,
+    pubkey: state.user.pubkey, method, path: `${await signBaseAt(clean)}/ui${path}`,
     id: newUlid(), ts: Date.now(),
     body_sha256: body ? sha256Base58(JSON.stringify(body)) : null
   };
@@ -704,7 +751,7 @@ async function uploadMediaBytes(bytes, ext) {
   }
   const body = { data_base64: btoa(bin), ext };
   const authdoc = {
-    pubkey: state.user.pubkey, method: 'POST', path: `${state.basePath}/media`,
+    pubkey: state.user.pubkey, method: 'POST', path: `${state.signBase}/media`,
     id: newUlid(), ts: Date.now(), body_sha256: sha256Base58(JSON.stringify(body)),
   };
   const sig = signDoc(authdoc, state.user.privateKey);

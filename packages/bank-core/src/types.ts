@@ -36,6 +36,12 @@ export type Bank = {
   // window.__POSTHOG_KEY__ (serveSpa). Unset means the web client stays
   // analytics-inert. From BANK_POSTHOG_KEY / BANK_<NAME>_POSTHOG_KEY env.
   posthogKey?: string;
+  // Browser-visible mount prefix (e.g. "/bank" when a gateway serves
+  // /bank/{name}/… and strips the prefix before route()). Router-visible
+  // paths never carry it; it only rewrites what browsers see: <base href>,
+  // manifest start_url/scope, Service-Worker-Allowed, the /ui → /ui/ 308.
+  // Default '' (no prefix). From BANK_MOUNT_PREFIX env.
+  mountPrefix?: string;
 };
 
 export type RpcContext = {

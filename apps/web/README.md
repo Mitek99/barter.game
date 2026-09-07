@@ -26,8 +26,15 @@ The bank ([`packages/bank-core`](../../packages/bank-core/README.md) —
 | `GET /:bank/ui/sw.js` | The service worker, served from the UI root so its scope covers the whole SPA |
 | `GET /:bank/ui/feed` | The bank's own posts (its curated auto-reposts) as JSON — unauthenticated, with the mentioned vouchers' docs and released meta bundled. This is what the logged-out landing renders (`bank-rpc.md` §2.5) |
 
-The SPA derives the bank name from the first URL path segment and boots by
-fetching the public `GET /:bank/ui/config` for the bank's pubkey and URL.
+The SPA derives the bank name from the injected `<base href>` (not
+`location.pathname`, so a path-prefixed mount like `/bank/{name}/ui/` works)
+and boots by fetching the public `GET /:bank/ui/config` for the bank's pubkey,
+URL, and `sign_base` — the router-visible path base that goes into signed
+authdocs (`X-Barter-Auth`). Under a mount prefix the gateway strips the prefix
+before the bank router sees the request, so the client signs
+`sign_base + "/ui" + path` while fetching the browser-visible path; without a
+prefix the two are identical. Cross-bank signed calls learn the target's
+`sign_base` from its `/ui/config` (fetched once, cached per session).
 Logged out, the landing page shows the bank's public feed (`/ui/feed`) under
 the hero — every card is verified client-side before it renders.
 
