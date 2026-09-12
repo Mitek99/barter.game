@@ -4,9 +4,10 @@
 >
 > If you are building your own bank or client, read this overview first, then see:
 >
-> - [`base.md`](./base.md) — identity, canonical JSON, `BaseDoc`, `Signature`, `Address`, the JSON-RPC envelope, replay protection, and request signing.
+> - [`base.md`](./base.md) — the domain-agnostic base layer: identity, canonical JSON, `BaseDoc`, `Signature`, `Address`, the JSON-RPC envelope, replay protection, and request signing.
 > - [`bank-schema.md`](./bank-schema.md) — bank document schemas (`Voucher`, `Account`, `Record`, `Order`, `Offer`, `Mandate`, `Balance` *(specified, not yet implemented)*) and ledger semantics (state machine, concurrency, balance invariants).
-> - [`bank-rpc.md`](./bank-rpc.md) — the bank JSON-RPC API and REST endpoints (address directory, media vault).
+> - [`settlement.md`](./settlement.md) — how a deal settles: the `ready`/`hold`/`settle`/`reject` signature actions, the Mandate's once-only and completeness guarantees, and the cross-bank `seen` handshake.
+> - [`bank-rpc.md`](./bank-rpc.md) — the bank JSON-RPC API and REST endpoints (address directory, media vault), bank discovery, and pubkey pinning.
 > - [`discovery.md`](./discovery.md) — how parties find banks, vouchers, issuers, offers, and posts through follows (the Discover surface); public holdings are specified there but not yet implemented.
 > - [`post-feed.md`](./post-feed.md) — voucher-anchored post feeds (`Post` doc, publishing, reading, moderation, the embedded media vault, voucher meta releases).
 > - [`../scenarios/`](../scenarios/) — step-by-step interaction traces.
@@ -59,7 +60,7 @@ Banks are open by default. The v1 reference posture:
 
 ## 2. Settlement model — coordinator-created records, Order authorization, lead/follow
 
-A deal executes in three waves: **ready → hold → settle**. Records are created by a coordinator, authorized by holder Orders, and cleared by a coordinator `Mandate` (one per Order per bank). Banks self-advance as signatures arrive, and there is no client `hold` or `settle` call.
+A deal executes in three waves: **ready → hold → settle**. Records are created by a coordinator, authorized by holder Orders, and cleared by a coordinator `Mandate` (one per Order per bank). Banks self-advance as signatures arrive, and there is no client `hold` or `settle` call. This section is the narrative; the normative mechanics are in [`settlement.md`](./settlement.md).
 
 ### 2.0 Three-wave execution model: ready → hold → settle
 
@@ -94,7 +95,7 @@ If a record cannot be held — because its debit is uncovered, the account is un
 **3. Settle** — settlement is an ordered cascade of record-level signatures, not a single atomic flip:
 
 - a **lead** bank settles first on its own records — but only once it has observed `hold` Signatures on the corresponding records from **every other bank in the deal**, so the whole graph is locked before anyone moves;
-- a **follow** bank settles on its own records only after it has verified record-level `settle` Signatures from **every one of its predecessors**, and cites their hashes in its own settle's `Signature.seen` (see `base.md`).
+- a **follow** bank settles on its own records only after it has verified record-level `settle` Signatures from **every one of its predecessors**, and cites their hashes in its own settle's `Signature.seen` (see [`settlement.md`](./settlement.md)).
 
 Settling means: apply the deltas of every owned record, release the holds, issue `settle` signatures, fan out.
 
@@ -220,7 +221,7 @@ If you are building your own bank or client:
 
 1. Read this overview cover to cover.
 2. Read [`base.md`](./base.md) for the wire format and signature rules.
-3. Read [`bank-schema.md`](./bank-schema.md) for the document schemas and ledger invariants.
+3. Read [`bank-schema.md`](./bank-schema.md) for the document schemas and ledger invariants, and [`settlement.md`](./settlement.md) for the settlement handshake.
 4. Read [`bank-rpc.md`](./bank-rpc.md) for the bank API methods, then [`discovery.md`](./discovery.md) and [`post-feed.md`](./post-feed.md) for the discovery and feed surfaces.
 5. Walk the traces in [`../scenarios/`](../scenarios/) — cheque, invoice, bilateral swap, coordinator arbitrage, merge-branch, and the builder-event journey.
 6. See how the reference implementation did it: [`../apps/bank/README.md`](../apps/bank/README.md) (Deno bank server, Deno KV key-space), [`../apps/web/README.md`](../apps/web/README.md) (browser SPA), and [`../packages/protocol/README.md`](../packages/protocol/README.md) (shared primitives + the canonicalization golden vectors to port against). You may use any stack that enforces the invariants in `bank-schema.md`.
