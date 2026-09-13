@@ -7,7 +7,7 @@ This file defines the bank's public interface:
 - Orchestration recipe
 - Bank discovery
 
-For document schemas and ledger semantics, see [`bank-schema.md`](./bank-schema.md). For the envelope, signatures, and base types, see [`base.md`](./base.md). For discovery surfaces, see [`discovery.md`](./discovery.md); for voucher post feeds, [`post-feed.md`](./post-feed.md). For the trust and settlement narrative, see [`README.md`](./README.md).
+For document schemas and ledger semantics, see [`bank-schema.md`](./bank-schema.md); for the settlement handshake, [`settlement.md`](./settlement.md). For the envelope, signatures, and base types, see [`base.md`](./base.md). For discovery surfaces, see [`discovery.md`](./discovery.md); for voucher post feeds, [`post-feed.md`](./post-feed.md). For the trust and settlement narrative, see [`README.md`](./README.md).
 
 ---
 
@@ -132,7 +132,7 @@ Across two banks, the coordinator makes one call to each bank, with `giver`/`rec
 | `list_vouchers({ issuer?, cursor?, limit? })` | any → bank | *Paginated* *(pagination specified, not yet implemented — the reference bank ignores `cursor`/`limit` and returns a bare `Voucher[]` array, not an `{ items }` envelope)*. Return Vouchers from the bank's public registry. The `issuer` filter is protocol: given an issuer pubkey, return every registry-published Voucher signed by it; the reference bank also accepts `filter: 'mine'` as a convenience alias for the sender's own pubkey. Which Vouchers enter the registry is bank policy ([`discovery.md`](./discovery.md) §2). |
 | `list_posts(pubkey, voucher_hash, before?)` | any → bank | *Paginated, newest-first.* Return stored Post docs by **author** `pubkey` (a bank, issuer, or user), for a single `voucher_hash` **or** the literal `"all"` (no voucher filter). Optional `before` ULID pages backward in time. Bodies carry the author `sig` inline ([`post-feed.md`](./post-feed.md) §3). |
 | `get_post(post_hash)` | any → bank | Return the Post doc body. |
-| `get_post_signatures(post_hash)` | any → bank | Return the **additional** signatures anchored to a post (endorsements, reactions, issuer co-signs) — accrued after the immutable post was signed. The author's own signature lives in the post body. Mirrors `get_record_signatures`. |
+| `get_post_signatures(post_hash)` | any → bank | Return the **additional** signatures anchored to a post (endorsements — [`post-feed.md`](./post-feed.md) §4 — reactions, issuer co-signs) — accrued after the immutable post was signed. The author's own signature lives in the post body. Mirrors `get_record_signatures`. |
 
 > **Status: specified, not yet implemented.** The reference bank does not serve
 > the rows marked *(specified, not yet implemented)* yet (tracked in TODOS.md);
@@ -148,8 +148,7 @@ Read/serve surfaces that are plain HTTP (cacheable, no JSON-RPC envelope):
   ([`post-feed.md`](./post-feed.md) §5), served with the Content-Type the
   extension implies and immutable caching. **Unauthenticated:** whoever knows
   the ref may fetch the bytes. The bank verifies the bytes hash to the ref's
-  hash before serving; unknown hash → `404`. A bare `<hash>` (no extension) is
-  the legacy form and serves the content type recorded at upload. Responses
+  hash before serving; unknown hash → `404`. Responses
   carry `X-Content-Type-Options: nosniff` and a sandboxing
   `Content-Security-Policy`, so a served SVG renders as an image but can never
   run script on the bank's origin.
@@ -193,9 +192,9 @@ caller. The authdoc fields:
 
 ---
 
-## 3. Bank discovery
+## 3. Bank discovery + pubkey pinning
 
-A bank exposes its identity document at:
+A bank's **canonical URL** is the base path clients use for that bank. Different banks MAY live at different paths on the same domain — for example `https://example.com/banks/alice` and `https://example.com/banks/bob`. The bank exposes its identity document at:
 
 ```
 GET <bank-url>/barter-bank.json
@@ -208,7 +207,21 @@ GET <bank-url>/barter-bank.json
   }
 ```
 
-The `url` field is the canonical RPC URL — the location clients should use. It MUST be a prefix of the URL from which `barter-bank.json` was fetched. Discovery and pubkey pinning semantics are defined in [`base.md`](./base.md) §5.
+The `url` field is the canonical RPC URL — the location clients should use. It MUST be a prefix of the URL from which `barter-bank.json` was fetched.
+
+Banks MAY maintain a cache of `(peer_pubkey, peer_url)` for banks they have heard from, sourced from discovery documents and from explicitly presented **Address** docs ([`base.md`](./base.md) §3.2). This cache is on the settlement hot path: banks deliver `ready`/`hold`/`settle`/`reject` signatures to each other directly via `notify_signatures`, resolving peer URLs through Address docs (see §4).
+
+### 3.1 Pubkey pinning (security)
+
+The discovery document is **not a trust anchor**. A compromised DNS / hosting provider could serve a different pubkey, and TOFU clients would be fooled. v1 pins pubkey alongside URL everywhere trust is established:
+
+- The client config map stores `{pubkey, url}` per bank.
+- Invite strings carry `<pubkey>@<bank-url>` syntax (see [`README.md`](./README.md) §3).
+- `barter-bank.json` is fetched and *compared* against the pinned pubkey; if divergent, the operation fails closed.
+
+In the v1 trust model the OOB channel that establishes the relationship already conveys the pubkey, so pinning is cheap.
+
+> **Invariant:** The `barter-bank.json` format and the pinning semantics are protocol. How the client stores its config is an implementation detail.
 
 ---
 
@@ -221,9 +234,19 @@ The coordinator builds the deal by discovering compatible Orders (via their disc
 3. **Share Address docs.** Before banks can call each other directly, each bank must have a signed `Address` doc for every peer bank. The coordinator fetches each bank's current Address (`get_address`) and submits it to the other participating banks via `submit_docs`. Banks also accept newer Address docs at any time.
 4. **create_records** on every participating bank, referencing the two Order hashes plus `amount` / `counter_amount` and a shared `deal_id`. Each bank mints the debit/credit record pair for the voucher it issues; for a same-bank swap the coordinator calls twice with `giver`/`receiver` swapped (see §2.2).
 5. **submit_mandate.** For each (Order, bank) the coordinator builds a `Mandate` naming that Order and listing **every record satisfying it across all banks**, signs it, and sends it **with all the record bodies** to the bank. The list is the same at every addressed bank.
-6. **Banks advance.** Once a bank has both (a) a `Mandate` for an Order and (b) that Order bound to its records (already stored via `submit_docs`), its advance engine issues `ready`, then `hold`, then `settle` automatically as preconditions are met. Because `hold` and `settle` are gated on the deal's **full** record set carrying the right upstream signatures (the `seen` handshake, `base.md` §3.1), banks fan out **every** signature they issue — `ready` and `hold` as well as `settle` — to the peer banks named by the deal's Orders, so each side can see the others' records advance. Banks discover each other via the `bank` fields in the Orders and use the Address registry to call each other directly; `notify_signatures` is the canonical bank-to-bank delivery path.
+6. **Banks advance.** Once a bank has both (a) a `Mandate` for an Order and (b) that Order bound to its records (already stored via `submit_docs`), its advance engine issues `ready`, then `hold`, then `settle` automatically as preconditions are met. Because `hold` and `settle` are gated on the deal's **full** record set carrying the right upstream signatures (the `seen` handshake, [`settlement.md`](./settlement.md) §3–4), banks fan out **every** signature they issue — `ready` and `hold` as well as `settle` — to the peer banks named by the deal's Orders, so each side can see the others' records advance. Banks discover each other via the `bank` fields in the Orders and use the Address registry to call each other directly; `notify_signatures` is the canonical bank-to-bank delivery path.
 7. **Relay fallback.** If direct bank-to-bank delivery fails, any party can relay signatures by hand (`get_record_signatures` → `notify_signatures`).
 
 Unsigned orchestration data (grouping, topology) is **not authority**: every gate that moves money — Order resolution, per-record ready, hold preconditions, settle proofs, Mandate clearance — flows from signed artifacts. A client lying about grouping or topology can only fragment or stall *its own* deal.
 
 > **Invariant:** The method names, parameter shapes, and side-effect semantics above are protocol. The exact HTTP client library, retry policy, timeout values, and how the coordinator discovers Orders are implementation details.
+
+---
+
+## 5. Standard vs custom API
+
+The open bank API that ensures interoperability and cross-bank transactions is standardized in this directory: document schemas, JSON-RPC envelope, method semantics, invite strings, and discovery formats.
+
+Banks MAY also expose custom API endpoints and UI beyond the standard surface. For example, a bank may choose its own KYC flow, fee model, admin tooling, or web dashboard. Such customizations MUST NOT alter the standard document schemas or the semantics of the methods defined in this file. Different banks may implement the custom layer differently; clients that speak only the standard protocol can still trade across them.
+
+> **Invariant:** Anything required for two independent implementations to interoperate belongs in this protocol directory. Anything that is operator-specific or UX-specific belongs in a custom or implementation layer.

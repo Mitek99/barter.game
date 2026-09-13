@@ -20,8 +20,7 @@ here are defined in [`bank-rpc.md`](./bank-rpc.md); document schemas in
 
 A bank's identity document lives at `GET <bank-url>/barter-bank.json` —
 `{pubkey, url, name, protocol_version}`. Clients pin `{pubkey, url}` together
-and fail closed on divergence. Defined in [`base.md`](./base.md) §5 and
-[`bank-rpc.md`](./bank-rpc.md) §3.
+and fail closed on divergence. Defined in [`bank-rpc.md`](./bank-rpc.md) §3.
 
 Banks find each other's endpoints through signed `Address` docs
 ([`base.md`](./base.md) §3.2): anyone may submit a newer signed Address via

@@ -38,16 +38,8 @@ interface Post extends BaseDoc {
 type MediaRef = string;    // "<base58(sha256(bytes))>.<ext>" — see §5
 ```
 
-**Legacy forms (normative).** Posts signed before media extensions existed
-carry `media` entries that are **bare base58 hashes** (no extension); such
-entries remain valid forever — signed docs are immutable, and any validator
-walking an embedded tree MUST accept them. Likewise, early meta releases used
-inline-SVG fields `icon_svg` / `square_svg` (bounded `<svg>` strings) instead
-of refs; the fields are deprecated in favor of `icon`/`square` but remain
-valid and still feed a release when the ref fields are absent.
-
 **Meta releases merge, artwork-wise.** A release that carries any artwork
-(`icon`/`square`, or the legacy inline fields) defines the voucher's look
+(`icon`/`square`) defines the voucher's look
 completely. A release that carries none is a **description update**: the bank
 keeps the current artwork (from the previous release, or the Voucher doc's
 own `images`) — otherwise a text-only release would silently strip a live
@@ -110,7 +102,7 @@ get_post(post_hash) → Post
 get_post_signatures(post_hash) → { signatures: Signature[] }
 
 get_voucher_meta(voucher_hash)
-→ { voucher, icon?, square?, icon_svg?, square_svg?,
+→ { voucher, icon?, square?,
     description_md?, post, ulid } | null
 ```
 
@@ -128,7 +120,7 @@ get_voucher_meta(voucher_hash)
 The bank returns stored Post bodies in **reverse-chronological order** (newest
 `ulid` first). It returns what it stored — it does not curate for the reader.
 Post bodies carry the author's `sig` inline (so an embedded thread verifies from
-the bytes returned). **Additional** signatures on a post — endorsements,
+the bytes returned). **Additional** signatures on a post — endorsements (§4),
 reactions, an issuer co-signing a holder's post — accrue *after* the immutable
 post is signed, so they cannot live in the post body; they are fetched
 separately with `get_post_signatures(post_hash)`, mirroring
@@ -173,6 +165,36 @@ without extra round-trips — the trade is size, which the intake caps (§6) bou
 A client that still wants the *canonical current* form of an embedded post (e.g.
 to fetch its accrued endorsements) resolves it by hash via `get_post` /
 `get_post_signatures`.
+
+### Endorsements — the `endorse` action
+
+An endorsement is not an embed and not a new doc type: it is a `Signature` doc
+([`base.md`](./base.md) §3.1) with `action: "endorse"`, anchored to the post's
+content hash:
+
+```ts
+Signature & {
+  action: "endorse";
+  hash: Base58SHA256;      // the endorsed Post's content hash
+  reason?: string;         // optional short note
+}
+```
+
+**Meaning.** The signer vouches for the post as it stands: a reader
+recommending it, an issuer co-signing a holder's post about their voucher, a
+bank marking a post it checked. Because `hash` covers the post's exact signed
+bytes (§1), an endorsement can never be retargeted to edited content — a post
+is immutable, so there is nothing to edit.
+
+**Submission and reads.** Endorsements accrue *after* the post is signed, so
+they live outside the post body. They travel the standard Signature path —
+submitted via `submit_docs` (or `notify_signatures`), stored like any
+Signature — and are served by `get_post_signatures(post_hash)`, indexed by
+target post hash (§8). Validity checks are the Signature baseline: the
+signature MUST verify against `pubkey`. Whether a bank stores and serves an
+endorsement is carriage policy, exactly as for posts themselves (§2, §6);
+clients weigh endorsements by their own trust graph (§7), so an endorsement
+from a key the reader does not follow is just bytes.
 
 ## 5. Embedded media — the vault
 
@@ -278,9 +300,8 @@ scan (Deno KV: a reverse range, or an inverted-ULID key):
 
 Media blobs are stored in the vault keyed by content hash (`media/<sha256>` →
 bytes, plus size/chunking metadata and the upload-time content type). The
-ref's extension names the Content-Type for canonical `"<hash>.<ext>"` GETs;
-the recorded type serves legacy bare-hash GETs (§5). Blobs are served by the
-REST GET in §5. Endorsement signatures are
+ref's extension names the Content-Type for the `"<hash>.<ext>"` GETs; blobs
+are served by the REST GET in §5. Endorsement signatures are
 indexed by their target post hash (`post_sig/<post_hash>/<sig_hash>`), exactly
 like `record_sig` for records, so `get_post_signatures` is a prefix scan.
 
@@ -291,8 +312,8 @@ Deliberately unspecified in v1, expected to be figured out as real feeds appear:
 - **Embedded documents** — first-class rendering of pubkeys, Vouchers, Orders,
   and other protocol docs inside a post body, so a recommendation can carry the
   thing it recommends.
-- **Endorsement/reaction vocabulary** — the concrete `action`/shape of the
-  signatures returned by `get_post_signatures` (likes, issuer co-signs, flags).
+- **Reaction vocabulary beyond `endorse`** — additional `Signature` actions on
+  posts (likes, flags, disputes), building on the endorsement shape in §4.
 
 Extensions MUST be backward-compatible: a v1 client seeing unknown fields
 ignores them; a v1 bank stores what validates today.
